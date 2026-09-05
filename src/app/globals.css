@@ -3073,6 +3073,25 @@ dialog::backdrop {
   .map-detail-toggle {
     top: calc(var(--map-top) + 16px);
   }
+  /* The brief stacks above the actions, so the bar needs the extra room. */
+  .learning-map.map-intro {
+    --map-bottom: 168px;
+  }
+  .learning-map.map-intro.details-open .map-canvas {
+    right: 0;
+  }
+  .map-intro-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 16px 20px;
+  }
+  .map-intro-brief {
+    max-height: 68px;
+  }
+  .map-intro-actions {
+    justify-content: space-between;
+  }
   .node-detail-resize {
     display: none;
   }
@@ -3200,6 +3219,72 @@ dialog::backdrop {
   margin: 6px 0 0;
 }
 .branch-confirm > button {
+  white-space: nowrap;
+}
+/* The map is also the screen a course opens on. A fixed-height bar carries what
+   the course promises and the only two ways out, and every panel that reaches
+   the bottom edge stops above it. */
+.learning-map.map-intro {
+  --map-bottom: 116px;
+}
+.learning-map.map-intro .map-canvas {
+  inset: var(--map-top) 0 var(--map-bottom);
+}
+.learning-map.map-intro.details-open .map-canvas {
+  right: var(--map-sidebar-width);
+}
+.learning-map.map-intro .map-toolbar {
+  bottom: calc(var(--map-bottom) + 22px);
+}
+.learning-map.map-intro .node-detail,
+.learning-map.map-intro .node-detail-resize {
+  bottom: var(--map-bottom);
+}
+.map-intro-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--map-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 18px 40px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  z-index: 12;
+}
+.map-intro-brief {
+  max-width: 760px;
+  max-height: 76px;
+  overflow-y: auto;
+}
+.map-intro-brief p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.map-intro-brief p + p {
+  margin-top: 6px;
+}
+.map-intro-brief strong {
+  margin-right: 6px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.map-intro-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+}
+.map-intro-actions .primary-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   white-space: nowrap;
 }
 .map-add-panel {

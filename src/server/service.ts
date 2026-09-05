@@ -1,7 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Store } from "./db";
 import { demoGraph, demoChapter } from "../core/fixtures";
-import { speechConfig } from "./speech";
+import {
+  featuredCourses,
+  featuredGraph,
+  featuredChapter,
+} from "../core/featured-courses";
+import { labValueSchema, validLabParameters } from "../core/lab";
+import { featuredAudioKey, readFeaturedAudio } from "./featured-audio";
+import { speechConfig, resolveSpeechProfile } from "./speech";
 import { checkFeedback } from "../core/check-feedback";
 import { useChapterNarration } from "./page-audio";
 import {
@@ -175,11 +182,13 @@ export class LearningService {
     requestId: string,
     language: "zh-TW" | "en" = "zh-TW",
     intake = false,
+    featuredId?: string,
   ): Snapshot {
     if (!goal.trim() || goal.length > 1500)
       throw new Error("請輸入 1–1500 字的學習目標");
     if (
       mode === "live" &&
+      !featuredId &&
       (!process.env.AI_API_KEY ||
         !process.env.AI_BASE_URL ||
         !process.env.AI_MODEL)
@@ -198,14 +207,19 @@ export class LearningService {
         )
         .get(session) as { n: number };
       if (busy.n > 4) throw new Error("請等待目前的課程生成完成");
-      const graph = mode === "demo" ? demoGraph(language) : null;
+      const graph = featuredId
+        ? featuredGraph(featuredId, language)
+        : mode === "demo"
+          ? demoGraph(language)
+          : null;
       const course: Course = {
         id: randomUUID(),
         sessionId: session,
         requestId,
         goal,
+        ...(featuredId ? { featuredId, labWork: {} } : {}),
         language,
-        scopeAccepted: true,
+        scopeAccepted: !featuredId,
         mode,
         status: graph ? "ready" : intake ? "intake" : "planning",
         ...(intake && mode === "live"
@@ -233,11 +247,72 @@ export class LearningService {
       if (graph) {
         this.store.revision(course);
         this.prepare(course, course.currentNodeId);
+        if (featuredId)
+          this.scheduleSpeech(
+            course,
+            this.store.getPackage(course.chapterIds[course.currentNodeId])!,
+          );
         this.prefetch(course);
       } else if (!intake)
         this.store.enqueue(`graph:${course.id}`, course.id, "graph");
       this.store.putCourse(course);
       return this.snapshot(course);
+    });
+  }
+  createFeatured(
+    session: string,
+    featuredId: string,
+    language: "en" | "zh-TW",
+  ) {
+    const entry = featuredCourses.find((item) => item.id === featuredId);
+    if (!entry) throw new Error("Featured course not found");
+    const created = this.createCourse(
+      session,
+      entry.title[language === "en" ? "en" : "zh"],
+      "live",
+      `featured-v1:${featuredId}:${language}`,
+      language,
+      false,
+      featuredId,
+    );
+    return this.mutate(session, created.id, (course) => {
+      for (const node of featuredGraph(featuredId, language).nodes)
+        this.prepare(course, node.id);
+      return this.snapshot(course);
+    });
+  }
+  saveLab(
+    session: string,
+    id: string,
+    nodeId: string,
+    sectionId: string,
+    input: Record<string, number>,
+    version = Date.now(),
+  ) {
+    const value = labValueSchema.parse(input);
+    return this.mutate(session, id, (course) => {
+      const section = this.store
+        .getPackage(course.chapterIds[nodeId] || "")
+        ?.chapter?.sections.find((s) => s.id === sectionId);
+      if (section?.component.type !== "lab.experiment")
+        throw new Error("Laboratory not found");
+      if (!validLabParameters(section.component.kind, value))
+        throw new Error("Unsupported laboratory parameters");
+      if (
+        !Number.isSafeInteger(version) ||
+        version < 0 ||
+        version > Date.now() + 60000
+      )
+        throw new Error("Invalid laboratory version");
+      course.labVersions ??= {};
+      course.labVersions[nodeId] ??= {};
+      if ((course.labVersions[nodeId][sectionId] ?? 0) > version)
+        return { saved: true, stale: true };
+      course.labVersions[nodeId][sectionId] = version;
+      course.labWork ??= {};
+      course.labWork[nodeId] ??= {};
+      course.labWork[nodeId][sectionId] = value;
+      return { saved: true };
     });
   }
   async generateIntakeQuestion(
@@ -359,8 +434,6 @@ export class LearningService {
   prepare(c: Course, nodeId: string): PackageState {
     if (c.learningVersion === 1 && nodeId !== c.currentNodeId)
       throw new Error("一次只準備正在學習的章節");
-    if (c.scopeAccepted === false)
-      throw new Error("請先確認課程範圍，再準備章節。");
     const node = c.graph!.nodes.find((n) => n.id === nodeId);
     if (!node) throw new Error("Node not found");
     const prior = c.chapterIds[nodeId]
@@ -373,16 +446,25 @@ export class LearningService {
         c.completed.includes(nodeId))
     )
       return prior;
-    const chapter = c.mode === "demo" ? demoChapter(node, c.language) : null;
+    const curatedNode =
+      c.featuredId &&
+      featuredGraph(c.featuredId, c.language || "zh-TW").nodes.some(
+        (n) => n.id === node.id,
+      );
+    const chapter = curatedNode
+      ? featuredChapter(c.featuredId!, node, c.language || "zh-TW")
+      : c.mode === "demo"
+        ? demoChapter(node, c.language)
+        : null;
     const pkg: PackageState = {
       id: randomUUID(),
       nodeHash: this.preparationHash(c, node),
       status: chapter ? "ready" : "queued",
-      speech: chapter ? "failed" : "not_requested",
+      speech: chapter && !c.featuredId ? "failed" : "not_requested",
       chapter,
       cues: [],
       narrationMode: "chapter",
-      ...(chapter
+      ...(chapter && !c.featuredId
         ? { error: "體驗課程尚未合成語音，可使用完整文字模式。" }
         : {}),
     };
@@ -435,13 +517,36 @@ export class LearningService {
       ["pending", "generating", "ready"].includes(pkg.speech)
     )
       return;
-    if (automatic && (c.mode !== "live" || pkg.speech === "failed")) return;
+    if (
+      automatic &&
+      ((!c.featuredId && c.mode !== "live") || pkg.speech === "failed")
+    )
+      return;
     try {
       useChapterNarration(pkg);
-      pkg.speechProfile = speechConfig(
+      pkg.speechProfile = resolveSpeechProfile(
         pkg.speechProfile,
         c.language || "zh-TW",
-      ).profile;
+      );
+      if (c.featuredId) {
+        const cached = readFeaturedAudio(
+          this.store,
+          featuredAudioKey(pkg.chapter.script, pkg.speechProfile),
+        );
+        if (cached) {
+          this.store.db
+            .prepare("INSERT OR REPLACE INTO audio_artifacts VALUES(?,?,?)")
+            .run(pkg.id, cached.audio, "audio/mpeg");
+          pkg.cues = cached.cues;
+          pkg.captions = cached.captions;
+          pkg.speech = "ready";
+          pkg.error = undefined;
+          this.store.putPackage(c.id, pkg);
+          return;
+        }
+      }
+      // Prepared narration needs a voice identity; only a cache miss needs a TTS key.
+      speechConfig(pkg.speechProfile, c.language || "zh-TW");
       pkg.speech = "pending";
       pkg.error = undefined;
       this.store.putPackage(c.id, pkg);
@@ -453,12 +558,21 @@ export class LearningService {
       this.store.putPackage(c.id, pkg);
     }
   }
+  /** The learner only moves through a course after pressing 「開始學習」 on the
+   *  learning map. Chapters are generated from the moment the graph lands, so
+   *  this gates entry to the lesson and nothing else. */
+  requireStarted(c: Course) {
+    if (c.scopeAccepted === false)
+      throw new Error("請先在學習地圖上按「開始學習」。");
+  }
   acceptScope(session: string, id: string) {
     return this.mutate(session, id, (c) => {
       if (!c.graph || c.status !== "ready")
         throw new Error("課程路徑尚未準備完成。");
       if (c.scopeAccepted !== false) return this.snapshot(c);
       c.scopeAccepted = true;
+      // Preparation already started when the graph landed; this only covers a
+      // course whose graph predates that, and is otherwise a no-op.
       const pkg = this.prepare(c, c.currentNodeId);
       this.scheduleSpeech(c, pkg);
       this.prefetch(c);
@@ -590,6 +704,7 @@ export class LearningService {
   }
   advance(session: string, id: string, nodeId?: string) {
     return this.mutate(session, id, (c) => {
+      this.requireStarted(c);
       if (nodeId && nodeId !== c.currentNodeId)
         throw new Error("Chapter conflict: 學習位置已改變，請重新載入");
       const chapter = this.store.getPackage(
@@ -638,6 +753,7 @@ export class LearningService {
    * stays available and the learner can jump back to it later. */
   jumpTo(session: string, id: string, nodeId: string) {
     return this.mutate(session, id, (c) => {
+      this.requireStarted(c);
       if (!c.graph) throw new Error("課程還在規劃中，請稍後再試。");
       if (c.extensionSession)
         throw new Error("請先離開延伸單元，再跳到其他章節。");
@@ -1016,20 +1132,13 @@ export class LearningService {
         pkg.status === "ready" &&
         ["failed", "not_requested"].includes(pkg.speech)
       ) {
-        useChapterNarration(pkg);
-        pkg.speechProfile = speechConfig(
-          pkg.speechProfile,
-          c.language || "zh-TW",
-        ).profile;
-        pkg.speech = "pending";
-        pkg.error = undefined;
-        this.store.putPackage(id, pkg);
-        this.store.enqueue(`speech:${pkg.id}`, id, "speech", pkg.id);
-        this.store.db
-          .prepare(
-            "UPDATE generation_jobs SET status='queued',lease=0 WHERE id=? AND status='failed'",
-          )
-          .run(`speech:${pkg.id}`);
+        this.scheduleSpeech(c, pkg, false);
+        if (pkg.speech === "pending")
+          this.store.db
+            .prepare(
+              "UPDATE generation_jobs SET status='queued',lease=0 WHERE id=? AND status='failed'",
+            )
+            .run(`speech:${pkg.id}`);
       }
       return this.snapshot(c);
     });

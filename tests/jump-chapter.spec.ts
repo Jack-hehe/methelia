@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/course-test";
-import { answerIntake } from "./fixtures/intake-browser";
+import { answerIntake, startLearning } from "./fixtures/intake-browser";
 import type { Snapshot } from "../src/core/state";
 
 test("a generated course can jump ahead and return without completing skipped work", async ({
@@ -14,6 +14,7 @@ test("a generated course can jump ahead and return without completing skipped wo
   await page.getByLabel("你想學什麼？").fill("Build a website");
   await page.locator('form button[type="submit"]').click();
   await answerIntake(page);
+  await startLearning(page);
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
   const { course }: { course: Snapshot } = await (
     await page.request.post("/api/sessions", { data: {} })

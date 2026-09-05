@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { labComponentSchema } from "./lab";
 import {
   emptyWorkspace,
   mergeStarterFiles,
@@ -59,6 +60,7 @@ const card = z
   })
   .strict();
 export const componentSchema = z.discriminatedUnion("type", [
+  labComponentSchema,
   z
     .object({
       type: z.literal("lesson.article"),
@@ -227,6 +229,7 @@ export const templateRegistry: Record<
     "diagram.flow",
   ],
   focus: [
+    "lab.experiment",
     "lesson.article",
     "concept.canvas",
     "dom.explorer",
@@ -236,6 +239,7 @@ export const templateRegistry: Record<
     "diagram.flow",
   ],
   split: [
+    "lab.experiment",
     "lesson.article",
     "dom.explorer",
     "code.editor",

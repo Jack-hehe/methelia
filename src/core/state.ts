@@ -98,11 +98,17 @@ export type Progress = {
   follow: boolean;
 };
 export type Course = {
+  featuredId?: string;
+  labWork?: Record<string, Record<string, Record<string, number>>>;
+  labVersions?: Record<string, Record<string, number>>;
   id: string;
   sessionId: string;
   requestId: string;
   goal: string;
   language?: "zh-TW" | "en";
+  /** False until the learner presses 「開始學習」 on the learning map they land
+   *  on. Chapters generate while that screen is open, so this gates entry to
+   *  the lesson rather than gating generation. */
   scopeAccepted?: boolean;
   mode: "demo" | "live";
   status: "intake" | "planning" | "ready" | "failed";

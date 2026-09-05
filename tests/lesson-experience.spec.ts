@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/course-test";
-import { answerIntake } from "./fixtures/intake-browser";
+import { answerIntake, startLearning } from "./fixtures/intake-browser";
 test("Stop during save prevents a delayed Python execution", async ({
   page,
   baseURL,
@@ -9,6 +9,7 @@ test("Stop during save prevents a delayed Python execution", async ({
   await page.getByLabel("你想學什麼？").fill("Learn Python");
   await page.locator('form button[type="submit"]').click();
   await answerIntake(page);
+  await startLearning(page);
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
   await page.getByLabel("下一頁", { exact: true }).click();
   let release!: () => void,
@@ -51,6 +52,7 @@ test("reading and illustrated explanations work on desktop and mobile", async ({
     .fill("Explain bread rising illustrated");
   await page.locator('form button[type="submit"]').click();
   await answerIntake(page);
+  await startLearning(page);
   await expect(page.locator(".lesson-article")).toBeVisible();
   await expect(page.locator(".lesson-figure li")).toHaveCount(3);
   await expect(page.locator(".lesson-figure li").last()).toHaveCSS(
@@ -82,6 +84,7 @@ test("failed practice shows actual saved code and expected evidence", async ({
   await page.getByLabel("你想學什麼？").fill("Learn Python");
   await page.locator('form button[type="submit"]').click();
   await answerIntake(page);
+  await startLearning(page);
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
   await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByRole("button", { name: "驗證我的練習" }).click();

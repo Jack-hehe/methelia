@@ -84,19 +84,28 @@ it("confirms scope through the API once and persists chapter preparation only fo
   }
 });
 
-it("does not allow preparation to bypass unconfirmed scope", () => {
+it("prepares chapters while the learner is still on the learning map", () => {
   const { store, service, session, id } = pendingCourse();
   try {
-    expect(() =>
-      service.mutate(session, id, (c) => service.prepare(c, "start")),
-    ).toThrow(/範圍/);
-    expect(service.getCourse(session, id).chapters).toEqual({});
+    service.mutate(session, id, (c) => service.prepare(c, "start"));
+    expect(service.getCourse(session, id).chapters.start.status).toBe("queued");
   } finally {
     store.db.close();
   }
 });
 
-it("shows the proposed outcome and limitation instead of a never-ending chapter spinner", () => {
+it("does not move the learner through the course before they start", () => {
+  const { store, service, session, id } = pendingCourse();
+  try {
+    expect(() => service.advance(session, id)).toThrow(/開始學習/);
+    expect(() => service.jumpTo(session, id, "next")).toThrow(/開始學習/);
+    expect(service.getCourse(session, id).currentNodeId).toBe("start");
+  } finally {
+    store.db.close();
+  }
+});
+
+it("opens on the learning map with the route, the outcome and the limitation", () => {
   const { store, service, session, id } = pendingCourse();
   try {
     const html = renderToStaticMarkup(
@@ -112,8 +121,37 @@ it("shows the proposed outcome and limitation instead of a never-ending chapter 
     expect(html).toContain(
       "Package installation and real processes are unavailable.",
     );
-    expect(html).toContain("確認範圍並開始");
+    // Every planned chapter is on the map, as the numbered list used to show.
+    expect(html).toContain("Directories");
+    expect(html).toContain("Navigation");
+    expect(html).toContain("等等再學");
     expect(html).not.toContain("正在準備章節");
+  } finally {
+    store.db.close();
+  }
+});
+
+it("waits for the first chapter before offering to start", () => {
+  const { store, service, session, id } = pendingCourse();
+  const render = () =>
+    renderToStaticMarkup(
+      createElement(CoursePlayer, {
+        course: service.getCourse(session, id),
+        onChange() {},
+        onError() {},
+        onHome() {},
+        themeControl: null,
+      }),
+    );
+  try {
+    service.mutate(session, id, (c) => service.prepare(c, "start"));
+    expect(render()).toContain("正在準備第 1 章…");
+    service.mutate(session, id, (c) => {
+      const pkg = store.getPackage(c.chapterIds.start)!;
+      pkg.status = "ready";
+      store.putPackage(c.id, pkg);
+    });
+    expect(render()).toContain("開始學習");
   } finally {
     store.db.close();
   }

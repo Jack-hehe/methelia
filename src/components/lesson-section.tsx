@@ -14,6 +14,7 @@ import {
 import type { Section } from "../core/protocol";
 import { buildPreview } from "../core/preview";
 import "./teaching-templates.css";
+import { Laboratory } from "./labs/laboratory";
 export function LessonSection({
   schemaVersion,
   section,
@@ -23,6 +24,7 @@ export function LessonSection({
   onCheck,
   onPractice,
   hideHeading = false,
+  labContext,
 }: {
   schemaVersion: 1 | 2;
   section: Section;
@@ -32,6 +34,11 @@ export function LessonSection({
   onCheck: (id: string, answer?: number) => Promise<boolean>;
   onPractice: () => void;
   hideHeading?: boolean;
+  labContext?: {
+    courseId: string;
+    nodeId: string;
+    saved?: Record<string, number>;
+  };
 }) {
   const { t } = useCourseLanguage();
   const [selected, setSelected] = useState(0),
@@ -107,7 +114,23 @@ export function LessonSection({
         </div>
       )}
       {!hideHeading && <h2>{section.title}</h2>}
-      <p className="section-body">{section.body}</p>
+      {!(
+        (c.type === "lab.experiment" && c.mission === section.body) ||
+        (c.type === "quiz.choice" && c.question === section.body) ||
+        (c.type === "lesson.article" && c.paragraphs[0] === section.body)
+      ) && <p className="section-body">{section.body}</p>}
+      {c.type === "lab.experiment" && labContext && (
+        <Laboratory
+          key={`${labContext.courseId}:${labContext.nodeId}:${section.id}`}
+          kind={c.kind}
+          mission={c.mission}
+          initial={c.initial}
+          courseId={labContext.courseId}
+          nodeId={labContext.nodeId}
+          sectionId={section.id}
+          saved={labContext.saved}
+        />
+      )}
       {c.type === "lesson.article" && (
         <article className="lesson-article">
           <div className="lesson-prose">

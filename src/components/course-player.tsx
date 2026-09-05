@@ -162,6 +162,9 @@ function CoursePlayerContent({
     canEnter && hasWorkspace && (practice || workspacePage),
   );
   const route = course.graph ? routeNodes(course.graph) : [];
+  // A planned course opens on its learning map, which takes the whole screen
+  // instead of a lesson canvas; the lesson itself waits behind 開始學習.
+  const intro = course.status === "ready" && course.scopeAccepted === false;
   const allDone = Boolean(
     route.length && route.every((item) => course.completed.includes(item.id)),
   );
@@ -587,7 +590,7 @@ function CoursePlayerContent({
           <strong>{node?.title}</strong>
         </div>
         <div className="header-right">
-          {course.mode === "demo" && (
+          {course.mode === "demo" && !course.featuredId && (
             <span className="demo-badge">{t("體驗課程", "Demo course")}</span>
           )}
           {themeControl}
@@ -647,49 +650,7 @@ function CoursePlayerContent({
             {t("回首頁", "Home")}
           </button>
         </main>
-      ) : course.scopeAccepted === false ? (
-        <main
-          className="preparation scope-confirmation"
-          aria-labelledby="scope-heading"
-        >
-          <h1 id="scope-heading">
-            {t("確認這堂課的學習範圍", "Confirm your course scope")}
-          </h1>
-          <p>{course.graph?.scopeNote}</p>
-          <p>
-            <strong>{t("完成後你能：", "After this course, you can:")}</strong>
-            {course.graph?.outcome}
-          </p>
-          <ol>
-            {route.map((item) => (
-              <li key={item.id}>
-                {item.title}：{item.objective}
-              </li>
-            ))}
-          </ol>
-          <button
-            className="primary-button"
-            disabled={busy}
-            onClick={() =>
-              void action(async () =>
-                onChange(
-                  await api<Snapshot>(`courses/${course.id}/accept-scope`, {}),
-                ),
-              )
-            }
-          >
-            {t("確認範圍並開始", "Confirm scope and start")}
-          </button>
-          <button
-            className="text-button"
-            disabled={busy}
-            onClick={() => void home()}
-          >
-            <ArrowLeft size={14} />
-            {t("回首頁調整目標", "Return home to adjust your goal")}
-          </button>
-        </main>
-      ) : (
+      ) : intro ? null : (
         <>
           <main
             className="lesson-canvas"
@@ -844,6 +805,7 @@ function CoursePlayerContent({
                     section={section!}
                     index={index}
                     hideHeading
+                    labContext={{courseId:course.id,nodeId,saved:course.labWork?.[nodeId]?.[sectionId]}}
                     done={progress.done.includes(sectionId)}
                     files={displayedWorkspace.files}
                     onCheck={check}
@@ -1189,10 +1151,27 @@ function CoursePlayerContent({
           </footer>
         </>
       )}
-      {map && course.graph && (
+      {(map || intro) && course.graph && (
         <LearningMap
           course={course}
           busy={busy}
+          intro={
+            intro
+              ? {
+                  themeControl,
+                  onLater: () => void home(),
+                  onStart: () =>
+                    void action(async () =>
+                      onChange(
+                        await api<Snapshot>(
+                          `courses/${course.id}/accept-scope`,
+                          {},
+                        ),
+                      ),
+                    ),
+                }
+              : undefined
+          }
           onClose={() => setMap(false)}
           onAdd={async (topic, afterId, depth) => {
             const preview = await api<BranchPreview>("extensions/preview", {

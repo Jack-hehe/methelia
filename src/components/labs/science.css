@@ -1,0 +1,66 @@
+.science-lab svg {
+  width: 100%;
+  min-height: 260px;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.science-lab svg text {
+  fill: currentColor;
+  font-size: 21px;
+  font-family: inherit;
+}
+.science-lab .lab-control > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.science-lab output {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.science-lab input[type="range"] {
+  width: 100%;
+  min-height: 36px;
+  accent-color: var(--lab-teal);
+  cursor: pointer;
+}
+.science-lab button,
+.science-lab select {
+  font: inherit;
+  font-size: 20px;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #638086;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.science-lab button:focus-visible,
+.science-lab select:focus-visible,
+.science-lab input:focus-visible {
+  outline: 3px solid #f4b65f;
+  outline-offset: 3px;
+}
+.science-lab .lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.science-color-stage {
+  min-height: 360px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-around;
+  gap: 1rem;
+  padding: 2rem;
+}
+.science-color-stage p {
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1.8;
+}
+.science-color-stage code {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 22px;
+}

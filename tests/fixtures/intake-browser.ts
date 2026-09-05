@@ -1,5 +1,15 @@
 import { expect, type Page } from "./course-test";
 
+/** A planned course opens on its learning map. Enter the first chapter from
+ *  there, once it has finished generating behind the map. */
+export async function startLearning(page: Page) {
+  const start = page
+    .getByRole("dialog", { name: "Learning Map", exact: true })
+    .getByRole("button", { name: "開始學習", exact: true });
+  await expect(start).toBeVisible({ timeout: 60000 });
+  await start.click();
+}
+
 /** Complete each generated card through the real intake API. */
 export async function answerIntake(page: Page) {
   for (let step = 0; step < 5; step++) {

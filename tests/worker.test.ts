@@ -65,10 +65,13 @@ it("a blocked prefetch cannot delay a new foreground course", async () => {
   );
   try {
     const session = service.session();
-    service.createCourse(session, "first", "live", "first", "en");
+    const first = service.createCourse(session, "first", "live", "first", "en");
     await vi.waitFor(() => expect(prefetchStarted).toBe(true), {
       timeout: 10000,
     });
+    // Chapters are generated while the learner reads the learning map, so a
+    // graph that asks for no confirmation still waits for 「開始學習」.
+    expect(service.getCourse(session, first.id).scopeAccepted).toBe(false);
     const started = Date.now();
     const second = service.createCourse(
       session,

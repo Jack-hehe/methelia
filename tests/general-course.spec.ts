@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/course-test";
-import { answerIntake } from "./fixtures/intake-browser";
+import { answerIntake, startLearning } from "./fixtures/intake-browser";
 
 // Run with playwright.general.config.ts: live API/worker against a local model double.
 test.beforeEach(async ({ baseURL }) => {
@@ -21,16 +21,17 @@ for (const goal of [
     await page.locator('form button[type="submit"]').click();
     await answerIntake(page);
     const pages = goal.includes("bread") ? 4 : 3;
+    // Every course opens on its map, with the whole route laid out.
+    const map = page.getByRole("dialog", { name: "Learning Map", exact: true });
+    await expect(map.locator(".map-node").first()).toBeVisible();
     if (goal.includes("Linux")) {
-      await expect(
-        page.getByRole("heading", { name: "確認這堂課的學習範圍" }),
-      ).toBeVisible();
+      // A scope caveat survives a reload, before anything has been entered.
       await page.reload();
       await expect(
         page.getByText("受限虛擬檔案環境，不支援安裝套件或系統程序。"),
       ).toBeVisible();
-      await page.getByRole("button", { name: "確認範圍並開始" }).click();
     }
+    await startLearning(page);
     await expect(page.getByLabel("頁碼")).toHaveText(`1 / ${pages}`);
     await page.getByLabel("下一頁", { exact: true }).click();
     await expect(page.getByLabel("頁碼")).toHaveText(`2 / ${pages}`);
@@ -119,6 +120,7 @@ test("Python runner stops, bounds execution and output, then runs a fresh progra
   await page.getByLabel("你想學什麼？").fill("Learn Python");
   await page.locator('form button[type="submit"]').click();
   await answerIntake(page);
+  await startLearning(page);
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
   await page.getByLabel("下一頁", { exact: true }).click();
   const editor = page.getByLabel("程式碼編輯器");

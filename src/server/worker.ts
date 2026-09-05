@@ -2,6 +2,11 @@ import { Store } from "./db";
 import { LearningService } from "./service";
 import { generateGraph, generateChapter } from "./model";
 import { synthesize, speechConfig } from "./speech";
+import {
+  featuredAudioKey,
+  readFeaturedAudio,
+  storeFeaturedAudio,
+} from "./featured-audio";
 import { useChapterNarration } from "./page-audio";
 const store = new Store();
 const service = new LearningService(store);
@@ -35,12 +40,14 @@ async function work(job: Job) {
       c.status = "ready";
       c.revision = 1;
       c.currentNodeId = graph.nodes[0].id;
-      c.scopeAccepted = !graph.requiresConfirmation;
+      // The learner lands on the learning map and presses 「開始學習」 to enter
+      // the lesson, so every planned course waits for that step.
+      c.scopeAccepted = false;
       store.revision(c);
-      if (c.scopeAccepted) {
-        service.prepare(c, c.currentNodeId);
-        service.prefetch(c);
-      }
+      // They read the map while this runs, which is the point: the first
+      // chapter is usually voiced and ready by the time they press start.
+      service.prepare(c, c.currentNodeId);
+      service.prefetch(c);
       store.putCourse(c);
     });
     return;
@@ -122,10 +129,16 @@ async function work(job: Job) {
       return current;
     });
     if (!active?.chapter) return;
-    const result = await synthesize(active.chapter, active.speechProfile);
+    const sharedKey = course.featuredId
+      ? featuredAudioKey(active.chapter.script, active.speechProfile)
+      : null;
+    const result =
+      (sharedKey ? readFeaturedAudio(store, sharedKey) : null) ||
+      (await synthesize(active.chapter, active.speechProfile));
     store.transaction(() => {
       const current = activePackage(course.id, pkg.id);
       if (!current) return;
+      if (sharedKey) storeFeaturedAudio(store, sharedKey, result);
       store.db
         .prepare("INSERT OR REPLACE INTO audio_artifacts VALUES(?,?,?)")
         .run(pkg.id, result.audio, "audio/mpeg");

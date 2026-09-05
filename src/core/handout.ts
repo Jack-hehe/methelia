@@ -84,6 +84,8 @@ function renderComponent(
 ): string {
   const component = section.component;
   switch (component.type) {
+    case "lab.experiment":
+      return `<p>${escape(component.mission)}</p><pre>${escape(JSON.stringify(component.initial || {}, null, 2))}</pre>`;
     case "lesson.article":
       return (
         component.paragraphs.map((p) => `<p>${escape(p)}</p>`).join("") +

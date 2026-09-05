@@ -16,6 +16,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS chapter_packages(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS generation_jobs(id TEXT PRIMARY KEY, course_id TEXT NOT NULL, package_id TEXT, kind TEXT NOT NULL, status TEXT NOT NULL, lease INTEGER NOT NULL DEFAULT 0, error TEXT);
       CREATE TABLE IF NOT EXISTS audio_artifacts(id TEXT PRIMARY KEY, audio BLOB NOT NULL, content_type TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS featured_audio(id TEXT PRIMARY KEY, audio BLOB NOT NULL, metadata TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS progress_events(id INTEGER PRIMARY KEY AUTOINCREMENT, course_id TEXT NOT NULL, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS daily_usage(day TEXT NOT NULL, kind TEXT NOT NULL, units INTEGER NOT NULL, PRIMARY KEY(day,kind));
       CREATE INDEX IF NOT EXISTS courses_session ON courses(session_id);

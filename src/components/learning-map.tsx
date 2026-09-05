@@ -39,9 +39,19 @@ type MapGesture = {
   moved: boolean;
 };
 
+/** The map doubles as the screen a course opens on, before its first chapter
+ *  has been entered. Editing the route is a mid-course affordance, so intro
+ *  mode drops it and offers the two ways out of the screen instead. */
+export type MapIntro = {
+  onStart: () => void;
+  onLater: () => void;
+  themeControl?: React.ReactNode;
+};
+
 export function LearningMap({
   course,
   busy,
+  intro,
   onClose,
   onConfirm,
   onAdd,
@@ -55,6 +65,7 @@ export function LearningMap({
 }: {
   course: Snapshot;
   busy: boolean;
+  intro?: MapIntro;
   onClose: () => void;
   onConfirm: (enterNow?: boolean) => Promise<void>;
   onAdd: (
@@ -238,7 +249,14 @@ export function LearningMap({
     return () => observer.disconnect();
   }, [showDetails, selected]);
   const anchorNode = graph.nodes.find((n) => n.id === anchorId);
-  const canAdd = Boolean(node) && graph.nodes.length < 50;
+  const canAdd = !intro && Boolean(node) && graph.nodes.length < 50;
+  // Intro mode waits on the chapter behind 「開始學習」 so that pressing it
+  // opens a lesson instead of the spinner this screen exists to replace.
+  const firstChapter = course.chapters[course.currentNodeId];
+  const introPending =
+    Boolean(intro) &&
+    firstChapter?.status !== "ready" &&
+    firstChapter?.status !== "failed";
   // The checkpoint decides the wording: finished chapters are reviewed,
   // the one you are on is resumed, anything further ahead is a preview.
   // course.progress is seeded whenever a chapter is prepared, including
@@ -311,15 +329,20 @@ export function LearningMap({
   return (
     <dialog
       ref={dialog}
-      className={"learning-map" + (showDetails ? " details-open" : "")}
+      className={
+        "learning-map" +
+        (showDetails ? " details-open" : "") +
+        (intro ? " map-intro" : "")
+      }
       // Canvas, add button and close button all offset from this one variable.
       style={
         { "--map-detail-width": `${detailWidth}px` } as React.CSSProperties
       }
       aria-label={t("Learning Map", "Learning map")}
       onCancel={(e) => {
+        // Intro mode has no course behind it to escape back to.
         e.preventDefault();
-        if (submitting || busy) return;
+        if (submitting || busy || intro) return;
         if (adding) closeAdd();
         else onClose();
       }}
@@ -356,14 +379,18 @@ export function LearningMap({
             </details>
           </div>
         </div>
-        <button
-          className="close-map"
-          onClick={onClose}
-          disabled={submitting || busy}
-        >
-          {t("回到課程", "Return to course")}
-          <X size={19} />
-        </button>
+        {intro ? (
+          intro.themeControl
+        ) : (
+          <button
+            className="close-map"
+            onClick={onClose}
+            disabled={submitting || busy}
+          >
+            {t("回到課程", "Return to course")}
+            <X size={19} />
+          </button>
+        )}
       </header>
       <div
         ref={canvas}
@@ -492,7 +519,7 @@ export function LearningMap({
                     </span>
                   </span>
                 </button>
-                {selected === n.id && !adding && !course.preview && (
+                {selected === n.id && !adding && !course.preview && !intro && (
                   <button
                     className="map-node-add"
                     aria-label={t(
@@ -605,14 +632,16 @@ export function LearningMap({
               </p>
             )}
           </div>
-          <button
-            className="pill-button quiet-pill"
-            disabled={busy || submitting || !canAdd}
-            onClick={() => openAdd(node.id)}
-          >
-            <Plus size={15} />
-            {t("從這裡延伸", "Extend from here")}
-          </button>
+          {!intro && (
+            <button
+              className="pill-button quiet-pill"
+              disabled={busy || submitting || !canAdd}
+              onClick={() => openAdd(node.id)}
+            >
+              <Plus size={15} />
+              {t("從這裡延伸", "Extend from here")}
+            </button>
+          )}
           {(graph.extensions ?? [])
             .filter(
               (e) => e.anchorId === node.id || e.nodeIds.includes(node.id),
@@ -627,7 +656,7 @@ export function LearningMap({
                     ? t("已完成延伸", "Extension completed")
                     : t("可隨時進入或繼續", "Start or resume at any time")}
                 </p>
-                {onEnterExtension && (
+                {onEnterExtension && !intro && (
                   <button
                     className="pill-button quiet-pill"
                     disabled={
@@ -652,7 +681,7 @@ export function LearningMap({
             ))}
           {error && <p role="alert">{error}</p>}
           <div className="node-detail-actions">
-            {nodeDone ? (
+            {intro ? null : nodeDone ? (
               <button
                 className="pill-button"
                 disabled={busy || submitting}
@@ -747,7 +776,43 @@ export function LearningMap({
           <Maximize size={17} />
         </button>
       </div>
-      {course.preview ? (
+      {intro ? (
+        <div className="map-intro-bar">
+          <div className="map-intro-brief">
+            {graph.outcome && (
+              <p>
+                <strong>
+                  {t("完成後你能：", "After this course, you can:")}
+                </strong>
+                {graph.outcome}
+              </p>
+            )}
+            {graph.scopeNote && <p className="quiet">{graph.scopeNote}</p>}
+          </div>
+          <div className="map-intro-actions">
+            <button
+              className="text-button"
+              disabled={busy || submitting}
+              onClick={intro.onLater}
+            >
+              {t("等等再學", "Learn later")}
+            </button>
+            <button
+              className="primary-button"
+              // A failed chapter still lets them through: the lesson offers the
+              // retry, and refusing entry would strand them here.
+              disabled={busy || submitting || introPending}
+              onClick={intro.onStart}
+            >
+              {introPending && <LoaderCircle className="spin" size={15} />}
+              {introPending
+                ? t("正在準備第 1 章…", "Preparing chapter 1…")
+                : t("開始學習", "Start learning")}
+              {!introPending && <ArrowRight size={16} />}
+            </button>
+          </div>
+        </div>
+      ) : course.preview ? (
         <div className="branch-confirm">
           <div>
             <strong>
@@ -887,7 +952,7 @@ export function LearningMap({
               </option>
             ))}
           </select>
-          {course.mode === "demo" && (
+          {course.mode === "demo" && !course.featuredId && (
             <small>
               {t(
                 "體驗模式的新增章節使用固定 HTML 範例。",

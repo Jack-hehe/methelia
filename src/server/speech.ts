@@ -18,20 +18,18 @@ const models: Record<
   },
   eleven_flash_v2_5: { limit: 40000, languageCode: true, neighbourText: true },
 };
-export function speechConfig(
+/** Resolve cache identity without requiring credentials for a new synthesis request. */
+export function resolveSpeechProfile(
   pinned?: SpeechProfile,
   language?: "zh-TW" | "en",
 ) {
-  const key = process.env.ELEVENLABS_API_KEY?.trim();
   const voiceId = pinned?.voiceId || process.env.ELEVENLABS_VOICE_ID?.trim();
   const model =
     pinned?.model ||
     process.env.ELEVENLABS_MODEL?.trim() ||
     "eleven_flash_v2_5";
-  if (!key || !voiceId)
-    throw new Error(
-      "請先設定 ELEVENLABS_API_KEY 與 ELEVENLABS_VOICE_ID。仍可閱讀課程。 ",
-    );
+  if (!voiceId)
+    throw new Error("請先設定 ELEVENLABS_VOICE_ID。仍可閱讀課程。 ");
   if (!/^[a-zA-Z0-9_-]{1,200}$/.test(voiceId))
     throw new Error("ELEVENLABS_VOICE_ID 格式不正確，請填入老師的 Voice ID。");
   if (!Object.hasOwn(models, model))
@@ -46,6 +44,17 @@ export function speechConfig(
         ? "en"
         : "zh"
       : pinned?.languageCode;
+  return profile;
+}
+
+export function speechConfig(
+  pinned?: SpeechProfile,
+  language?: "zh-TW" | "en",
+) {
+  const key = process.env.ELEVENLABS_API_KEY?.trim();
+  if (!key) throw new Error("請先設定 ELEVENLABS_API_KEY。仍可閱讀課程。 ");
+  const profile = resolveSpeechProfile(pinned, language);
+  const capability = models[profile.model];
   return {
     key,
     profile,

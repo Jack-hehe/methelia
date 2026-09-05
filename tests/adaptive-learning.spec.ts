@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures/course-test";
-import { answerIntake } from "./fixtures/intake-browser";
+import { answerIntake, startLearning } from "./fixtures/intake-browser";
 import type { Snapshot } from "../src/core/state";
 
 async function snapshot(page: Page): Promise<Snapshot> {
@@ -36,6 +36,7 @@ test("live intake, last-node extension, learning evidence and main-route restora
     "I have edited one page before",
   );
   await answerIntake(page);
+  await startLearning(page);
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
   const initial = await snapshot(page);
   expect(initial.learnerProfile?.depth).toBe("applied");

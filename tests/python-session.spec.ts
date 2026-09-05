@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/course-test";
-import { answerIntake } from "./fixtures/intake-browser";
+import { answerIntake, startLearning } from "./fixtures/intake-browser";
 
 test("Python prewarms on the reading page and keeps its interpreter and scoped output across navigation", async ({
   page,
@@ -15,6 +15,7 @@ test("Python prewarms on the reading page and keeps its interpreter and scoped o
   await page.getByLabel("你想學什麼？").fill("Learn Python");
   await page.locator('form button[type="submit"]').click();
   await answerIntake(page);
+  await startLearning(page);
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
   // The first page has no PythonRunner view; its course already owns the runtime.
   await expect.poll(() => wasmLoads, { timeout: 60000 }).toBe(1);
