@@ -206,7 +206,8 @@ export class LearningService {
           "SELECT count(*) AS n FROM generation_jobs j JOIN courses c ON c.id=j.course_id WHERE c.session_id=? AND j.status IN ('queued','working')",
         )
         .get(session) as { n: number };
-      if (busy.n > 4) throw new Error("請等待目前的課程生成完成");
+      if (!featuredId && busy.n > 4)
+        throw new Error("請等待目前的課程生成完成");
       const graph = featuredId
         ? featuredGraph(featuredId, language)
         : mode === "demo"
