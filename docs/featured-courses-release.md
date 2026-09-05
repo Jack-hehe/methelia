@@ -42,4 +42,8 @@ On 2026-09-06, the merged `main` branch passed all 294 unit tests, a production 
 
 Screenshot review led to stronger diagram contrast, side-by-side synthesis controls, expandable data/truth tables, and a single consistent reset action. Browser width checks cover desktop and a 390px geometry viewport; phones may scroll the lesson surface vertically to reach detailed controls.
 
-Release completion additionally requires the all-assets verification command, reviewed commits on `main`, a successful Render deployment and authenticated live-site checks. Those steps are recorded in the implementation plan when finished.
+## Live release
+
+On 2026-09-06 at 05:39 Asia/Taipei, Render deployment `dep-dae8n2n40ujc73e96esg` successfully deployed application commit `93f9049` from `main` to [methelia.com](https://methelia.com). Both the service and its Blueprint now track `main`.
+
+Authenticated production-browser checks passed for the 20-course catalog, English geometry enrollment, five prepared chapters, real cached MP3 playback, visible idle captions, next-page autoplay, saved controls after reload, and the Chinese Python project's actual execution, localized website preview and ZIP export. HTTPS health returned 200, anonymous homepage access remained protected (401), and `www.methelia.com` redirected to the primary domain (301). The existing demo credentials and persistent disk were retained.
