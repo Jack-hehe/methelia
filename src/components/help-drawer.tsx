@@ -1,16 +1,22 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import {
-  X,
+  PanelRightClose,
   ArrowUp,
   MessageCircle,
   GitBranch,
   LoaderCircle,
   Check,
+  Copy,
 } from "lucide-react";
 import type { Message, Snapshot } from "../core/state";
 import type { LearningNode } from "../core/protocol";
 import { api } from "./api";
+import { RichText } from "./rich-text";
+const MIN_WIDTH = 320,
+  MAX_WIDTH = 720,
+  DEFAULT_WIDTH = 440,
+  WIDTH_KEY = "methelia:help-width";
 export function HelpDrawer({
   course,
   sectionId,
@@ -27,46 +33,112 @@ export function HelpDrawer({
   onError: (error: string) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null),
-    bottom = useRef<HTMLDivElement>(null);
+    bottom = useRef<HTMLDivElement>(null),
+    field = useRef<HTMLTextAreaElement>(null),
+    dragging = useRef(false);
   const [question, setQuestion] = useState(""),
     [busy, setBusy] = useState(false),
-    [excluded, setExcluded] = useState<string[]>([]);
+    [excluded, setExcluded] = useState<string[]>([]),
+    // The learner's own line, shown before the reply lands.
+    [pending, setPending] = useState(""),
+    [copied, setCopied] = useState(""),
+    [width, setWidth] = useState(() => {
+      try {
+        const stored = Number(localStorage.getItem(WIDTH_KEY));
+        if (stored >= MIN_WIDTH && stored <= MAX_WIDTH) return stored;
+      } catch {}
+      return DEFAULT_WIDTH;
+    });
   useEffect(() => {
-    ref.current?.showModal();
+    // show(), not showModal(): the lesson behind stays readable and clickable.
+    ref.current?.show();
+    field.current?.focus();
     return () => {
       ref.current?.close();
     };
   }, []);
   useEffect(() => {
+    // A non-modal dialog never receives cancel, so Escape is handled here.
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && !dragging.current) onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  useEffect(() => {
     bottom.current?.scrollIntoView({ block: "nearest" });
-  }, [course.messages, busy]);
+  }, [course.messages, busy, pending]);
   async function send() {
-    if (!question.trim()) return;
+    const text = question.trim();
+    if (!text || busy) return;
+    setPending(text);
+    setQuestion("");
     setBusy(true);
     try {
       const messages = await api<Message[]>("help/messages", {
         courseId: course.id,
-        question,
+        question: text,
         sectionId,
       });
       onMessages(messages);
-      setQuestion("");
+      setPending("");
     } catch (e) {
+      // Hand the question back rather than losing what was typed.
+      setPending("");
+      setQuestion(text);
       onError((e as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+  async function copy(message: Message) {
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setCopied(message.id);
+      setTimeout(() => setCopied(""), 1600);
+    } catch {
+      onError("這個瀏覽器不允許複製，請手動選取文字。");
+    }
+  }
+  function startResize(event: React.PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragging.current = true;
+  }
+  function moveResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging.current) return;
+    setWidth(
+      Math.min(
+        MAX_WIDTH,
+        Math.max(MIN_WIDTH, window.innerWidth - event.clientX),
+      ),
+    );
+  }
+  function endResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging.current) return;
+    dragging.current = false;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    try {
+      localStorage.setItem(WIDTH_KEY, String(width));
+    } catch {}
   }
   return (
     <dialog
       ref={ref}
       className="help-drawer"
       aria-label="小問題"
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
+      style={{ width }}
     >
+      <div
+        className="help-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="調整側欄寬度"
+        onPointerDown={startResize}
+        onPointerMove={moveResize}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+      />
       <div className="panel-heading">
         <div>
           <MessageCircle size={19} />
@@ -74,10 +146,11 @@ export function HelpDrawer({
         </div>
         <button
           className="icon-button"
-          aria-label="關閉小問題"
+          aria-label="收合小問題"
+          title="收合側欄"
           onClick={onClose}
         >
-          <X size={18} />
+          <PanelRightClose size={18} />
         </button>
       </div>
       <div className="help-context">
@@ -92,7 +165,29 @@ export function HelpDrawer({
                 METHELIA {course.mode === "demo" ? "· 示範回覆" : ""}
               </span>
             )}
-            <p>{message.text}</p>
+            {message.role === "assistant" ? (
+              <div className="rich-text">
+                <RichText text={message.text} />
+              </div>
+            ) : (
+              <p>{message.text}</p>
+            )}
+            {message.role === "assistant" && (
+              <div className="message-actions">
+                <button
+                  className="icon-button"
+                  aria-label="複製回覆"
+                  title={copied === message.id ? "已複製" : "複製回覆"}
+                  onClick={() => void copy(message)}
+                >
+                  {copied === message.id ? (
+                    <Check size={14} />
+                  ) : (
+                    <Copy size={14} />
+                  )}
+                </button>
+              </div>
+            )}
             {!!message.nodes?.length && (
               <div className="recommendations">
                 <span>
@@ -140,6 +235,11 @@ export function HelpDrawer({
             )}
           </div>
         ))}
+        {pending && (
+          <div className="chat-message user is-pending">
+            <p>{pending}</p>
+          </div>
+        )}
         {busy && (
           <div className="thinking">
             <LoaderCircle className="spin" size={16} /> 回覆中…
@@ -155,9 +255,21 @@ export function HelpDrawer({
         }}
       >
         <textarea
-          placeholder="哪個地方還不太懂？"
+          ref={field}
+          placeholder="哪個地方還不太懂？（Enter 送出，Shift+Enter 換行）"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => {
+            // isComposing keeps Enter from sending while an IME candidate is open.
+            if (
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.nativeEvent.isComposing
+            ) {
+              e.preventDefault();
+              void send();
+            }
+          }}
           maxLength={2000}
         />
         <button aria-label="送出問題" disabled={busy || !question.trim()}>

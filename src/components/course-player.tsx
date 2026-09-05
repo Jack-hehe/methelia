@@ -4,7 +4,6 @@ import {
   ChevronRight,
   ChevronLeft,
   MessageCircle,
-  Code2,
   Network,
   LoaderCircle,
   ArrowLeft,
@@ -23,7 +22,6 @@ import { WorkspacePanel } from "./workspace-panel";
 import { LearningMap } from "./learning-map";
 import { HelpDrawer } from "./help-drawer";
 import { AudioControls } from "./audio-controls";
-import { SpeechSettings } from "./speech-settings";
 
 export function CoursePlayer({
   course,
@@ -310,33 +308,6 @@ export function CoursePlayer({
       onHome();
     });
   }
-  async function rebuildSpeech() {
-    if (!pkg || busy) throw new Error("請稍後再試。");
-    leavingPage.current = true;
-    setBusy(true);
-    try {
-      pauseAudio();
-      await leaveWorkspace.current?.();
-      await progressQueue.current;
-      const next = await api<Snapshot>(`chapters/${pkg.id}/retry`, {
-        courseId: course.id,
-        nodeId,
-        rebuildSpeech: true,
-      });
-      onChange(next);
-    } finally {
-      leavingPage.current = false;
-      setBusy(false);
-    }
-  }
-  const speechSettings = (
-    <SpeechSettings
-      pkg={pkg}
-      disabled={!canEnter || busy}
-      onOpen={pauseAudio}
-      onRebuild={rebuildSpeech}
-    />
-  );
   const nextDisabled =
     busy ||
     Boolean(review) ||
@@ -392,26 +363,17 @@ export function CoursePlayer({
             <span className="demo-badge">體驗課程</span>
           )}
           {themeControl}
-          {!fullscreen && speechSettings}
-          {hasWorkspace && (
-            <button
-              className="icon-button"
-              aria-label="開啟實作區"
-              disabled={!canEnter || busy}
-              onClick={() => setPractice(true)}
-            >
-              <Code2 size={20} />
-            </button>
-          )}
           <button
-            className="help-button"
+            className="icon-button"
+            aria-label="小問題"
+            title="小問題"
             disabled={!canEnter}
             onClick={() => {
               pauseAudio();
               setHelp(true);
             }}
           >
-            <MessageCircle size={16} /> 小問題
+            <MessageCircle size={19} />
           </button>
         </div>
       </header>
@@ -497,17 +459,6 @@ export function CoursePlayer({
               </div>
               {fullscreen && canEnter && (
                 <div className="canvas-page-actions">
-                  {speechSettings}
-                  {hasWorkspace && (
-                    <button
-                      className="icon-button"
-                      aria-label="開啟實作區"
-                      disabled={!canEnter || busy}
-                      onClick={() => setPractice(true)}
-                    >
-                      <Code2 size={19} />
-                    </button>
-                  )}
                   <button
                     className="icon-button"
                     aria-label="小問題"
