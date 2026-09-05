@@ -1,5 +1,16 @@
 import type { Chapter } from "../core/protocol";
-import type { PageAudio } from "../core/state";
+import type { PageAudio, PackageState } from "../core/state";
+
+export function hasLegacySpeech(pkg: PackageState) {
+  return (
+    !pkg.speechProfile &&
+    (pkg.speech === "ready" ||
+      pkg.cues.length > 0 ||
+      Object.values(pkg.pageAudio || {}).some(
+        (page) => page.status === "ready",
+      ))
+  );
+}
 
 export const pageAudioArtifactKey = (packageId: string, sectionId: string) =>
   "page-audio:" + packageId + ":" + sectionId;

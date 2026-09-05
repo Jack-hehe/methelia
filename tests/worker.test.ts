@@ -10,7 +10,7 @@ import { Store } from "../src/server/db";
 import { LearningService } from "../src/server/service";
 import { demoGraph, demoChapter } from "../src/core/fixtures";
 it("synthesizes page audio sequentially, retries only a failed page, and reuses ready pages", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "methelia-fish-worker-"));
+  const dir = mkdtempSync(join(tmpdir(), "methelia-speech-worker-"));
   const store = new Store(join(dir, "methelia.sqlite"));
   const service = new LearningService(store);
   const session = service.session();
@@ -41,17 +41,16 @@ it("synthesizes page audio sequentially, retries only a failed page, and reuses 
       res.end("unavailable");
       return;
     }
-    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Content-Type", "application/json");
     res.end(
-      `data: ${JSON.stringify({
+      JSON.stringify({
         audio_base64: "YXVkaW8=",
-        chunk_seq: 0,
-        chunk_audio_offset_sec: 0,
         alignment: {
-          audio_duration: 2,
-          segments: [{ text: input.text, start: 0, end: 2 }],
+          characters: [input.text],
+          character_start_times_seconds: [0],
+          character_end_times_seconds: [2],
         },
-      })}\n\n`,
+      }),
     );
   });
   server.listen(0, "127.0.0.1");
@@ -63,7 +62,7 @@ it("synthesizes page audio sequentially, retries only a failed page, and reuses 
     process.execPath,
     [
       "--import",
-      pathToFileURL(resolve("tests/fixtures/fish-fetch.mjs")).href,
+      pathToFileURL(resolve("tests/fixtures/elevenlabs-fetch.mjs")).href,
       "--import",
       "tsx",
       resolve("src/server/worker.ts"),
@@ -73,10 +72,10 @@ it("synthesizes page audio sequentially, retries only a failed page, and reuses 
         ...process.env,
         METHELIA_DATA_DIR: dir,
         AI_API_KEY: "",
-        FISH_AUDIO_API_KEY: "test",
-        FISH_AUDIO_REFERENCE_ID: "test",
-        FISH_AUDIO_MODEL: "s2.1-pro-free",
-        METHELIA_TEST_FISH_URL: `http://127.0.0.1:${address.port}`,
+        ELEVENLABS_API_KEY: "test",
+        ELEVENLABS_VOICE_ID: "teacher-test",
+        ELEVENLABS_MODEL: "eleven_multilingual_v2",
+        METHELIA_TEST_SPEECH_URL: `http://127.0.0.1:${address.port}`,
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -102,6 +101,11 @@ it("synthesizes page audio sequentially, retries only a failed page, and reuses 
     const partial = service.getChapter(session, course.id, "web");
     expect(partial).toMatchObject({
       speech: "failed",
+      speechProfile: {
+        provider: "elevenlabs",
+        voiceId: "teacher-test",
+        model: "eleven_multilingual_v2",
+      },
       pageAudio: {
         languages: {
           status: "ready",
@@ -114,14 +118,19 @@ it("synthesizes page audio sequentially, retries only a failed page, and reuses 
       },
     });
     expect(requests).toEqual(["Page one.", "Page two."]);
-    vi.stubEnv("FISH_AUDIO_API_KEY", "test");
-    vi.stubEnv("FISH_AUDIO_REFERENCE_ID", "test");
-    vi.stubEnv("FISH_AUDIO_MODEL", "s2.1-pro-free");
+    vi.stubEnv("ELEVENLABS_API_KEY", "test");
+    vi.stubEnv("ELEVENLABS_VOICE_ID", "different-voice");
+    vi.stubEnv("ELEVENLABS_MODEL", "eleven_flash_v2_5");
     service.retry(session, course.id, "web");
     expect(await waitJob("speech:" + pkg.id), errors).toBe("done");
     const ready = service.getChapter(session, course.id, "web");
     expect(ready).toMatchObject({
       speech: "ready",
+      speechProfile: {
+        provider: "elevenlabs",
+        voiceId: "teacher-test",
+        model: "eleven_multilingual_v2",
+      },
       pageAudio: {
         languages: { status: "ready" },
         structure: {
@@ -208,6 +217,8 @@ it("processes persisted graph and chapter jobs in the real worker process", asyn
         AI_API_KEY: "test",
         FISH_AUDIO_API_KEY: "",
         FISH_AUDIO_REFERENCE_ID: "",
+        ELEVENLABS_API_KEY: "",
+        ELEVENLABS_VOICE_ID: "",
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,

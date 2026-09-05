@@ -1,0 +1,42 @@
+# Paid, single-instance demo. Website and worker share one persistent SQLite DB.
+services:
+  - type: web
+    name: methelia-demo
+    runtime: node
+    plan: 1c-2g
+    region: singapore
+    branch: feat/methelia-mvp-release
+    numInstances: 1
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:render
+    healthCheckPath: /api/health
+    autoDeployTrigger: off
+    disk:
+      name: methelia-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: METHELIA_DATA_DIR
+        value: /var/data/methelia
+      - key: METHELIA_ALLOWED_ORIGINS
+        value: https://methelia.com,https://www.methelia.com
+      - key: METHELIA_DEMO_PASSWORD
+        generateValue: true
+      - key: METHELIA_AI_DAILY_REQUESTS
+        value: "100"
+      - key: METHELIA_SPEECH_DAILY_CHARACTERS
+        value: "30000"
+      - key: AI_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: AI_MODEL
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: ELEVENLABS_MODEL
+        value: eleven_multilingual_v2

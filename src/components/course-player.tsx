@@ -23,6 +23,7 @@ import { WorkspacePanel } from "./workspace-panel";
 import { LearningMap } from "./learning-map";
 import { HelpDrawer } from "./help-drawer";
 import { AudioControls } from "./audio-controls";
+import { SpeechSettings } from "./speech-settings";
 
 export function CoursePlayer({
   course,
@@ -303,6 +304,33 @@ export function CoursePlayer({
       onHome();
     });
   }
+  async function rebuildSpeech() {
+    if (!pkg || busy) throw new Error("請稍後再試。");
+    leavingPage.current = true;
+    setBusy(true);
+    try {
+      pauseAudio();
+      await leaveWorkspace.current?.();
+      await progressQueue.current;
+      const next = await api<Snapshot>(`chapters/${pkg.id}/retry`, {
+        courseId: course.id,
+        nodeId,
+        rebuildSpeech: true,
+      });
+      onChange(next);
+    } finally {
+      leavingPage.current = false;
+      setBusy(false);
+    }
+  }
+  const speechSettings = (
+    <SpeechSettings
+      pkg={pkg}
+      disabled={!canEnter || busy}
+      onOpen={pauseAudio}
+      onRebuild={rebuildSpeech}
+    />
+  );
   const nextDisabled =
     busy ||
     Boolean(review) ||
@@ -358,6 +386,7 @@ export function CoursePlayer({
             <span className="demo-badge">體驗課程</span>
           )}
           {themeControl}
+          {!fullscreen && speechSettings}
           <button
             className="icon-button"
             aria-label="開啟實作區"
@@ -421,6 +450,7 @@ export function CoursePlayer({
               </div>
               {fullscreen && canEnter && (
                 <div className="canvas-page-actions">
+                  {speechSettings}
                   <button
                     className="icon-button"
                     aria-label="開啟實作區"

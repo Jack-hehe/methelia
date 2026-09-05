@@ -499,12 +499,22 @@ button:hover:not(:disabled) {
   color: var(--ink);
   min-height: 32px;
 }
+.saved-course-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+.saved-course-entry {
+  position: relative;
+  min-width: 0;
+}
 .saved-course {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 24px;
-  width: min(520px, 100%);
+  height: 100%;
+  padding: 24px 66px 24px 24px;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface);
@@ -534,10 +544,96 @@ button:hover:not(:disabled) {
   color: var(--muted);
 }
 .saved-course > svg {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
   flex-shrink: 0;
 }
 .saved-course:hover {
   border-color: #a39c90;
+}
+.saved-course-delete {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.saved-course-delete:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+}
+.course-delete-dialog,
+.speech-dialog {
+  position: fixed;
+  width: min(460px, calc(100vw - 32px));
+  margin: auto;
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 100px #0004;
+}
+.course-delete-dialog::backdrop,
+.speech-dialog::backdrop {
+  background: #18122266;
+  backdrop-filter: blur(6px);
+}
+.course-delete-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+.course-delete-dialog h2,
+.speech-dialog h2 {
+  margin-bottom: 12px;
+  font-size: 22px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.course-delete-dialog p,
+.speech-dialog p {
+  margin-bottom: 22px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.course-delete-dialog .course-delete-error,
+.speech-dialog .speech-dialog-error {
+  margin-top: -8px;
+  color: var(--danger);
+}
+.course-delete-actions,
+.speech-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.course-delete-actions button {
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  font-weight: 600;
+}
+.course-delete-confirm {
+  border-color: var(--danger) !important;
+  background: var(--danger);
+  color: var(--surface);
 }
 @media (max-width: 650px) {
   .course-group > summary h2 {
@@ -547,8 +643,27 @@ button:hover:not(:disabled) {
     padding-top: 36px;
   }
   .saved-course {
-    padding: 18px;
+    padding: 18px 60px 18px 18px;
     gap: 12px;
+  }
+  .saved-course-delete {
+    top: 10px;
+    right: 10px;
+  }
+  .saved-course > svg {
+    right: 16px;
+    bottom: 16px;
+  }
+  .course-delete-dialog,
+  .speech-dialog {
+    padding: 24px;
+  }
+  .course-delete-actions,
+  .speech-dialog-actions {
+    flex-direction: column-reverse;
+  }
+  .course-delete-actions button {
+    width: 100%;
   }
 }
 .home-catalog .rail-btn {

@@ -17,13 +17,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
   for (const store of stores.splice(0)) store.db.close();
 });
-it("rejects invalid Fish configuration before queuing synthesis", () => {
-  vi.stubEnv("FISH_AUDIO_API_KEY", "test");
-  vi.stubEnv("FISH_AUDIO_REFERENCE_ID", "test");
-  vi.stubEnv("FISH_AUDIO_MODEL", "s2-pro-free");
+it("rejects invalid ElevenLabs configuration before queuing synthesis", () => {
+  vi.stubEnv("ELEVENLABS_API_KEY", "test");
+  vi.stubEnv("ELEVENLABS_VOICE_ID", "test");
+  vi.stubEnv("ELEVENLABS_MODEL", "unknown-model");
   const { service, store, session, course } = setup();
   expect(() => service.retry(session, course.id, "web")).toThrow(
-    /FISH_AUDIO_MODEL/,
+    /ELEVENLABS_MODEL/,
   );
   expect(
     store.db

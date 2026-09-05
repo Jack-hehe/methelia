@@ -10,6 +10,7 @@
     "dev": "concurrently -k -n web,worker \"next dev --hostname 127.0.0.1\" \"tsx --env-file-if-exists=.env.local src/server/worker.ts\"",
     "build": "next build",
     "start": "concurrently -k \"next start --hostname 127.0.0.1\" \"tsx --env-file-if-exists=.env.local src/server/worker.ts\"",
+    "start:render": "concurrently -k -n web,worker \"next start --hostname 0.0.0.0\" \"tsx src/server/worker.ts\"",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",

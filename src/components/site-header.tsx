@@ -25,11 +25,13 @@ function GitHubMark() {
  */
 export function SiteHeader({
   active,
+  homeHref = "/?home=1",
   language = "zh",
   onLanguageChange,
   themeControl,
 }: {
   active?: "explore";
+  homeHref?: string;
   language?: HomeLanguage;
   onLanguageChange: (language: HomeLanguage) => void;
   themeControl: React.ReactNode;
@@ -38,7 +40,7 @@ export function SiteHeader({
   const copy = homeCopy[language];
   return (
     <header className="site-header unified-header">
-      <a className="brand" href="/?home=1">
+      <a className="brand" href={homeHref}>
         Methelia
       </a>
       <div className="header-right">

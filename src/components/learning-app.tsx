@@ -36,10 +36,15 @@ export function LearningApp() {
     const params = new URLSearchParams(window.location.search);
     const wantsHome = params.has("home");
     const wantsDemo = !wantsHome && params.has("demo");
+    const courseId = params.get("course");
     setHome(wantsHome);
     try {
       const result = await api<{ course: Snapshot | null }>("sessions", {});
-      setCourse(result.course);
+      const restored =
+        courseId && !wantsDemo
+          ? await api<Snapshot>("courses/" + encodeURIComponent(courseId))
+          : result.course;
+      setCourse(restored);
       if (wantsDemo) {
         const url = new URL(window.location.href);
         url.searchParams.delete("demo");
@@ -49,6 +54,8 @@ export function LearningApp() {
           url.pathname + url.search + url.hash,
         );
         await start("demo");
+      } else if (restored) {
+        showHome(wantsHome, restored.id);
       }
       setSessionStatus("ready");
     } catch {
@@ -82,9 +89,11 @@ export function LearningApp() {
     };
   }, [course]);
 
-  function showHome(value: boolean) {
+  function showHome(value: boolean, courseId = course?.id) {
     const url = new URL(window.location.href);
     url.searchParams.delete("demo");
+    if (courseId) url.searchParams.set("course", courseId);
+    else url.searchParams.delete("course");
     if (value) url.searchParams.set("home", "1");
     else url.searchParams.delete("home");
     window.history.replaceState(null, "", url.pathname + url.search + url.hash);
@@ -101,7 +110,7 @@ export function LearningApp() {
         requestId: crypto.randomUUID(),
       });
       setCourse(c);
-      showHome(false);
+      showHome(false, c.id);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -138,6 +147,7 @@ export function LearningApp() {
             >
               {copy.retry}
             </button>
+            <a href="/explore">{copy.courses}</a>
           </>
         ) : (
           <div role="status">
@@ -176,6 +186,11 @@ export function LearningApp() {
         />
       ) : (
         <Landing
+          homeHref={
+            course
+              ? `/?home=1&course=${encodeURIComponent(course.id)}`
+              : undefined
+          }
           language={language}
           onLanguageChange={changeLanguage}
           goal={goal}

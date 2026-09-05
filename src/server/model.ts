@@ -9,6 +9,7 @@ import {
   type LearningNode,
 } from "../core/protocol";
 import type { Workspace } from "../core/workspace";
+import { reserveUsage } from "./usage";
 export function modelConfigured() {
   return Boolean(
     process.env.AI_BASE_URL && process.env.AI_MODEL && process.env.AI_API_KEY,
@@ -26,6 +27,7 @@ async function structured<T>(
     process.env.AI_BASE_URL!.replace(/\/$/, "") + "/chat/completions";
   let feedback = "";
   for (let attempt = 0; attempt < 3; attempt++) {
+    reserveUsage("ai");
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {

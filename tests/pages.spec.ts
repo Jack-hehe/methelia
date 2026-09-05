@@ -52,6 +52,14 @@ test("page audio uses independent tracks, stays on the page at the end and never
     snapshot.course.graph = course.graph;
     await route.fulfill({ json: snapshot });
   });
+  // Reload now reads the pinned course ID. Keep the prepared-audio fixture
+  // consistent at both read boundaries without making a paid TTS request.
+  await page.route(`**/api/courses/${course.id}`, async (route) => {
+    const snapshot = await (await route.fetch()).json();
+    snapshot.chapters.web = pkg;
+    snapshot.graph = course.graph;
+    await route.fulfill({ json: snapshot });
+  });
   await page.route("**/api/progress/events", async (route) => {
     // A slow page save keeps the outgoing media mounted long enough to deliver pause events.
     await new Promise((resolve) => setTimeout(resolve, 100));

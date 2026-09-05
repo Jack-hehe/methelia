@@ -7,6 +7,11 @@ export type PageAudio = {
   captions: Caption[];
   error?: string;
 };
+export type SpeechProfile = {
+  provider: "elevenlabs";
+  voiceId: string;
+  model: string;
+};
 export type PackageState = {
   id: string;
   nodeHash: string;
@@ -17,6 +22,8 @@ export type PackageState = {
   captions?: Caption[];
   // Absence denotes a legacy whole-chapter narration package.
   pageAudio?: Record<string, PageAudio>;
+  // Pin the narrator across pages/retries; older Fish packages have no profile.
+  speechProfile?: SpeechProfile;
   error?: string;
 };
 export type Message = {
@@ -62,3 +69,7 @@ export type Course = {
 export type Snapshot = Omit<Course, "sessionId" | "requestId"> & {
   chapters: Record<string, PackageState>;
 };
+export type CourseSummary = Pick<
+  Course,
+  "id" | "goal" | "status" | "createdAt"
+>;

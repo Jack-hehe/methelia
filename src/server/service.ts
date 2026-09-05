@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Store } from "./db";
 import { demoGraph, demoChapter } from "../core/fixtures";
-import { fishConfig } from "./fish";
+import { speechConfig } from "./speech";
+import { hasLegacySpeech, pageAudioForChapter } from "./page-audio";
 import {
   emptyWorkspace,
   normalizePath,
@@ -12,6 +13,7 @@ import { insertBranch } from "../core/graph";
 import { nodeSchema, type LearningNode, type Chapter } from "../core/protocol";
 import type {
   Course,
+  CourseSummary,
   Snapshot,
   PackageState,
   Message,
@@ -54,6 +56,47 @@ export class LearningService {
   }
   getCourse(session: string, id: string) {
     return this.snapshot(this.owned(session, id));
+  }
+  listCourses(session: string): CourseSummary[] {
+    // Project only card metadata; opening the library must not load every
+    // course's chapter packages, messages, or workspace files.
+    return this.store.db
+      .prepare(
+        `SELECT id, json_extract(data, '$.goal') AS goal,
+          json_extract(data, '$.status') AS status,
+          json_extract(data, '$.createdAt') AS createdAt
+         FROM courses WHERE session_id=? ORDER BY rowid DESC`,
+      )
+      .all(session) as CourseSummary[];
+  }
+  deleteCourse(session: string, id: string): { deleted: true } {
+    return this.store.transaction(() => {
+      this.owned(session, id);
+      const packages = this.store.db
+        .prepare("SELECT id FROM chapter_packages WHERE course_id=?")
+        .all(id) as { id: string }[];
+      const deleteAudio = this.store.db.prepare(
+        "DELETE FROM audio_artifacts WHERE id=? OR substr(id,1,length(?))=?",
+      );
+      for (const pkg of packages) {
+        const pageAudioPrefix = `page-audio:${pkg.id}:`;
+        deleteAudio.run(pkg.id, pageAudioPrefix, pageAudioPrefix);
+      }
+      this.store.db
+        .prepare("DELETE FROM generation_jobs WHERE course_id=?")
+        .run(id);
+      this.store.db
+        .prepare("DELETE FROM progress_events WHERE course_id=?")
+        .run(id);
+      this.store.db
+        .prepare("DELETE FROM graph_revisions WHERE course_id=?")
+        .run(id);
+      this.store.db
+        .prepare("DELETE FROM chapter_packages WHERE course_id=?")
+        .run(id);
+      this.store.db.prepare("DELETE FROM courses WHERE id=?").run(id);
+      return { deleted: true };
+    });
   }
   latest(session: string) {
     const row = this.store.db
@@ -381,10 +424,46 @@ export class LearningService {
       return c.messages;
     });
   }
-  retry(session: string, id: string, nodeId: string) {
+  retry(
+    session: string,
+    id: string,
+    nodeId: string,
+    request?: { packageId: string; rebuild?: boolean },
+  ) {
     return this.mutate(session, id, (c) => {
       const pkg = this.store.getPackage(c.chapterIds[nodeId]);
       if (!pkg) throw new Error("Chapter not found");
+      if (request && request.packageId !== pkg.id)
+        throw new Error("Chapter conflict，請重新整理後再試。");
+      if (request?.rebuild) {
+        if (pkg.status !== "ready" || !pkg.chapter)
+          throw new Error("請等待章節內容準備完成。");
+        if (["pending", "generating"].includes(pkg.speech))
+          throw new Error("語音仍在準備中，請稍後再試。");
+        const profile = speechConfig().profile;
+        const next: PackageState = {
+          ...pkg,
+          id: randomUUID(),
+          speech: "pending",
+          error: undefined,
+          cues: [],
+          captions: [],
+          pageAudio: pageAudioForChapter(pkg.chapter),
+          speechProfile: profile,
+        };
+        // Keep the prior package/audio intact. A new ID prevents old tabs or
+        // late worker responses from replacing the newly requested narrator.
+        this.store.putPackage(id, next);
+        c.chapterIds[nodeId] = next.id;
+        if (c.progress[nodeId]) c.progress[nodeId].time = 0;
+        this.store.db
+          .prepare(
+            "UPDATE generation_jobs SET status='failed',lease=0,error='Audio package replaced' WHERE package_id=? AND status IN ('queued','working')",
+          )
+          .run(pkg.id);
+        this.store.enqueue(`speech:${next.id}`, id, "speech", next.id);
+        return this.snapshot(c);
+      }
       if (pkg.status === "failed") {
         pkg.status = "queued";
         pkg.error = undefined;
@@ -395,7 +474,11 @@ export class LearningService {
           )
           .run(`chapter:${pkg.id}`);
       } else if (pkg.status === "ready" && pkg.speech === "failed") {
-        fishConfig();
+        if (hasLegacySpeech(pkg))
+          throw new Error(
+            "此章仍有舊語音，請使用「重建章節語音」改用 ElevenLabs，避免混用聲音。",
+          );
+        pkg.speechProfile = speechConfig(pkg.speechProfile).profile;
         if (pkg.pageAudio) {
           for (const page of Object.values(pkg.pageAudio))
             if (page.status === "failed") {

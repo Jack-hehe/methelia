@@ -6,7 +6,8 @@ import { getStore } from "../../../server/db";
 import { LearningService } from "../../../server/service";
 import { generateHelp, modelConfigured } from "../../../server/model";
 import { nodeSchema } from "../../../core/protocol";
-import { sameOrigin } from "../../../server/origin";
+import { demoAccess, publicOrigin } from "../../../server/deployment";
+import { UsageLimitError } from "../../../server/usage";
 import { pageAudioArtifactKey } from "../../../server/page-audio";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,14 @@ async function readBody(request: NextRequest): Promise<unknown> {
   return JSON.parse(body + decoder.decode());
 }
 async function handle(request: NextRequest) {
+  const denied = demoAccess(request.headers);
+  if (denied) return denied;
+  const expectedOrigin = publicOrigin(
+    request.headers.get("host"),
+    request.nextUrl.protocol,
+  );
+  if (!expectedOrigin)
+    return NextResponse.json({ error: "Host not allowed" }, { status: 403 });
   const store = getStore(),
     service = new LearningService(store);
   let session = "";
@@ -38,8 +47,8 @@ async function handle(request: NextRequest) {
     const origin = request.headers.get("origin");
     if (
       request.method !== "GET" &&
-      origin &&
-      !sameOrigin(origin, request.headers.get("host"), request.nextUrl.protocol)
+      ((origin && origin !== expectedOrigin) ||
+        request.headers.get("sec-fetch-site") === "cross-site")
     )
       return NextResponse.json(
         { error: "Origin not allowed" },
@@ -47,19 +56,28 @@ async function handle(request: NextRequest) {
       );
     session = service.session(request.cookies.get("methelia_session")?.value);
     const path = request.nextUrl.pathname.slice("/api/".length).split("/");
-    const data = request.method === "GET" ? {} : await readBody(request);
+    const data =
+      request.method === "GET" || request.method === "DELETE"
+        ? {}
+        : await readBody(request);
     let result: unknown;
     if (path[0] === "sessions")
       result = {
         course: service.latest(session),
         configured: {
           ai: modelConfigured(),
-          fish: Boolean(
-            process.env.FISH_AUDIO_API_KEY &&
-            process.env.FISH_AUDIO_REFERENCE_ID,
+          speech: Boolean(
+            process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID,
           ),
+          speechProvider: "elevenlabs",
         },
       };
+    else if (
+      path[0] === "courses" &&
+      request.method === "GET" &&
+      path.length === 1
+    )
+      result = { courses: service.listCourses(session) };
     else if (
       path[0] === "courses" &&
       request.method === "POST" &&
@@ -78,7 +96,14 @@ async function handle(request: NextRequest) {
         body.mode,
         body.requestId,
       );
-    } else if (path[0] === "courses" && path[1] && request.method === "GET")
+    } else if (
+      path[0] === "courses" &&
+      path[1] &&
+      path.length === 2 &&
+      request.method === "DELETE"
+    )
+      result = service.deleteCourse(session, path[1]);
+    else if (path[0] === "courses" && path[1] && request.method === "GET")
       result = service.getCourse(session, path[1]);
     else if (
       path[0] === "courses" &&
@@ -128,8 +153,13 @@ async function handle(request: NextRequest) {
       request.method === "POST" &&
       path[2] === "retry"
     ) {
-      const body = courseBody.extend({ nodeId: short }).parse(data);
-      result = service.retry(session, body.courseId, body.nodeId);
+      const body = courseBody
+        .extend({ nodeId: short, rebuildSpeech: z.boolean().optional() })
+        .parse(data);
+      result = service.retry(session, body.courseId, body.nodeId, {
+        packageId: path[1],
+        rebuild: body.rebuildSpeech,
+      });
     } else if (
       path[0] === "progress" &&
       path[1] === "events" &&
@@ -389,7 +419,7 @@ async function handle(request: NextRequest) {
     response.cookies.set("methelia_session", session, {
       httpOnly: true,
       sameSite: "lax",
-      secure: request.nextUrl.protocol === "https:",
+      secure: expectedOrigin.startsWith("https:"),
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
     });
@@ -404,11 +434,14 @@ async function handle(request: NextRequest) {
     return NextResponse.json(
       { error: message },
       {
-        status: /not found/i.test(message)
-          ? 404
-          : /conflict/i.test(message)
-            ? 409
-            : 400,
+        status:
+          error instanceof UsageLimitError
+            ? 429
+            : /not found/i.test(message)
+              ? 404
+              : /conflict/i.test(message)
+                ? 409
+                : 400,
         headers: { "Cache-Control": "no-store" },
       },
     );
@@ -417,3 +450,4 @@ async function handle(request: NextRequest) {
 export const GET = handle;
 export const POST = handle;
 export const PUT = handle;
+export const DELETE = handle;

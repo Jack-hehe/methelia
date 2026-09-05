@@ -1,12 +1,12 @@
-import { randomUUID } from "node:crypto";
 import { Store } from "./db";
 import { LearningService } from "./service";
 import { generateGraph, generateChapter } from "./model";
-import { synthesize } from "./fish";
+import { synthesize, speechConfig } from "./speech";
 import {
   pageAudioArtifactKey,
   pageAudioForChapter,
   pageAudioReady,
+  hasLegacySpeech,
 } from "./page-audio";
 const store = new Store();
 const service = new LearningService(store);
@@ -16,12 +16,20 @@ type Job = {
   package_id: string | null;
   kind: string;
 };
+// Check inside the same transaction as each write. A request may finish after
+// the learner deletes a course or replaces its narration package.
+function activePackage(courseId: string, packageId: string) {
+  const course = store.getCourse(courseId);
+  return course && Object.values(course.chapterIds).includes(packageId)
+    ? store.getPackage(packageId)
+    : null;
+}
 async function synthesizePages(courseId: string, packageId: string) {
-  let pkg = store.getPackage(packageId);
+  let pkg = activePackage(courseId, packageId);
   if (!pkg?.chapter || !pkg.pageAudio) return;
   const chapter = pkg.chapter;
   store.transaction(() => {
-    const current = store.getPackage(packageId);
+    const current = activePackage(courseId, packageId);
     if (!current?.chapter || !current.pageAudio) return;
     current.pageAudio = pageAudioForChapter(current.chapter, current.pageAudio);
     current.speech = pageAudioReady(current.chapter, current.pageAudio)
@@ -30,8 +38,8 @@ async function synthesizePages(courseId: string, packageId: string) {
     current.error = undefined;
     store.putPackage(courseId, current);
   });
-  for (const entry of chapter.script) {
-    pkg = store.getPackage(packageId);
+  for (const [index, entry] of chapter.script.entries()) {
+    pkg = activePackage(courseId, packageId);
     const page = pkg?.pageAudio?.[entry.sectionId];
     if (!pkg?.chapter || !page) return;
     const artifactKey = pageAudioArtifactKey(packageId, entry.sectionId);
@@ -41,12 +49,31 @@ async function synthesizePages(courseId: string, packageId: string) {
     if (page.status === "ready" && saved) continue;
     if (page.status === "failed")
       throw new Error(page.error || "Page audio generation failed");
-    page.status = "generating";
-    store.putPackage(courseId, pkg);
     try {
-      const result = await synthesize({ ...pkg.chapter, script: [entry] });
+      pkg = store.transaction(() => {
+        const current = activePackage(courseId, packageId);
+        const target = current?.pageAudio?.[entry.sectionId];
+        if (!current?.chapter || !target) return null;
+        if (hasLegacySpeech(current))
+          throw new Error(
+            "此章仍有舊語音，請手動重建章節語音以改用 ElevenLabs。",
+          );
+        current.speechProfile = speechConfig(current.speechProfile).profile;
+        target.status = "generating";
+        store.putPackage(courseId, current);
+        return current;
+      });
+      if (!pkg?.chapter) return;
+      const result = await synthesize(
+        { ...pkg.chapter, script: [entry] },
+        pkg.speechProfile,
+        {
+          previousText: chapter.script[index - 1]?.text,
+          nextText: chapter.script[index + 1]?.text,
+        },
+      );
       store.transaction(() => {
-        const current = store.getPackage(packageId);
+        const current = activePackage(courseId, packageId);
         const target = current?.pageAudio?.[entry.sectionId];
         if (!current || !target) return;
         store.db
@@ -66,7 +93,7 @@ async function synthesizePages(courseId: string, packageId: string) {
       const message =
         error instanceof Error ? error.message : "Page audio generation failed";
       store.transaction(() => {
-        const current = store.getPackage(packageId);
+        const current = activePackage(courseId, packageId);
         const target = current?.pageAudio?.[entry.sectionId];
         if (!current || !target) return;
         target.status = "failed";
@@ -85,8 +112,8 @@ async function work(job: Job) {
   if (job.kind === "graph") {
     const graph = await generateGraph(course.goal);
     store.transaction(() => {
-      const c = store.getCourse(course.id)!;
-      if (c.graph) return;
+      const c = store.getCourse(course.id);
+      if (!c || c.graph) return;
       c.graph = graph;
       c.status = "ready";
       c.revision = 1;
@@ -98,22 +125,27 @@ async function work(job: Job) {
     });
     return;
   }
-  const pkg = store.getPackage(job.package_id!);
+  const pkg = activePackage(course.id, job.package_id!);
   if (!pkg) return;
   const nodeId = Object.keys(course.chapterIds).find(
     (id) => course.chapterIds[id] === pkg.id,
   );
   if (!nodeId) return;
   if (!pkg.chapter) {
-    pkg.status = "generating";
-    store.putPackage(course.id, pkg);
+    const active = store.transaction(() => {
+      if (!activePackage(course.id, pkg.id)) return false;
+      pkg.status = "generating";
+      store.putPackage(course.id, pkg);
+      return true;
+    });
+    if (!active) return;
     const node = course.graph!.nodes.find((n) => n.id === nodeId)!;
     const chapter = await generateChapter(node, course.goal, course.workspace);
     if (chapter.nodeId !== node.id || chapter.objective !== node.objective)
       throw new Error("生成章節與學習目標不一致");
     store.transaction(() => {
-      const c = store.getCourse(course.id)!;
-      if (c.chapterIds[nodeId] !== pkg.id) return;
+      const c = store.getCourse(course.id);
+      if (!c || c.chapterIds[nodeId] !== pkg.id) return;
       pkg.chapter = chapter;
       pkg.status = "ready";
       pkg.speech = "pending";
@@ -137,24 +169,41 @@ async function work(job: Job) {
       .get(pkg.id)
   )
     return;
-  pkg.speech = "generating";
-  store.putPackage(course.id, pkg);
   try {
-    const result = await synthesize(pkg.chapter);
+    const active = store.transaction(() => {
+      const current = activePackage(course.id, pkg.id);
+      if (!current) return null;
+      if (hasLegacySpeech(current))
+        throw new Error(
+          "此章仍有舊語音，請手動重建章節語音以改用 ElevenLabs。",
+        );
+      current.speechProfile = speechConfig(current.speechProfile).profile;
+      current.speech = "generating";
+      store.putPackage(course.id, current);
+      return current;
+    });
+    if (!active?.chapter) return;
+    const result = await synthesize(active.chapter, active.speechProfile);
     store.transaction(() => {
+      const current = activePackage(course.id, pkg.id);
+      if (!current) return;
       store.db
         .prepare("INSERT OR REPLACE INTO audio_artifacts VALUES(?,?,?)")
         .run(pkg.id, result.audio, "audio/mpeg");
-      pkg.cues = result.cues;
-      pkg.captions = result.captions;
-      pkg.speech = "ready";
-      pkg.error = undefined;
-      store.putPackage(course.id, pkg);
+      current.cues = result.cues;
+      current.captions = result.captions;
+      current.speech = "ready";
+      current.error = undefined;
+      store.putPackage(course.id, current);
     });
   } catch (error) {
-    pkg.speech = "failed";
-    pkg.error = error instanceof Error ? error.message : "語音生成失敗";
-    store.putPackage(course.id, pkg);
+    store.transaction(() => {
+      const current = activePackage(course.id, pkg.id);
+      if (!current) return;
+      current.speech = "failed";
+      current.error = error instanceof Error ? error.message : "語音生成失敗";
+      store.putPackage(course.id, current);
+    });
     throw error;
   }
 }
@@ -198,7 +247,9 @@ while (!stop) {
   try {
     await work(job);
     store.db
-      .prepare("UPDATE generation_jobs SET status='done',lease=0 WHERE id=?")
+      .prepare(
+        "UPDATE generation_jobs SET status='done',lease=0 WHERE id=? AND status='working'",
+      )
       .run(job.id);
   } catch (error) {
     const message =
@@ -215,7 +266,7 @@ while (!stop) {
         c.error = message;
         store.putCourse(c);
       } else if (job.package_id) {
-        const pkg = store.getPackage(job.package_id);
+        const pkg = activePackage(job.course_id, job.package_id);
         if (pkg && !pkg.chapter) {
           pkg.status = "failed";
           pkg.error = message;

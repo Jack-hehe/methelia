@@ -14,6 +14,7 @@ export function Landing({
   onStart,
   onDemo,
   onMyCourses,
+  homeHref,
   themeControl,
   language,
   onLanguageChange,
@@ -25,6 +26,7 @@ export function Landing({
   onStart: () => void;
   onDemo: () => void;
   onMyCourses?: () => void;
+  homeHref?: string;
   themeControl: React.ReactNode;
   language: HomeLanguage;
   onLanguageChange: (language: HomeLanguage) => void;
@@ -48,6 +50,7 @@ export function Landing({
     <div className="landing" lang={copy.lang}>
       <div className="landing-hero">
         <SiteHeader
+          homeHref={homeHref}
           language={language}
           onLanguageChange={onLanguageChange}
           themeControl={themeControl}
