@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { demoChapter, demoGraph } from "../src/core/fixtures";
 import { Store } from "../src/server/db";
 import { LearningService } from "../src/server/service";
+import { generalGraph } from "./fixtures/general-course";
 
 type DeferredProvider = {
   kind: "model" | "speech";
@@ -48,7 +49,7 @@ function deferredProvider(
     if (kind === "model") {
       const request = JSON.parse(body);
       const input = JSON.parse(request.messages[1].content).input;
-      const content = input.node ? demoChapter(input.node) : demoGraph();
+      const content = input.node ? demoChapter(input.node) : generalGraph();
       res.end(
         JSON.stringify({
           choices: [{ message: { content: JSON.stringify(content) } }],

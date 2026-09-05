@@ -1,8 +1,13 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { generateGraph, generateChapter } from "../src/server/model";
+import {
+  generateGraph,
+  generateChapter,
+  generateHelp,
+} from "../src/server/model";
 import { synthesize } from "../src/server/fish";
 import { demoGraph, demoChapter } from "../src/core/fixtures";
 import { emptyWorkspace } from "../src/core/workspace";
+import { generalGraph } from "./fixtures/general-course";
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -12,6 +17,38 @@ function modelEnv() {
   vi.stubEnv("AI_BASE_URL", "https://model.test/v1");
   vi.stubEnv("AI_MODEL", "test-model");
 }
+it("repairs a support recommendation without an explicit environment", async () => {
+  modelEnv();
+  let count = 0;
+  vi.stubGlobal("fetch", async () => {
+    count++;
+    return Response.json({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              answer: "Review the underlying concept.",
+              nodes: [
+                {
+                  id: "support-concept",
+                  title: "A missing concept",
+                  objective: "Explain the concept",
+                  kind: "support",
+                  minutes: 4,
+                  prerequisites: [],
+                  ...(count > 1 ? { environment: "none" } : {}),
+                },
+              ],
+            }),
+          },
+        },
+      ],
+    });
+  });
+  const result = await generateHelp("Why?", {});
+  expect(result.nodes[0].environment).toBe("none");
+  expect(count).toBe(2);
+});
 it("passes the actual learner goal to the model and validates the generated graph", async () => {
   modelEnv();
   const requests: string[] = [];
@@ -22,7 +59,9 @@ it("passes the actual learner goal to the model and validates the generated grap
     return Response.json({
       choices: [
         {
-          message: { content: JSON.stringify({ ...demoGraph(), title: goal }) },
+          message: {
+            content: JSON.stringify({ ...generalGraph(), title: goal }),
+          },
         },
       ],
     });

@@ -16,7 +16,7 @@ export type PackageState = {
   id: string;
   nodeHash: string;
   status: "queued" | "generating" | "ready" | "failed";
-  speech: "pending" | "generating" | "ready" | "failed";
+  speech: "not_requested" | "pending" | "generating" | "ready" | "failed";
   chapter: Chapter | null;
   cues: Cue[];
   captions?: Caption[];
@@ -51,6 +51,8 @@ export type Course = {
   sessionId: string;
   requestId: string;
   goal: string;
+  language?: "zh-TW" | "en";
+  scopeAccepted?: boolean;
   mode: "demo" | "live";
   status: "planning" | "ready" | "failed";
   error?: string;

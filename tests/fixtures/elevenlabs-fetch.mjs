@@ -2,6 +2,17 @@
 const originalFetch = globalThis.fetch;
 globalThis.fetch = (url, options) => {
   const requested = new URL(url);
+  // Combined content/speech tests may also use a local model double.
+  if (process.env.AI_BASE_URL) {
+    const model = new URL(process.env.AI_BASE_URL);
+    if (
+      model.hostname === "127.0.0.1" &&
+      requested.origin === model.origin &&
+      requested.pathname ===
+        model.pathname.replace(/\/$/, "") + "/chat/completions"
+    )
+      return originalFetch(url, options);
+  }
   if (
     requested.origin !== "https://api.elevenlabs.io" ||
     !requested.pathname.endsWith("/with-timestamps")

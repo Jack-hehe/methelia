@@ -60,6 +60,70 @@ export function saveFiles(
   next.revision++;
   return next;
 }
+
+/** Shared preparation path: preserve edits, create parents, reject collisions atomically. */
+export function mergeStarterFiles(
+  ws: Workspace,
+  files: Record<string, string>,
+): Workspace {
+  if (Object.keys(files).length > 30) throw new Error("Too many starter files");
+  const next = structuredClone(ws);
+  const additions: Record<string, string> = {};
+  for (const [name, value] of Object.entries(files)) {
+    const path = normalizePath("/", name);
+    if (name !== path || path === "/" || next.directories.includes(path))
+      throw new Error("Invalid starter path or file/directory collision");
+    const pieces = path.split("/").slice(1, -1);
+    let parent = "";
+    for (const piece of pieces) {
+      parent += "/" + piece;
+      if (parent in next.files || parent in files)
+        throw new Error("Starter parent is a file");
+      if (!next.directories.includes(parent)) next.directories.push(parent);
+    }
+    if (!(path in next.files)) additions[path] = value;
+  }
+  if (next.directories.length > 60)
+    throw new Error("Workspace directory limit reached");
+  return Object.keys(additions).length
+    ? saveFiles(next, additions, next.revision)
+    : next;
+}
+
+export const practiceCommands = [
+  "pwd",
+  "ls",
+  "cd",
+  "mkdir",
+  "touch",
+  "cat",
+  "clear",
+] as const;
+
+export function validatePracticeCommand(command: string) {
+  if (
+    !command.trim() ||
+    command.length > 300 ||
+    /[;&|`$<>\n\r\0]/.test(command)
+  )
+    throw new Error("Only supported practice commands can run");
+  if (command.trim() === "python -m http.server 8000") return;
+  const [cmd, ...args] = command.trim().split(/\s+/);
+  const arg = args.join(" ");
+  if (
+    !practiceCommands.includes(cmd as (typeof practiceCommands)[number]) ||
+    ((cmd === "pwd" || cmd === "clear") && !!arg) ||
+    (!["pwd", "ls", "clear"].includes(cmd) && !arg) ||
+    arg.startsWith("-")
+  )
+    throw new Error(
+      "Command or arguments not supported. Try pwd, ls, cd, mkdir, touch, cat, clear.",
+    );
+  // Syntax is independent of cwd. Runtime resolution below enforces the root
+  // boundary; a parent reference can be valid in a nested learner directory.
+  if (arg && (arg.includes("\\") || arg.length > 200))
+    throw new Error("Invalid virtual path");
+}
 export function runCommand(
   ws: Workspace,
   command: string,
@@ -67,8 +131,7 @@ export function runCommand(
   const next = structuredClone(ws);
   let output = "";
   try {
-    if (command.length > 300 || /[;&|`$<>]/.test(command))
-      throw new Error("Only supported practice commands can run");
+    validatePracticeCommand(command);
     const [cmd, ...args] = command.trim().split(/\s+/);
     const arg = args.join(" ");
     const path = arg ? normalizePath(next.cwd, arg) : next.cwd;

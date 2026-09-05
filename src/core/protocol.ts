@@ -1,7 +1,15 @@
 import { z } from "zod";
+import {
+  emptyWorkspace,
+  mergeStarterFiles,
+  normalizePath,
+  validatePracticeCommand,
+} from "./workspace";
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
 const text = z.string().min(1).max(12000);
+export const environmentSchema = z.enum(["none", "web", "python", "terminal"]);
+export type LearningEnvironment = z.infer<typeof environmentSchema>;
 export const nodeSchema = z
   .object({
     id,
@@ -10,12 +18,16 @@ export const nodeSchema = z
     minutes: z.number().int().min(1).max(20),
     kind: z.enum(["main", "support"]),
     prerequisites: z.array(id).max(40),
+    environment: environmentSchema.optional(),
   })
   .strict();
 export const graphSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     title: text,
+    outcome: z.string().max(500).optional(),
+    scopeNote: z.string().max(800).optional(),
+    requiresConfirmation: z.boolean().optional(),
     nodes: z.array(nodeSchema).min(2).max(50),
     edges: z.array(z.object({ from: id, to: id }).strict()).max(100),
   })
@@ -31,6 +43,7 @@ export const componentSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("concept.canvas"),
+      variant: z.enum(["cards", "web.languages"]).optional(),
       cards: z.array(card).min(1).max(6),
     })
     .strict(),
@@ -55,7 +68,7 @@ export const componentSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("code.editor"),
       path: text,
-      language: z.enum(["html", "css", "javascript"]),
+      language: z.enum(["html", "css", "javascript", "python", "bash", "text"]),
       example: z.string().max(30000),
     })
     .strict(),
@@ -67,6 +80,24 @@ export const componentSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ type: z.literal("file.tree") }).strict(),
   z.object({ type: z.literal("browser.preview") }).strict(),
+  z
+    .object({
+      type: z.literal("steps.sequence"),
+      steps: z
+        .array(z.object({ title: text, body: text }).strict())
+        .min(2)
+        .max(6),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("diagram.flow"),
+      items: z
+        .array(z.object({ label: text, description: text }).strict())
+        .min(2)
+        .max(6),
+    })
+    .strict(),
   z
     .object({
       type: z.literal("quiz.choice"),
@@ -83,10 +114,14 @@ const conditionSchema = z.discriminatedUnion("type", [
     .object({ type: z.literal("file.includes"), path: text, value: text })
     .strict(),
   z.object({ type: z.literal("preview.running") }).strict(),
+  z.object({ type: z.literal("file.exists"), path: text }).strict(),
+  z.object({ type: z.literal("directory.exists"), path: text }).strict(),
+  z.object({ type: z.literal("cwd.equals"), path: text }).strict(),
 ]);
 export const chapterSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
+    environment: environmentSchema.optional(),
     nodeId: id,
     title: text,
     objective: text,
@@ -140,15 +175,51 @@ export const templateRegistry: Record<
   Section["template"],
   readonly Component["type"][]
 > = {
-  narrative: ["concept.canvas", "dom.explorer"],
-  focus: ["concept.canvas", "dom.explorer", "quiz.choice", "browser.preview"],
-  split: ["dom.explorer", "code.editor", "browser.preview"],
+  narrative: [
+    "concept.canvas",
+    "dom.explorer",
+    "steps.sequence",
+    "diagram.flow",
+  ],
+  focus: [
+    "concept.canvas",
+    "dom.explorer",
+    "quiz.choice",
+    "browser.preview",
+    "steps.sequence",
+    "diagram.flow",
+  ],
+  split: [
+    "dom.explorer",
+    "code.editor",
+    "browser.preview",
+    "steps.sequence",
+    "diagram.flow",
+  ],
   workspace: ["code.editor", "terminal", "file.tree", "browser.preview"],
-  compare: ["concept.canvas"],
+  compare: ["concept.canvas", "steps.sequence", "diagram.flow"],
 };
+
+export function chapterEnvironment(chapter: Chapter): LearningEnvironment {
+  return chapter.environment || (chapter.schemaVersion === 1 ? "web" : "none");
+}
 
 export function validateGraph(input: unknown): Graph {
   const graph = graphSchema.parse(input);
+  if (
+    graph.schemaVersion === 2 &&
+    (!graph.outcome?.trim() || graph.nodes.some((n) => !n.environment))
+  )
+    throw new Error(
+      "v2 graph requires an outcome and explicit node environments",
+    );
+  if (graph.requiresConfirmation && !graph.scopeNote?.trim())
+    throw new Error("Scope confirmation requires an explanation");
+  if (
+    graph.schemaVersion === 2 &&
+    graph.nodes.some((n) => n.title.length > 100 || n.objective.length > 500)
+  )
+    throw new Error("Node title/objective exceeds presentation limits");
   const ids = new Set(graph.nodes.map((n) => n.id));
   if (ids.size !== graph.nodes.length) throw new Error("Duplicate node ID");
   const seenEdges = new Set<string>();
@@ -196,6 +267,23 @@ export function validateGraph(input: unknown): Graph {
 
 export function validateChapter(input: unknown): Chapter {
   const chapter = chapterSchema.parse(input);
+  const environment = chapterEnvironment(chapter);
+  if (chapter.schemaVersion === 2) {
+    if (!chapter.environment)
+      throw new Error("v2 chapter requires an environment");
+    if (!chapter.sections.some((s) => s.completion))
+      throw new Error("Chapter needs at least one checkpoint");
+    if (
+      chapter.title.length > 100 ||
+      chapter.objective.length > 500 ||
+      chapter.sections.some((s) => s.title.length > 100 || s.body.length > 800)
+    )
+      throw new Error("Chapter exceeds title/body presentation limits");
+    if (environment === "none" && Object.keys(chapter.workspaceSetup).length)
+      throw new Error("Concept environment must not create a workspace");
+  }
+  // Same initializer as activation; no accepted-but-dropped nested paths.
+  mergeStarterFiles(emptyWorkspace(), chapter.workspaceSetup);
   const ids = new Set(chapter.sections.map((s) => s.id));
   if (ids.size !== chapter.sections.length)
     throw new Error("Duplicate section");
@@ -226,16 +314,97 @@ export function validateChapter(input: unknown): Chapter {
       throw new Error("Quiz completion requires quiz component");
     if (["practice", "check"].includes(section.intent) && !section.completion)
       throw new Error("Practice section needs completion");
-    if (
-      c.type === "terminal" &&
-      c.commands.some(
-        (command) =>
-          !/^(pwd|ls|cd|mkdir|touch|cat|clear)( [a-zA-Z0-9_./ -]+)?$|^python -m http\.server 8000$/.test(
-            command,
-          ),
+    if (c.type === "terminal")
+      for (const command of c.commands) validatePracticeCommand(command);
+    if (chapter.schemaVersion === 2) {
+      if (
+        environment === "none" &&
+        (["terminal", "code.editor", "file.tree", "browser.preview"].includes(
+          c.type,
+        ) ||
+          section.guide ||
+          (section.completion && section.completion.type !== "quiz"))
       )
-    )
-      throw new Error("Unsupported terminal command");
+        throw new Error(
+          "Component/checkpoint requires a practical environment",
+        );
+      if (
+        (c.type === "browser.preview" ||
+          c.type === "dom.explorer" ||
+          (c.type === "concept.canvas" && c.variant === "web.languages")) &&
+        environment !== "web"
+      )
+        throw new Error("Web component requires the web environment");
+      if (c.type === "terminal" && environment !== "terminal")
+        throw new Error("Terminal component requires the terminal environment");
+      if (
+        c.type === "terminal" &&
+        c.commands.some((cmd) => cmd.startsWith("python "))
+      )
+        throw new Error(
+          "Terminal environment is a file sandbox, not Python or a web server",
+        );
+      if (c.type === "code.editor") {
+        if (
+          normalizePath("/", c.path) !== c.path ||
+          !(c.path in chapter.workspaceSetup)
+        )
+          throw new Error(
+            "Code editor requires a prepared, canonical file path",
+          );
+        if (
+          (c.language === "python") !== (environment === "python") ||
+          (environment === "web" &&
+            !["html", "css", "javascript"].includes(c.language))
+        )
+          throw new Error("Code language is incompatible with environment");
+      }
+      const condition = section.completion;
+      if (
+        condition &&
+        "path" in condition &&
+        normalizePath("/", condition.path) !== condition.path
+      )
+        throw new Error("Checkpoint path must be canonical");
+      if (
+        condition?.type === "file.includes" &&
+        (!(condition.path in chapter.workspaceSetup) ||
+          condition.value.length > 2000)
+      )
+        throw new Error(
+          "File checkpoint requires a prepared editable file and a short target",
+        );
+      if (
+        condition &&
+        ["directory.exists", "cwd.equals", "file.exists"].includes(
+          condition.type,
+        ) &&
+        environment !== "terminal"
+      )
+        throw new Error("Filesystem checkpoint requires terminal environment");
+      if (condition?.type === "preview.running")
+        throw new Error(
+          "v2 needs a meaningful edit or quiz checkpoint, not merely viewing a preview",
+        );
+      if (
+        c.type === "quiz.choice" &&
+        (c.question.length > 500 ||
+          c.explanation.length > 900 ||
+          c.options.some((o) => o.length > 260))
+      )
+        throw new Error("Quiz exceeds presentation limits");
+      if (
+        c.type === "concept.canvas" &&
+        c.cards.some(
+          (card) => card.title.length > 100 || card.body.length > 800,
+        )
+      )
+        throw new Error("Concept cards exceed presentation limits");
+      if (section.guide?.previewClick && environment !== "web")
+        throw new Error(
+          "Preview click is only supported by the web environment",
+        );
+    }
   }
   if (
     Object.keys(chapter.workspaceSetup).length > 30 ||

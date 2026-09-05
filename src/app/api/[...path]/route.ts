@@ -88,6 +88,7 @@ async function handle(request: NextRequest) {
           goal: z.string().min(1).max(1500),
           mode: z.enum(["demo", "live"]),
           requestId: short,
+          language: z.enum(["zh-TW", "en"]).optional(),
         })
         .parse(data);
       result = service.createCourse(
@@ -95,6 +96,7 @@ async function handle(request: NextRequest) {
         body.goal,
         body.mode,
         body.requestId,
+        body.language,
       );
     } else if (
       path[0] === "courses" &&
@@ -105,6 +107,14 @@ async function handle(request: NextRequest) {
       result = service.deleteCourse(session, path[1]);
     else if (path[0] === "courses" && path[1] && request.method === "GET")
       result = service.getCourse(session, path[1]);
+    else if (
+      path[0] === "courses" &&
+      path[1] &&
+      path[2] === "accept-scope" &&
+      path.length === 3 &&
+      request.method === "POST"
+    )
+      result = service.acceptScope(session, path[1]);
     else if (
       path[0] === "courses" &&
       path[2] === "advance" &&
@@ -319,6 +329,9 @@ async function handle(request: NextRequest) {
                   id: "support-" + randomUUID(),
                   title: body.topic,
                   objective: body.topic,
+                  // A manually added topic starts as conceptual reinforcement.
+                  // Practical capability must be an explicit model recommendation.
+                  environment: "none",
                   minutes: 5,
                   kind: "support",
                   prerequisites: [],

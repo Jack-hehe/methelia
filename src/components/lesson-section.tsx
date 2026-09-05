@@ -2,6 +2,7 @@
 import { useState } from "react";
 import {
   ArrowUpRight,
+  ArrowRight,
   Check,
   Code2,
   Braces,
@@ -11,7 +12,9 @@ import {
 } from "lucide-react";
 import type { Section } from "../core/protocol";
 import { buildPreview } from "../core/preview";
+import "./teaching-templates.css";
 export function LessonSection({
+  schemaVersion,
   section,
   index,
   done,
@@ -20,6 +23,7 @@ export function LessonSection({
   onPractice,
   hideHeading = false,
 }: {
+  schemaVersion: 1 | 2;
   section: Section;
   index: number;
   done: boolean;
@@ -37,17 +41,30 @@ export function LessonSection({
   const c = section.component;
   const webTrio =
     c.type === "concept.canvas" &&
-    c.cards.length === 3 &&
-    c.cards.map((card) => card.title.toLowerCase()).join(",") ===
-      "html,css,javascript";
+    (c.variant === "web.languages" ||
+      // Preserve already-saved v1 lessons. New protocols require an explicit variant.
+      (schemaVersion === 1 &&
+        !c.variant &&
+        c.cards.map((card) => card.title.toLowerCase()).join(",") ===
+          "html,css,javascript")) &&
+    c.cards.length === 3;
+  const sequence =
+    c.type === "steps.sequence"
+      ? c.steps
+      : c.type === "diagram.flow"
+        ? c.items.map((item) => ({ title: item.label, body: item.description }))
+        : null;
   async function check(value?: number) {
     setChecking(true);
+    setFeedback("");
     try {
       setAnswer(value ?? null);
       const passed = await onCheck(section.id, value);
       setFeedback(
         passed ? "練習完成" : "再試一次，觀察一下上面的說明或儲存你的修改。",
       );
+    } catch {
+      setFeedback("暫時無法驗證，請再試一次。");
     } finally {
       setChecking(false);
     }
@@ -80,34 +97,53 @@ export function LessonSection({
       {!hideHeading && <h2>{section.title}</h2>}
       <p className="section-body">{section.body}</p>
       {c.type === "concept.canvas" && (
-        <div className="concept-board">
-          <div className="concept-cards">
+        <div className={webTrio ? "concept-board" : "teaching-concept"}>
+          <div
+            className={webTrio ? "concept-cards" : "teaching-concept-cards"}
+            role="group"
+            aria-label="選擇概念"
+          >
             {c.cards.map((card, i) => (
               <button
                 key={i}
+                type="button"
+                aria-pressed={selected === i}
+                aria-controls={`concept-detail-${section.id}`}
                 onClick={() => {
                   setSelected(i);
                   setExampleClicked(false);
                 }}
                 className={
-                  "concept-card " +
+                  (webTrio ? "concept-card " : "teaching-concept-card ") +
                   card.accent +
                   (selected === i ? " selected" : "")
                 }
               >
-                <span className="concept-icon">
-                  {i === 0 ? <Code2 /> : i === 1 ? <Palette /> : <Braces />}
+                <span className={webTrio ? "concept-icon" : "teaching-number"}>
+                  {webTrio ? (
+                    i === 0 ? (
+                      <Code2 />
+                    ) : i === 1 ? (
+                      <Palette />
+                    ) : (
+                      <Braces />
+                    )
+                  ) : (
+                    String(i + 1).padStart(2, "0")
+                  )}
                 </span>
                 <strong>{card.title}</strong>
-                <span>
-                  {!webTrio
-                    ? `${String(i + 1).padStart(2, "0")}`
-                    : i === 0
+                {webTrio ? (
+                  <span>
+                    {i === 0
                       ? "放什麼內容"
                       : i === 1
                         ? "長什麼樣子"
                         : "點了會怎樣"}
-                </span>
+                  </span>
+                ) : (
+                  <ArrowUpRight size={16} aria-hidden="true" />
+                )}
               </button>
             ))}
           </div>
@@ -174,7 +210,11 @@ export function LessonSection({
               </div>
             </div>
           )}
-          <div className="concept-caption">
+          <div
+            id={`concept-detail-${section.id}`}
+            className={webTrio ? "concept-caption" : "teaching-concept-detail"}
+            aria-live="polite"
+          >
             <Lightbulb size={18} />
             <div>
               <strong>
@@ -186,6 +226,73 @@ export function LessonSection({
             <span>
               {selected + 1} / {c.cards.length}
             </span>
+          </div>
+        </div>
+      )}
+      {sequence && (
+        <div
+          className={
+            "teaching-sequence " +
+            (c.type === "diagram.flow" ? "teaching-flow" : "teaching-steps")
+          }
+        >
+          <ol className="teaching-sequence-list" aria-label={section.title}>
+            {sequence.map((step, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  className={
+                    "teaching-sequence-item" +
+                    (selected === i ? " selected" : "")
+                  }
+                  aria-pressed={selected === i}
+                  aria-controls={`sequence-detail-${section.id}`}
+                  onClick={() => setSelected(i)}
+                >
+                  <span className="teaching-number">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <strong>{step.title}</strong>
+                  {c.type === "steps.sequence" && (
+                    <span className="teaching-step-summary">{step.body}</span>
+                  )}
+                </button>
+                {c.type === "diagram.flow" && i < sequence.length - 1 && (
+                  <ArrowRight
+                    className="teaching-flow-arrow"
+                    size={18}
+                    aria-hidden="true"
+                  />
+                )}
+              </li>
+            ))}
+          </ol>
+          <div
+            className="teaching-sequence-detail"
+            id={`sequence-detail-${section.id}`}
+            aria-live="polite"
+          >
+            <span className="teaching-detail-count">
+              {selected + 1} / {sequence.length}
+            </span>
+            <h3>{sequence[selected].title}</h3>
+            <p>{sequence[selected].body}</p>
+            <div className="teaching-sequence-controls" aria-label="切換步驟">
+              <button
+                type="button"
+                disabled={selected === 0}
+                onClick={() => setSelected(selected - 1)}
+              >
+                上一步
+              </button>
+              <button
+                type="button"
+                disabled={selected === sequence.length - 1}
+                onClick={() => setSelected(selected + 1)}
+              >
+                下一步 <ArrowRight size={15} />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -263,7 +370,7 @@ export function LessonSection({
       {c.type === "terminal" && (
         <div className="terminal-example">
           <span>
-            <TerminalIcon size={16} /> 網站練習 Terminal
+            <TerminalIcon size={16} /> 教學 Terminal
           </span>
           {c.commands.map((command) => (
             <button key={command} onClick={onPractice}>

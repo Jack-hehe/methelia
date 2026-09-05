@@ -8,9 +8,15 @@ import {
   normalizePath,
   runCommand,
   saveFiles,
+  mergeStarterFiles,
 } from "../core/workspace";
-import { insertBranch } from "../core/graph";
-import { nodeSchema, type LearningNode, type Chapter } from "../core/protocol";
+import { insertBranch, routeNodes } from "../core/graph";
+import {
+  nodeSchema,
+  chapterEnvironment,
+  type LearningNode,
+  type Chapter,
+} from "../core/protocol";
 import type {
   Course,
   CourseSummary,
@@ -119,6 +125,7 @@ export class LearningService {
     goal: string,
     mode: "demo" | "live",
     requestId: string,
+    language: "zh-TW" | "en" = "zh-TW",
   ): Snapshot {
     if (!goal.trim() || goal.length > 1500)
       throw new Error("請輸入 1–1500 字的學習目標");
@@ -148,6 +155,8 @@ export class LearningService {
         sessionId: session,
         requestId,
         goal,
+        language,
+        scopeAccepted: true,
         mode,
         status: graph ? "ready" : "planning",
         graph,
@@ -173,6 +182,8 @@ export class LearningService {
     });
   }
   prepare(c: Course, nodeId: string): PackageState {
+    if (c.scopeAccepted === false)
+      throw new Error("請先確認課程範圍，再準備章節。");
     const node = c.graph!.nodes.find((n) => n.id === nodeId);
     if (!node) throw new Error("Node not found");
     const prior = c.chapterIds[nodeId]
@@ -180,7 +191,7 @@ export class LearningService {
       : null;
     if (
       prior &&
-      (prior.nodeHash === nodeHash(node) ||
+      (prior.nodeHash === this.preparationHash(c, node) ||
         nodeId === c.currentNodeId ||
         c.completed.includes(nodeId))
     )
@@ -188,9 +199,9 @@ export class LearningService {
     const chapter = c.mode === "demo" ? demoChapter(node) : null;
     const pkg: PackageState = {
       id: randomUUID(),
-      nodeHash: nodeHash(node),
+      nodeHash: this.preparationHash(c, node),
       status: chapter ? "ready" : "queued",
-      speech: chapter ? "failed" : "pending",
+      speech: chapter ? "failed" : "not_requested",
       chapter,
       cues: [],
       pageAudio: {},
@@ -213,19 +224,65 @@ export class LearningService {
     return pkg;
   }
   initialize(c: Course, chapter: Chapter) {
-    const additions: Record<string, string> = {};
-    for (const [name, value] of Object.entries(chapter.workspaceSetup)) {
-      const path = normalizePath("/", name);
-      if (
-        c.workspace.files[path] === undefined &&
-        !c.workspace.directories.includes(path)
-      ) {
-        const parent = path.slice(0, path.lastIndexOf("/")) || "/";
-        if (parent === "/") additions[path] = value;
-      }
+    if (chapterEnvironment(chapter) !== "none")
+      c.workspace = mergeStarterFiles(c.workspace, chapter.workspaceSetup);
+  }
+  preparationHash(c: Course, node: LearningNode) {
+    if (c.graph?.schemaVersion !== 2) return nodeHash(node);
+    const route = routeNodes(c.graph);
+    const at = route.findIndex((n) => n.id === node.id);
+    return createHash("sha256")
+      .update(
+        JSON.stringify({
+          protocol: 2,
+          goal: c.goal,
+          language: c.language,
+          node,
+          prior: route.slice(0, at).map((n) => ({
+            id: n.id,
+            objective: n.objective,
+            environment: n.environment,
+          })),
+          next: route[at + 1]?.objective,
+        }),
+      )
+      .digest("hex");
+  }
+  scheduleSpeech(c: Course, pkg: PackageState, automatic = true) {
+    if (
+      !pkg.chapter ||
+      pkg.status !== "ready" ||
+      ["pending", "generating", "ready"].includes(pkg.speech)
+    )
+      return;
+    if (automatic && (c.mode !== "live" || pkg.speech === "failed")) return;
+    try {
+      if (hasLegacySpeech(pkg))
+        throw new Error("舊語音仍保留，請使用重建章節語音切換供應商。");
+      pkg.speechProfile = speechConfig(pkg.speechProfile).profile;
+      pkg.pageAudio = pageAudioForChapter(pkg.chapter, pkg.pageAudio);
+      pkg.speech = "pending";
+      pkg.error = undefined;
+      this.store.putPackage(c.id, pkg);
+      this.store.enqueue(`speech:${pkg.id}`, c.id, "speech", pkg.id);
+    } catch (error) {
+      if (!automatic) throw error;
+      pkg.speech = "failed";
+      pkg.error = error instanceof Error ? error.message : "語音尚未設定";
+      this.store.putPackage(c.id, pkg);
     }
-    if (Object.keys(additions).length)
-      c.workspace = saveFiles(c.workspace, additions, c.workspace.revision);
+  }
+  acceptScope(session: string, id: string) {
+    return this.mutate(session, id, (c) => {
+      if (!c.graph || c.status !== "ready")
+        throw new Error("課程路徑尚未準備完成。");
+      if (c.scopeAccepted !== false) return this.snapshot(c);
+      c.scopeAccepted = true;
+      const pkg = this.prepare(c, c.currentNodeId);
+      this.scheduleSpeech(c, pkg);
+      this.prefetch(c);
+      return this.snapshot(c);
+    });
   }
   prefetch(c: Course) {
     const next = c.graph?.edges.find((e) => e.from === c.currentNodeId)?.to;
@@ -250,6 +307,18 @@ export class LearningService {
   }
   command(session: string, id: string, command: string) {
     return this.mutate(session, id, (c) => {
+      const chapter = this.store.getPackage(
+        c.chapterIds[c.currentNodeId],
+      )?.chapter;
+      if (
+        chapter?.schemaVersion === 2 &&
+        chapterEnvironment(chapter) !== "terminal"
+      )
+        throw new Error("這個章節使用編輯器，不提供 Terminal 指令。");
+      if (chapter?.schemaVersion === 2 && command.trim().startsWith("python "))
+        throw new Error(
+          "教學檔案環境不執行 Python；請使用 Python 編輯器的執行按鈕。",
+        );
       const result = runCommand(c.workspace, command);
       c.workspace = result.workspace;
       return result;
@@ -270,6 +339,12 @@ export class LearningService {
         ).includes(condition.value);
       if (condition.type === "preview.running")
         passed = c.workspace.previewRunning;
+      if (condition.type === "file.exists")
+        passed = condition.path in c.workspace.files;
+      if (condition.type === "directory.exists")
+        passed = c.workspace.directories.includes(condition.path);
+      if (condition.type === "cwd.equals")
+        passed = c.workspace.cwd === condition.path;
       if (passed) {
         const progress = c.progress[c.currentNodeId];
         progress.done = Array.from(new Set([...progress.done, sectionId]));
@@ -302,6 +377,7 @@ export class LearningService {
         c.currentNodeId = next;
         const pkg = this.prepare(c, next);
         if (pkg.chapter) this.initialize(c, pkg.chapter);
+        this.scheduleSpeech(c, pkg);
         this.prefetch(c);
       }
       return this.snapshot(c);
@@ -404,7 +480,7 @@ export class LearningService {
           continue;
         const node = c.graph.nodes.find((n) => n.id === nodeId);
         const pkg = this.store.getPackage(packageId);
-        if (!node || pkg?.nodeHash !== nodeHash(node)) {
+        if (!node || pkg?.nodeHash !== this.preparationHash(c, node)) {
           delete c.chapterIds[nodeId];
           delete c.progress[nodeId];
           this.store.db
@@ -473,7 +549,10 @@ export class LearningService {
             "UPDATE generation_jobs SET status='queued',lease=0 WHERE id=? AND status='failed'",
           )
           .run(`chapter:${pkg.id}`);
-      } else if (pkg.status === "ready" && pkg.speech === "failed") {
+      } else if (
+        pkg.status === "ready" &&
+        ["failed", "not_requested"].includes(pkg.speech)
+      ) {
         if (hasLegacySpeech(pkg))
           throw new Error(
             "此章仍有舊語音，請使用「重建章節語音」改用 ElevenLabs，避免混用聲音。",

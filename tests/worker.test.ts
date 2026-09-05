@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import { Store } from "../src/server/db";
 import { LearningService } from "../src/server/service";
 import { demoGraph, demoChapter } from "../src/core/fixtures";
+import { generalGraph, generalChapter } from "./fixtures/general-course";
 it("synthesizes page audio sequentially, retries only a failed page, and reuses ready pages", async () => {
   const dir = mkdtempSync(join(tmpdir(), "methelia-speech-worker-"));
   const store = new Store(join(dir, "methelia.sqlite"));
@@ -165,6 +166,128 @@ it("synthesizes page audio sequentially, retries only a failed page, and reuses 
     rmSync(dir, { recursive: true, force: true });
   }
 }, 25000);
+
+it("prepares the next chapter while current narration is blocked and preserves content after speech fails", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "methelia-independent-lanes-"));
+  const store = new Store(join(dir, "methelia.sqlite"));
+  const service = new LearningService(store);
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let speechStarted = false;
+  let speechCalls = 0;
+  const server = createServer(async (req, res) => {
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    const body = JSON.parse(raw);
+    if (body.text) {
+      speechCalls++;
+      speechStarted = true;
+      await blocked;
+      res.statusCode = 503;
+      res.end("Local speech double failed");
+    } else {
+      const input = JSON.parse(body.messages[1].content).input;
+      const content = input.node
+        ? generalChapter(input.node)
+        : generalGraph("none");
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(content) } }],
+        }),
+      );
+    }
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  if (!address || typeof address === "string")
+    throw new Error("Missing server address");
+  const session = service.session();
+  const course = service.createCourse(session, "Concepts", "demo", "lanes");
+  service.mutate(session, course.id, (c) => {
+    c.mode = "live";
+    c.status = "planning";
+    c.graph = null;
+    c.revision = 0;
+    c.currentNodeId = "";
+    c.chapterIds = {};
+    c.progress = {};
+    store.db.prepare("DELETE FROM graph_revisions WHERE course_id=?").run(c.id);
+    store.enqueue("lane-graph", c.id, "graph");
+  });
+  const child = spawn(
+    process.execPath,
+    [
+      "--import",
+      pathToFileURL(resolve("tests/fixtures/elevenlabs-fetch.mjs")).href,
+      "--import",
+      "tsx",
+      resolve("src/server/worker.ts"),
+    ],
+    {
+      env: {
+        ...process.env,
+        METHELIA_DATA_DIR: dir,
+        AI_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
+        AI_MODEL: "local-test",
+        AI_API_KEY: "test",
+        ELEVENLABS_API_KEY: "test",
+        ELEVENLABS_VOICE_ID: "teacher-test",
+        ELEVENLABS_MODEL: "eleven_multilingual_v2",
+        METHELIA_TEST_SPEECH_URL: `http://127.0.0.1:${address.port}`,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
+  let errors = "";
+  child.stderr.on("data", (data) => {
+    errors += String(data);
+  });
+  try {
+    await vi.waitFor(
+      () => {
+        expect(speechStarted, errors).toBe(true);
+        expect(
+          service.getCourse(session, course.id).chapters.html?.status,
+          errors,
+        ).toBe("ready");
+      },
+      { timeout: 10000, interval: 50 },
+    );
+    const before = service.getCourse(session, course.id);
+    expect(before.chapters.web.speech).toBe("generating");
+    expect(before.chapters.html.speech).toBe("not_requested");
+    expect(speechCalls).toBe(1);
+    release();
+    await vi.waitFor(
+      () =>
+        expect(service.getCourse(session, course.id).chapters.web.speech).toBe(
+          "failed",
+        ),
+      { timeout: 5000 },
+    );
+    expect(service.getCourse(session, course.id).chapters.web.chapter).toEqual(
+      before.chapters.web.chapter,
+    );
+    expect(speechCalls).toBe(1);
+    expect(service.check(session, course.id, "check", 1).passed).toBe(true);
+  } finally {
+    release();
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, "exit");
+      child.kill();
+      await exited;
+    }
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    store.db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 20000);
 it("processes persisted graph and chapter jobs in the real worker process", async () => {
   const dir = mkdtempSync(join(tmpdir(), "methelia-worker-"));
   const store = new Store(join(dir, "methelia.sqlite"));
@@ -173,7 +296,7 @@ it("processes persisted graph and chapter jobs in the real worker process", asyn
     let body = "";
     for await (const chunk of req) body += chunk;
     const input = JSON.parse(JSON.parse(body).messages[1].content).input;
-    const content = input.node ? demoChapter(input.node) : demoGraph();
+    const content = input.node ? generalChapter(input.node) : generalGraph();
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify({

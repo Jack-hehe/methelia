@@ -23,7 +23,7 @@ That is the whole bet: content can be about anything, while practice stays verif
 - **A goal becomes a graph, not a playlist.** The planner emits learning nodes with prerequisites and an ordered route. The Learning Map draws it, opens fullscreen, pans and zooms, and lets you re-enter any finished node without losing your position in the course.
 - **Chapters are generated whole, just in time.** A chapter is never streamed at you sentence by sentence while you read. Every page, example, checkpoint and line of narration is generated and validated before you see page one, and stays immutable while you work through it.
 - **Narration is aligned, not estimated.** Each page goes to ElevenLabs as one with-timestamps request, and short subtitles are cut from the returned character alignment. When alignment and text disagree we show an error rather than invent timings. Playback stops at the end of a page instead of dragging you forward.
-- **The workspace is real.** Live preview on the left, teaching terminal on the right; `edit index.html` opens the editor and the preview repaints as you type. Files persist in SQLite and the finished site exports as a ZIP.
+- **The workspace matches the activity.** New website lessons open an editor and live preview directly; Python lessons use a real in-browser Pyodide runtime; terminal lessons operate on virtual files. Concept lessons need no code workspace. The existing website demo retains its teaching terminal. Files persist in SQLite and can be exported as a ZIP.
 - **The teacher demonstrates without doing your homework.** A demonstration section replays a pre-validated find/replace against an isolated copy of the files and shows the result. Your own work is untouched, and the exercise that follows is still yours to do.
 - **Checkpoints are server-side.** `file.includes`, `file.exists`, `directory.exists`, `cwd.equals`, or a quiz answer — every one is evaluated in the backend against saved state. A client that POSTs "I finished" gets nothing.
 - **Ask a question, get a detour.** The help drawer can propose support nodes for a gap you just hit. You see what they cover and where they rejoin before anything changes; approving one forks the graph into a new immutable revision instead of overwriting your route.
@@ -133,7 +133,7 @@ Written down here so nobody has to discover them during a demo.
 
 Next, roughly in order:
 
-- **Subject independence (in progress, on the development branch).** Every node declares its Learning Environment — `none`, `web`, `python` or `terminal` — so a conceptual topic stops being forced into building a website to prove it was learned. Brings an in-browser Pyodide Python environment and a printable handout export with it. Design notes: [general learning architecture](docs/superpowers/specs/2026-09-05-general-learning-architecture-design.md).
+- **Subject independence.** Scope confirmation, four learning environments (`none`, `web`, `python`, `terminal`), and separate content/speech lanes are connected. See the [validation record and capability limits](docs/general-learning-validation.md). Handouts currently have an HTML renderer but no export entry point. The [architecture design](docs/superpowers/specs/2026-09-05-general-learning-architecture-design.md) describes the broader roadmap.
 - Accounts and cross-device progress sync.
 - Word-level alignment for the guided cursor, so the demonstration follows the sentence rather than the clock.
 - Multi-branch scheduling, and stricter acceptance checks on generated chapters.

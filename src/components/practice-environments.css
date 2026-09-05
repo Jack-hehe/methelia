@@ -1,0 +1,168 @@
+.practice-environment .studio-terminal {
+  background: var(--surface);
+}
+.practice-environment .studio-terminalbar,
+.practice-pane-header {
+  min-height: 47px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.practice-pane-header strong,
+.practice-pane-header button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+.practice-pane-header small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.practice-pane-header button {
+  border-radius: 7px;
+  padding: 7px 10px;
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+.practice-file-tabs {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.practice-file-tabs button {
+  white-space: nowrap;
+  font:
+    11px ui-monospace,
+    Consolas,
+    monospace;
+  border-radius: 5px;
+  padding: 7px 10px;
+  color: var(--muted);
+}
+.practice-file-tabs button[aria-pressed="true"] {
+  color: var(--violet);
+  background: var(--violet-soft);
+}
+.python-runner,
+.practice-file-browser {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--surface);
+}
+.python-run-status {
+  padding: 16px 20px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.python-output,
+.python-error {
+  margin: 0;
+  padding: 16px 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.8 ui-monospace,
+    Consolas,
+    monospace;
+}
+.python-output {
+  flex: 1;
+  min-height: 100px;
+}
+.python-error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 5%, var(--surface));
+}
+.practice-footnote {
+  display: block;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.practice-directory {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 18px;
+  color: var(--muted);
+}
+.practice-directory code {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.practice-directory button {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px;
+}
+.practice-file-list {
+  padding: 0 10px 20px;
+  flex: 1;
+}
+.practice-file-list > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  text-align: left;
+  border-radius: 6px;
+  font:
+    12px ui-monospace,
+    Consolas,
+    monospace;
+}
+.practice-file-list > button span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.practice-file-list > button:hover,
+.practice-file-list > button[aria-current="true"] {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+.practice-empty {
+  padding: 25px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.practice-environment .terminal-editor textarea {
+  tab-size: 4;
+}
+@media (max-width: 700px) {
+  .practice-environment .studio-columns,
+  .paged-course .practice-environment .studio-columns {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+  }
+  .practice-environment .studio-terminal {
+    min-height: 350px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .practice-environment .studio-browser,
+  .practice-environment .python-runner,
+  .practice-environment .practice-file-browser {
+    min-height: 260px;
+  }
+  .practice-environment .studio-toolbar {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+}

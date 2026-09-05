@@ -14,7 +14,7 @@ import {
   Volume2,
 } from "lucide-react";
 import type { Snapshot, Progress, BranchPreview } from "../core/state";
-import type { LearningNode } from "../core/protocol";
+import { chapterEnvironment, type LearningNode } from "../core/protocol";
 import { routeNodes } from "../core/graph";
 import { pageIndex, pageTrack } from "../core/lesson-pages";
 import { api } from "./api";
@@ -91,13 +91,19 @@ export function CoursePlayer({
   activeKey.current = `${pkg?.id}:${sectionId}`;
   const track = pkg ? pageTrack(pkg, sectionId) : null;
   const canEnter = Boolean(chapter && pkg.status === "ready");
+  const environment = chapter
+    ? chapterEnvironment(chapter)
+    : node?.environment || (course.graph?.schemaVersion === 1 ? "web" : "none");
+  const hasWorkspace = environment !== "none";
   const workspacePage =
     section &&
     (["terminal", "code.editor", "file.tree"].includes(
       section.component.type,
     ) ||
       section.template === "workspace");
-  const workOpen = Boolean(canEnter && (practice || workspacePage));
+  const workOpen = Boolean(
+    canEnter && hasWorkspace && (practice || workspacePage),
+  );
   const route = course.graph ? routeNodes(course.graph) : [];
   const allDone = Boolean(
     course.graph && course.completed.length === course.graph.nodes.length,
@@ -387,14 +393,16 @@ export function CoursePlayer({
           )}
           {themeControl}
           {!fullscreen && speechSettings}
-          <button
-            className="icon-button"
-            aria-label="開啟實作區"
-            disabled={!canEnter || busy}
-            onClick={() => setPractice(true)}
-          >
-            <Code2 size={20} />
-          </button>
+          {hasWorkspace && (
+            <button
+              className="icon-button"
+              aria-label="開啟實作區"
+              disabled={!canEnter || busy}
+              onClick={() => setPractice(true)}
+            >
+              <Code2 size={20} />
+            </button>
+          )}
           <button
             className="help-button"
             disabled={!canEnter}
@@ -435,6 +443,45 @@ export function CoursePlayer({
             <ArrowLeft size={14} /> 回首頁
           </button>
         </main>
+      ) : course.scopeAccepted === false ? (
+        <main
+          className="preparation scope-confirmation"
+          aria-labelledby="scope-heading"
+        >
+          <h1 id="scope-heading">確認這堂課的學習範圍</h1>
+          <p>{course.graph?.scopeNote}</p>
+          <p>
+            <strong>完成後你能：</strong>
+            {course.graph?.outcome}
+          </p>
+          <ol>
+            {route.map((item) => (
+              <li key={item.id}>
+                {item.title}：{item.objective}
+              </li>
+            ))}
+          </ol>
+          <button
+            className="primary-button"
+            disabled={busy}
+            onClick={() =>
+              void action(async () =>
+                onChange(
+                  await api<Snapshot>(`courses/${course.id}/accept-scope`, {}),
+                ),
+              )
+            }
+          >
+            確認範圍並開始
+          </button>
+          <button
+            className="text-button"
+            disabled={busy}
+            onClick={() => void home()}
+          >
+            <ArrowLeft size={14} /> 回首頁調整目標
+          </button>
+        </main>
       ) : (
         <>
           <main className="lesson-canvas" aria-label="課程畫布">
@@ -451,14 +498,16 @@ export function CoursePlayer({
               {fullscreen && canEnter && (
                 <div className="canvas-page-actions">
                   {speechSettings}
-                  <button
-                    className="icon-button"
-                    aria-label="開啟實作區"
-                    disabled={!canEnter || busy}
-                    onClick={() => setPractice(true)}
-                  >
-                    <Code2 size={19} />
-                  </button>
+                  {hasWorkspace && (
+                    <button
+                      className="icon-button"
+                      aria-label="開啟實作區"
+                      disabled={!canEnter || busy}
+                      onClick={() => setPractice(true)}
+                    >
+                      <Code2 size={19} />
+                    </button>
+                  )}
                   <button
                     className="icon-button"
                     aria-label="小問題"
@@ -557,6 +606,7 @@ export function CoursePlayer({
                   </div>
                 ) : (
                   <LessonSection
+                    schemaVersion={chapter!.schemaVersion}
                     key={`${pkg!.id}:${sectionId}`}
                     section={section!}
                     index={index}
@@ -645,7 +695,7 @@ export function CoursePlayer({
                           <Volume2 size={16} />
                           {pkg.speech === "ready"
                             ? "啟用語音解說"
-                            : pkg.speech === "failed"
+                            : ["failed", "not_requested"].includes(pkg.speech)
                               ? "準備章節語音"
                               : "語音準備中…"}
                         </button>
@@ -686,13 +736,19 @@ export function CoursePlayer({
                           回到課程
                         </button>
                       ) : allDone ? (
-                        <a
-                          className="page-nav-button page-nav-next"
-                          href={`/api/workspace/export?courseId=${course.id}`}
-                        >
-                          <Download size={16} />
-                          匯出網站
-                        </a>
+                        Object.keys(course.workspace.files).length ? (
+                          <a
+                            className="page-nav-button page-nav-next"
+                            href={`/api/workspace/export?courseId=${course.id}`}
+                          >
+                            <Download size={16} />
+                            {chapterEnvironment(chapter!) === "web"
+                              ? "匯出網站"
+                              : "匯出作品"}
+                          </a>
+                        ) : (
+                          <span className="page-nav-button">課程已完成</span>
+                        )
                       ) : (
                         <button
                           className="page-nav-button page-nav-next"

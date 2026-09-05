@@ -108,6 +108,7 @@ export function LearningApp() {
         goal: mode === "demo" ? "體驗：從零打造我的第一個網站" : goal,
         mode,
         requestId: crypto.randomUUID(),
+        language: mode === "demo" || language === "zh" ? "zh-TW" : "en",
       });
       setCourse(c);
       showHome(false, c.id);
