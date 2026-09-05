@@ -116,8 +116,8 @@ export function LearningApp() {
         goal:
           mode === "demo"
             ? selectedLanguage === "en"
-              ? "Build my first website"
-              : "體驗：從零打造我的第一個網站"
+              ? "Build an interactive personal homepage with HTML, CSS and JavaScript"
+              : "用 HTML、CSS、JavaScript 製作互動個人首頁"
             : goal,
         mode,
         requestId: crypto.randomUUID(),

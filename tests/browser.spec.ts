@@ -330,7 +330,7 @@ test("learn, inspect map, enter an optional extension, practice and resume", asy
   await page.getByRole("button", { name: "先體驗一堂課" }).click();
   await expect(page.locator("[data-section]").first()).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "HTML、CSS、JavaScript 的分工" }),
+    page.getByRole("heading", { name: "同一個個人首頁，三種語言各負責什麼？" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "開啟 Learning Map" }).click();
   await expect(
@@ -392,6 +392,15 @@ test("learn, inspect map, enter an optional extension, practice and resume", asy
 test("practice has left live preview, right terminal, and an isolated guided demonstration", async ({
   page,
 }) => {
+  // Exercise the text-only fallback explicitly now that starter audio is bundled.
+  await page.route("**/api/courses", async route => {
+    const response = await route.fetch();
+    const course = await response.json();
+    for (const pkg of Object.values(course.chapters) as {speech:string}[]) {
+      pkg.speech = "failed";
+    }
+    await route.fulfill({json:course});
+  });
   const duplicateKeys: string[] = [];
   page.on("console", (m) => {
     if (m.text().includes("same key")) duplicateKeys.push(m.text());
@@ -458,7 +467,7 @@ test("light landing and mobile lesson remain usable with an opaque map", async (
   await page.getByRole("button", { name: "先體驗一堂課" }).click();
   await expect(page.locator("[data-section]").first()).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "HTML、CSS、JavaScript 的分工" }),
+    page.getByRole("heading", { name: "同一個個人首頁，三種語言各負責什麼？" }),
   ).toBeVisible();
   await page.screenshot({
     path: "test-results/lesson-light.png",

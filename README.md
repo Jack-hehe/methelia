@@ -13,6 +13,10 @@ The website is open to everyone without an account or shared password. Courses a
 3. **Learn by doing.** Read a concise explanation, manipulate a visual model, watch a demonstration, or work in the appropriate editor.
 4. **Check understanding and adapt.** Quizzes and saved-work checkpoints provide feedback. Personalized routes use learning results when preparing subsequent chapters. Extension units branch from a selected node and let learners return to the main course.
 
+### Starter website course
+
+“Try a lesson” opens **Build an interactive personal homepage with HTML, CSS and JavaScript**: five chapters covering language roles, an HTML heading, CSS button styling, a JavaScript click handler, and exporting the finished files. Teacher narration includes explanations, demonstrations and practice guidance. Its ten bilingual chapter audio files are bundled (approximately 33 minutes across both languages); opening the starter never automatically purchases missing narration. See the [reviewed scripts and verification record](docs/starter-course-release.md).
+
 ### Featured projects
 
 **20 projects × 5 chapters**, in **English and Traditional Chinese**: 100 chapters and 200 localized chapter packages. All 200 chapter narration files are prepared, with approximately 154 minutes of audio.

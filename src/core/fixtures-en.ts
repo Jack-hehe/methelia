@@ -4,6 +4,11 @@ import {
   type LearningNode,
   validateChapter,
 } from "./protocol";
+import {
+  starterCourseTitle,
+  starterTeaching,
+  teachStarterChapter,
+} from "./starter-teaching";
 
 const starterFiles = {
   "/index.html":
@@ -49,11 +54,11 @@ export function englishDemoGraph(): Graph {
   ] as const;
   return {
     schemaVersion: 1,
-    title: "Build your first website from scratch",
+    title: starterCourseTitle.en,
     nodes: lessons.map(([id, title, objective, minutes], i) => ({
       id,
-      title,
-      objective,
+      title: starterTeaching.en[id].title,
+      objective: starterTeaching.en[id].objective,
       minutes,
       kind: "main",
       prerequisites: i ? [lessons[i - 1][0]] : [],
@@ -321,23 +326,26 @@ export function englishDemoChapter(node: LearningNode): Chapter {
             component: { type: "browser.preview" },
           },
         ];
-  return validateChapter({
-    schemaVersion: 1,
-    nodeId: node.id,
-    title: node.title,
-    objective: node.objective,
-    sections,
-    script: sections.map((section) => ({
-      sectionId: section.id,
-      text:
-        section.id === "languages"
-          ? "Select CSS and choose a button color. The content stays the same while the appearance changes. Now select JavaScript and click the button to change its text. HTML supplies content, CSS defines appearance, and JavaScript responds to actions. Switch between them to compare."
-          : section.id === "structure"
-            ? "Let's change a heading. In the Terminal, type edit index.html to open the file. Find h1 and replace the text between its tags with Hello Methelia. Keep the tags. The heading on the left updates. h1 holds a heading, p holds a paragraph, and button creates a button."
-            : section.id === "check"
-              ? "Your turn to decide. We want to change the button from purple to green, keeping its label and click behavior the same. Think back to the color experiment and choose the language responsible for that change."
-              : section.body,
-    })),
-    workspaceSetup: starterFiles,
-  });
+  return teachStarterChapter(
+    validateChapter({
+      schemaVersion: 1,
+      nodeId: node.id,
+      title: node.title,
+      objective: node.objective,
+      sections,
+      script: sections.map((section) => ({
+        sectionId: section.id,
+        text:
+          section.id === "languages"
+            ? "Select CSS and choose a button color. The content stays the same while the appearance changes. Now select JavaScript and click the button to change its text. HTML supplies content, CSS defines appearance, and JavaScript responds to actions. Switch between them to compare."
+            : section.id === "structure"
+              ? "Let's change a heading. In the Terminal, type edit index.html to open the file. Find h1 and replace the text between its tags with Hello Methelia. Keep the tags. The heading on the left updates. h1 holds a heading, p holds a paragraph, and button creates a button."
+              : section.id === "check"
+                ? "Your turn to decide. We want to change the button from purple to green, keeping its label and click behavior the same. Think back to the color experiment and choose the language responsible for that change."
+                : section.body,
+      })),
+      workspaceSetup: starterFiles,
+    }),
+    "en",
+  );
 }

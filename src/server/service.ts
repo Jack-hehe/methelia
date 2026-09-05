@@ -248,7 +248,7 @@ export class LearningService {
       if (graph) {
         this.store.revision(course);
         this.prepare(course, course.currentNodeId);
-        if (featuredId)
+        if (featuredId || mode === "demo")
           this.scheduleSpeech(
             course,
             this.store.getPackage(course.chapterIds[course.currentNodeId])!,
@@ -520,7 +520,7 @@ export class LearningService {
       return;
     if (
       automatic &&
-      ((!c.featuredId && c.mode !== "live") || pkg.speech === "failed")
+      c.mode !== "demo" && pkg.speech === "failed"
     )
       return;
     try {
@@ -529,10 +529,11 @@ export class LearningService {
         pkg.speechProfile,
         c.language || "zh-TW",
       );
-      if (c.featuredId) {
+      if (c.featuredId || c.mode === "demo") {
         const cached = readFeaturedAudio(
           this.store,
           featuredAudioKey(pkg.chapter.script, pkg.speechProfile),
+          c.featuredId ? "featured-audio" : "starter-audio",
         );
         if (cached) {
           this.store.db
@@ -546,6 +547,9 @@ export class LearningService {
           return;
         }
       }
+      // Starter lessons use reviewed, bundled narration. Opening one must never
+      // create a paid request when that exact script/profile is unavailable.
+      if (automatic && c.mode === "demo" && !c.featuredId) return;
       // Prepared narration needs a voice identity; only a cache miss needs a TTS key.
       speechConfig(pkg.speechProfile, c.language || "zh-TW");
       pkg.speech = "pending";

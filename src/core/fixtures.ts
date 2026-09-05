@@ -5,6 +5,11 @@ import {
   validateChapter,
 } from "./protocol";
 import { englishDemoChapter, englishDemoGraph } from "./fixtures-en";
+import {
+  starterCourseTitle,
+  starterTeaching,
+  teachStarterChapter,
+} from "./starter-teaching";
 
 export const starterFiles = {
   "/index.html":
@@ -30,11 +35,11 @@ export function demoGraph(language: "en" | "zh-TW" = "zh-TW"): Graph {
   ] as const;
   return {
     schemaVersion: 1,
-    title: "從零打造你的第一個網站",
+    title: starterCourseTitle["zh-TW"],
     nodes: lessons.map(([id, title, objective, minutes], i) => ({
       id,
-      title,
-      objective,
+      title: starterTeaching["zh-TW"][id].title,
+      objective: starterTeaching["zh-TW"][id].objective,
       minutes,
       kind: "main",
       prerequisites: i ? [lessons[i - 1][0]] : [],
@@ -322,23 +327,26 @@ export function demoChapter(
             component: { type: "browser.preview" },
           },
         ];
-  return validateChapter({
-    schemaVersion: 1,
-    nodeId: node.id,
-    title: node.title,
-    objective: node.objective,
-    sections,
-    script: sections.map((s) => ({
-      sectionId: s.id,
-      text:
-        s.id === "languages"
-          ? "先選 CSS，再選一個按鈕顏色。看，內容沒變，但外觀換了。接著選 JavaScript，點一下按鈕，文字會改變。這三種語言各有工作：HTML 放上內容，CSS 決定長相，JavaScript 回應操作。你可以來回切換，比較它們的差別。"
-          : s.id === "structure"
-            ? "現在看一次標題怎麼改。在 Terminal 輸入 edit index.html，打開檔案。找到 h1，把中間的文字換成 Hello Methelia，左右的標籤保留。左邊的標題就會更新。h1 是主要標題，p 放段落，button 放按鈕；先認得這三個就能開始改網頁。"
-            : s.id === "check"
-              ? "換你判斷一下。這次只想把按鈕從紫色換成綠色，不改按鈕上的字，也不改點擊後的反應。想想剛才換顏色的操作，再選出負責這件事的語言。"
-              : s.body,
-    })),
-    workspaceSetup: starterFiles,
-  });
+  return teachStarterChapter(
+    validateChapter({
+      schemaVersion: 1,
+      nodeId: node.id,
+      title: node.title,
+      objective: node.objective,
+      sections,
+      script: sections.map((s) => ({
+        sectionId: s.id,
+        text:
+          s.id === "languages"
+            ? "先選 CSS，再選一個按鈕顏色。看，內容沒變，但外觀換了。接著選 JavaScript，點一下按鈕，文字會改變。這三種語言各有工作：HTML 放上內容，CSS 決定長相，JavaScript 回應操作。你可以來回切換，比較它們的差別。"
+            : s.id === "structure"
+              ? "現在看一次標題怎麼改。在 Terminal 輸入 edit index.html，打開檔案。找到 h1，把中間的文字換成 Hello Methelia，左右的標籤保留。左邊的標題就會更新。h1 是主要標題，p 放段落，button 放按鈕；先認得這三個就能開始改網頁。"
+              : s.id === "check"
+                ? "換你判斷一下。這次只想把按鈕從紫色換成綠色，不改按鈕上的字，也不改點擊後的反應。想想剛才換顏色的操作，再選出負責這件事的語言。"
+                : s.body,
+      })),
+      workspaceSetup: starterFiles,
+    }),
+    "zh-TW",
+  );
 }

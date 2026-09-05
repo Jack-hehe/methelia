@@ -400,7 +400,7 @@ test("review can enable prepared narration and keeps its draft isolated from the
   await page.getByLabel("開啟 Learning Map", { exact: true }).click();
   await page
     .locator(".map-node")
-    .filter({ hasText: "認識網站的三種語言" })
+    .filter({ hasText: "網頁入門：內容、外觀與點擊互動如何分工" })
     .click();
   await page.getByRole("button", { name: "複習這一章" }).click();
   await page.getByRole("button", { name: "啟用語音解說" }).click();
@@ -412,7 +412,7 @@ test("review can enable prepared narration and keeps its draft isolated from the
   await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByRole("button", { name: "回到目前章節" }).click();
   await expect(
-    page.getByRole("heading", { name: "用 HTML 建立骨架", exact: true }),
+    page.getByRole("heading", { name: "讀懂 HTML：標籤與內容的關係", exact: true }),
   ).toBeVisible();
   const workspace = await (
     await page.request.get(`/api/workspace?courseId=${course.id}`)

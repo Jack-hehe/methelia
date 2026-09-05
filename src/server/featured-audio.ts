@@ -18,6 +18,7 @@ export type FeaturedAudio = {
 export function readFeaturedAudio(
   store: Store,
   key: string,
+  directory: "featured-audio" | "starter-audio" = "featured-audio",
 ): FeaturedAudio | null {
   const row = store.db
     .prepare("SELECT audio,metadata FROM featured_audio WHERE id=?")
@@ -26,9 +27,9 @@ export function readFeaturedAudio(
   // Bundled, content-addressed assets are prepared before release and reusable across learners.
   try {
     const metadata = JSON.parse(
-      readFileSync(resolve("public/featured-audio", `${key}.json`), "utf8"),
+      readFileSync(resolve("public", directory, `${key}.json`), "utf8"),
     );
-    const audio = readFileSync(resolve("public/featured-audio", `${key}.mp3`));
+    const audio = readFileSync(resolve("public", directory, `${key}.mp3`));
     return { audio, cues: metadata.cues, captions: metadata.captions };
   } catch {
     return null;

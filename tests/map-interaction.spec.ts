@@ -80,7 +80,7 @@ test("sidebar toggles independently and stays fixed across node selection, dragg
   const originalCanvas = await map.locator(".map-canvas").boundingBox();
   await node.click();
   await expect(detail.getByRole("heading", { level: 3 })).toHaveText(
-    "用 HTML 建立骨架",
+    "HTML 實作：修改個人首頁的主標題",
   );
   const before = await expectSidebar(map);
   const a = (await node.boundingBox())!;
@@ -98,7 +98,7 @@ test("sidebar toggles independently and stays fixed across node selection, dragg
   await map.locator(".map-node").nth(2).click();
   await expect(detail).toHaveCount(1);
   await expect(detail.getByRole("heading", { level: 3 })).toHaveText(
-    "CSS：顏色與間距",
+    "CSS 實作：修改按鈕底色並理解內距",
   );
   expect(await expectSidebar(map)).toEqual(before);
   await page.mouse.click(canvas.x + 20, canvas.y + 25);
@@ -110,7 +110,7 @@ test("sidebar toggles independently and stays fixed across node selection, dragg
   );
   await map.locator(".map-node").nth(2).click();
   await expect(detail.getByRole("heading", { level: 3 })).toHaveText(
-    "CSS：顏色與間距",
+    "CSS 實作：修改按鈕底色並理解內距",
   );
   await map.getByLabel("收起節點資訊", { exact: true }).click();
   await node.focus();
@@ -173,7 +173,7 @@ test("canceling a selected preview node leaves current-node details reachable", 
   await map.locator(".map-node.current").click();
   await expect(
     map.locator(".node-detail").getByRole("heading", { level: 3 }),
-  ).toHaveText("認識網站的三種語言");
+  ).toHaveText("網頁入門：內容、外觀與點擊互動如何分工");
   await expectSidebar(map);
 });
 
