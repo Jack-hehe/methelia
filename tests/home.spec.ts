@@ -9,7 +9,7 @@ test("the Methelia logo on explore opens the learning home instead of resuming a
   await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
   await page.goto("/explore");
   await page.getByRole("link", { name: "Methelia", exact: true }).click();
-  // Wait for the saved session, not the temporary landing before it loads.
+  // The explicit home destination must remain home after session restoration.
   await expect(
     page.getByRole("button", { name: "先體驗一堂課" }),
   ).toBeEnabled();

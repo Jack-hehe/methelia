@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import type { Snapshot } from "../core/state";
 import { api } from "./api";
 import { CoursePlayer } from "./course-player";
@@ -12,8 +12,10 @@ import { useTheme } from "./use-theme";
 
 export function LearningApp() {
   const initialized = useRef(false);
+  const [sessionStatus, setSessionStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
   const [course, setCourse] = useState<Snapshot | null>(null),
-    [ready, setReady] = useState(false),
     [busy, setBusy] = useState(false),
     [goal, setGoal] = useState(""),
     [error, setError] = useState(""),
@@ -25,22 +27,34 @@ export function LearningApp() {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    // The explore route's demo card hands off through the URL, so that button
-    // means exactly what the one on the landing means.
+    void restoreSession();
+  }, []);
+
+  async function restoreSession() {
+    setSessionStatus("loading");
+    setError("");
     const params = new URLSearchParams(window.location.search);
     const wantsHome = params.has("home");
     const wantsDemo = !wantsHome && params.has("demo");
     setHome(wantsHome);
-    if (wantsDemo)
-      window.history.replaceState(null, "", window.location.pathname);
-    api<{ course: Snapshot | null }>("sessions", {})
-      .then((r) => {
-        setCourse(r.course);
-        if (wantsDemo) void start("demo");
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setReady(true));
-  }, []);
+    try {
+      const result = await api<{ course: Snapshot | null }>("sessions", {});
+      setCourse(result.course);
+      if (wantsDemo) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("demo");
+        window.history.replaceState(
+          null,
+          "",
+          url.pathname + url.search + url.hash,
+        );
+        await start("demo");
+      }
+      setSessionStatus("ready");
+    } catch {
+      setSessionStatus("error");
+    }
+  }
 
   useEffect(() => {
     if (!course || course.status === "failed") return;
@@ -95,7 +109,7 @@ export function LearningApp() {
     }
   }
 
-  const showingLanding = !course || home;
+  const showingLanding = sessionStatus === "ready" && (!course || home);
 
   useEffect(() => {
     if (!showingLanding) return;
@@ -105,6 +119,35 @@ export function LearningApp() {
       document.documentElement.lang = previous;
     };
   }, [showingLanding, copy.lang]);
+
+  // A session that has not loaded is not evidence that no course exists.
+  // Keep both SSR and the first client render neutral until the destination is known.
+  if (sessionStatus !== "ready") {
+    return (
+      <main
+        className="app-entry"
+        lang={copy.lang}
+        aria-busy={sessionStatus === "loading"}
+      >
+        {sessionStatus === "error" ? (
+          <>
+            <p role="alert">{copy.restoreError}</p>
+            <button
+              className="secondary-button"
+              onClick={() => void restoreSession()}
+            >
+              {copy.retry}
+            </button>
+          </>
+        ) : (
+          <div role="status">
+            <LoaderCircle className="spin" size={24} aria-hidden="true" />
+            <span className="sr-only">{copy.loading}</span>
+          </div>
+        )}
+      </main>
+    );
+  }
 
   return (
     <>
@@ -138,7 +181,7 @@ export function LearningApp() {
           goal={goal}
           onGoalChange={setGoal}
           busy={busy}
-          ready={ready}
+          ready={sessionStatus === "ready"}
           onStart={() => void start("live")}
           onDemo={() => void start("demo")}
           onMyCourses={course ? () => showHome(false) : undefined}

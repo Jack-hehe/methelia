@@ -56,19 +56,13 @@ export function Landing({
         <main className="landing-main">
           <h1 className="hero-title">
             <span className="title-line">
-              {language === "en" ? (
-                <>
-                  I want to{" "}
-                  <span className="learn-word">
-                    learn
-                    <span className="word-star" aria-hidden="true">
-                      ✳
-                    </span>
-                  </span>
-                </>
-              ) : (
-                copy.title
-              )}
+              {language === "en" ? "I want to " : "我想"}
+              <span className="learn-word">
+                {language === "en" ? "learn" : "學習"}
+                <span className="word-star" aria-hidden="true">
+                  ✳
+                </span>
+              </span>
             </span>
             <span className="title-line title-typed">
               <span className="typed">{subject.text}</span>

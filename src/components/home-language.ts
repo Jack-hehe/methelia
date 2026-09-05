@@ -17,6 +17,9 @@ export const homeCopy = {
     start: "Start Exploring",
     demo: "Try a Lesson",
     dismiss: "Dismiss message",
+    loading: "Loading…",
+    restoreError: "Unable to load your learning progress.",
+    retry: "Retry",
     subjects: [
       "Web Design",
       "Technical Analysis",
@@ -52,6 +55,9 @@ export const homeCopy = {
     start: "開始學習",
     demo: "先體驗一堂課",
     dismiss: "關閉訊息",
+    loading: "載入中…",
+    restoreError: "無法載入學習進度。",
+    retry: "重試",
     subjects: ["網頁設計", "技術分析", "數位行銷", "流體動力學"],
     ideas: [
       "我想從零開始，做一個屬於自己的網站",

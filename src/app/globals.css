@@ -256,6 +256,20 @@ button:hover:not(:disabled) {
 .mobile-only {
   display: none;
 }
+.app-entry {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+.app-entry p {
+  margin: 0;
+}
 /* The entry screen gives the learning goal room to breathe. */
 /* ---------- landing: one screen, the ask box centred ---------- */
 .landing {
@@ -633,10 +647,8 @@ button:hover:not(:disabled) {
   min-height: 1.08em;
   white-space: nowrap;
 }
-.landing .title-typed {
-  font-size: clamp(24px, 5vw, 70px);
-}
 .landing .hero-title {
+  font-size: clamp(24px, 5vw, 70px);
   font-weight: 500;
   font-family: "DM Sans", "Noto Sans TC", system-ui, sans-serif;
   font-style: normal;
@@ -645,10 +657,13 @@ button:hover:not(:disabled) {
 .landing .learn-word {
   font-family: Georgia, serif;
   font-style: italic;
-  font-weight: 400;
+  font-weight: inherit;
   color: var(--violet);
   position: relative;
   letter-spacing: -0.04em;
+}
+.landing[lang="zh-Hant"] .learn-word {
+  font-family: inherit;
 }
 .landing .word-star {
   position: absolute;
