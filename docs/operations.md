@@ -36,21 +36,21 @@
 
 1. 模型輸出 JSON，經 Zod 與圖形／元件語意驗證，格式不合格時最多修復兩次。
 2. 每個小章節包含全部說明、互動設定、練習條件及 narration script；不在章節播放中途生成內容。
-3. 新章節按分頁把 script 交給 ElevenLabs：一頁一次完整請求，不拆成逐句請求。使用 with-timestamps 回傳 MP3 與原文字符 alignment，對應短句字幕；同時傳入相鄰頁文字改善上下文連貫。逐頁交易保存，全部分頁準備好才標示章節語音可用。
+3. 新章節把整份 script 一次交給 ElevenLabs，使用 with-timestamps 回傳一個 MP3 與原文字元 alignment，再對應各頁 cues 與短句字幕。完整保存音檔與時間資料後才標示章節語音可用。精選課程優先讀取預製快取。
 4. 字幕與 alignment 不一致時顯示錯誤，不捏造時間。連線中斷、逾時、HTTP 錯誤或本機對齊失敗均不自動重送；手動重試可能再次計費。已完整保存的音訊會重用，不因重複工作再次合成。
-5. 播放結束停在當頁。使用者手動翻頁，練習驗證全部通過後才能繼續下一章；翻頁會先保存實作草稿。
+5. 播放到分頁邊界自動暫停；手動按下一頁或下一章會自動播放。練習驗證全部通過後才能完成並繼續下一章；翻頁會先保存實作草稿。
 
-舊章節不會因為開啟新版介面而重新合成或變更文案：既有整章音軌依當頁的 Section cues 限制播放範圍。新章節的音檔以 `/api/audio/{packageId}?sectionId={sectionId}` 讀取，進度使用頁內時間。ElevenLabs 部分失敗時，重試會重用已完成分頁，只補尚未完成的音檔；同章固定 Voice ID 與模型，不會因中途修改環境設定而換聲音。
+舊章節不會因為開啟新版介面而重新合成或變更文案，舊分頁音軌仍相容。新章節以 `/api/audio/{packageId}` 讀取整章音檔，進度使用整章時間並由 Section cues 對應頁面。同章固定 Voice ID 與模型，不會因中途修改環境設定而換聲音。
 
 要把舊 Fish 語音改成 ElevenLabs，或改用新老師：點課程上方的「章節語音」圖示，再確認「重建章節語音」。這會使用額度，建立新的整章語音版本並重設本章音訊時間，不修改課程文字、已完成練習與實作檔案。已有部分 Fish 音檔的章節不能直接補成 ElevenLabs，必須整章重建以避免混用。已開始準備的章節不可重複提交重建；舊版本保留到刪除課程為止，不會自動再合成。
 
-章節內容完成就直接顯示，不受語音準備中或失敗影響；可閱讀、翻頁與操作示範。底部「準備章節語音」可手動開始或重試合成，不會因進入頁面而自動重送。所有分頁音檔完成後即可按播放；曾選擇文字模式的舊課程，需先按「啟用語音解說」。現有 Chapter Package 保持原樣；若要體驗更新後的示範內容，請從首頁建立新的示範課程。
+章節內容完成就可以開始學習，不受語音準備中或失敗影響；可閱讀、翻頁與操作示範。底部「準備章節語音」可手動開始或重試合成，不會因進入頁面而自動重送失敗請求。整章音檔與字幕完成後即可播放；曾選擇文字模式的舊課程，需先按「啟用語音解說」。現有 Chapter Package 保持原樣。
 
 ## 第一次試播
 
 1. 先更換任何曾曝光的金鑰，再於 `.env.local` 設定 ElevenLabs key、老師 Voice ID 與模型。Voice ID 可由 ElevenLabs 聲音庫複製，API key 需有文字轉語音權限；訂閱不代表每次 API 合成都不扣額度。
 2. 重新啟動網頁與 worker，建立示範課程；按「準備章節語音」只準備所選小章節，不需先設定 AI 服務。
-3. 等待所有分頁音檔及字幕準備完成，啟用語音後按播放。確認當頁字幕與示範同步、暫停／重播正常；按底部「下一頁」切換分頁，再自行按播放。
+3. 等待整章音檔及字幕準備完成，啟用語音後按播放。確認字幕、暫停與重播正常；按底部「下一頁」後會自動播放，到下一個分頁邊界時自動暫停。
 4. 401／403 時檢查憑證與權限；429 時檢查額度與流量限制；對齊錯誤時可先用文字模式。不要把金鑰或完整 provider 回應貼到 issue。
 
 若已填設定卻仍出現「語音尚未設定」，確認沒有舊 worker 留在背景：修改 `.env.local` 不會更新已啟動 worker 的環境。停止原本的 `npm.cmd start`／`npm.cmd run dev`，再重新啟動兩個程序並重試失敗的章節。`AI_BASE_URL` 必須是完整網址，例如 `https://openrouter.ai/api/v1`，不能只填 `//openrouter.ai/api/v1`。
@@ -120,9 +120,9 @@ npm.cmd start
 使用根目錄的 [render.yaml](../render.yaml)：一個付費 Node Web Service（1 CPU / 2 GB，新加坡）＋ 1 GB 持久化磁碟。不建立第二個 worker 服務：網站與單一 worker 在同一個服務內執行，共用 SQLite。
 
 1. 在 Render 的免費 Hobby workspace 選 **New → Blueprint**，連接 `Jack-hehe/methelia`。
-2. Branch 選 **`feat/methelia-mvp-release`**，Blueprint Path 使用 `render.yaml`。
+2. Branch 選 **`main`**，Blueprint Path 使用 `render.yaml`。
 3. 依畫面提示填入本機 `.env.local` 的 `AI_MODEL`、`AI_API_KEY`、`ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID`。不要把金鑰貼到聊天室或 GitHub。
-4. 確認資源只有一個 2 GB 服務和一個 1 GB 磁碟，再按 Deploy。這一步開始建立付費資源。`AI_BASE_URL` 預設為 OpenRouter，`ELEVENLABS_MODEL` 預設為 `eleven_multilingual_v2`；若本機使用不同設定，在 Render Environment 改成相同值。
+4. 確認資源只有一個 2 GB 服務和一個 1 GB 磁碟，再按 Deploy。這一步開始建立付費資源。`AI_BASE_URL` 預設為 OpenRouter，`ELEVENLABS_MODEL` 預設為 `eleven_v3`；預製精選語音的 Voice ID 與模型必須和 Render 一致。準備方式見[精選課程操作說明](featured-courses-release.md)。
 5. 部署成功後，開啟 Render 提供的 `https://…onrender.com` 網址。登入帳號是 **`demo`**；密碼在該服務 Environment 的 **`METHELIA_DEMO_PASSWORD`**，由 Render 隨機產生。不設密碼或密碼少於 16 字元時，Render 環境不會開放網站。
 6. 在最終展示網址生成一堂小課程，確認語音、翻頁、實作、重新整理後的進度。語音／AI 的實際呼叫另計費，部署健康檢查不會呼叫它們。
 

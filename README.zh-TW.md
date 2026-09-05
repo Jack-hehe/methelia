@@ -20,9 +20,10 @@ Methelia 從另一邊切：**模型只規劃與撰寫，不負責呈現。** 它
 
 ## 核心功能
 
+- **20 堂可以直接動手的精選專案。** 每堂五章，包含網站、Python 專案，以及數學、科學、設計等領域的 17 種互動實驗元件。所有課程都有英文與繁體中文內容、實驗進度儲存與預製語音快取。詳見[課程與元件指南](docs/featured-courses-release.md)。
 - **目標變成一張圖，不是播放清單。** 規劃器輸出帶前置條件的學習節點與一條排好序的路徑。Learning Map 把它畫出來，可全螢幕、可拖曳縮放，也可以回頭進入任何已完成的節點而不會弄丟你現在的進度。
 - **章節整章生成，而且是即時準備。** 章節不會在你邊看的時候一句一句吐給你。所有分頁、範例、檢查點與整份旁白腳本，都在你看到第一頁之前就生成並驗證完畢，而且在你上這一章的期間結構不再改變。
-- **字幕是對齊出來的，不是估出來的。** 每一頁以一次 with-timestamps 請求送給 ElevenLabs，短句字幕從回傳的字元對齊時間切出來。對齊與原文對不上時直接顯示錯誤，不捏造時間。播完停在當頁，不會硬拖著你往前。
+- **字幕是對齊出來的，不是估出來的。** 每一章以一次 with-timestamps 請求送給 ElevenLabs，各頁共用同一音檔與分頁時間點，短句字幕由回傳的字元時間對齊。播完停在當頁，手動選擇下一頁時自動播放。
 - **實作環境配合學習活動。** 新網站課程直接使用編輯器與即時預覽；Python 使用真正的瀏覽器內 Pyodide 執行環境；Terminal 操作虛擬檔案。純概念課程不要求程式碼工作區，既有網站體驗課程則保留教學 Terminal。檔案存在 SQLite，可整包 ZIP 匯出。
 - **老師會示範，但不會幫你寫作業。** 示範區塊是在一份隔離的檔案副本上重播一段預先驗證過的 find/replace 並展示結果。你自己的作品完全沒被動到，接下來的練習還是得你自己做。
 - **練習驗收在伺服器端。** `file.includes`、`file.exists`、`directory.exists`、`cwd.equals` 或答對題目——每一種都由後端對照存下來的狀態判定。前端送一個「我完成了」過來不會有任何效果。
@@ -72,7 +73,7 @@ flowchart TB
 
 **學習者的程式碼離主機很遠。** 網站預覽是沒有同源權限的沙箱 iframe，CSP 擋掉外部載入。Terminal 不是 shell，而是一個跑在資料庫裡的虛擬檔案系統之上的直譯器。
 
-大約 8,000 行 TypeScript，測試也差不多是同樣的量。
+TypeScript 程式碼包含學習引擎、可重用實驗元件、完整課程內容與瀏覽器回歸測試。
 
 ## 使用技術
 
@@ -83,7 +84,7 @@ flowchart TB
 | 後端         | Next.js Route Handler（Node.js 22）、Zod 4                  | API、匿名 session、Protocol 驗證與練習判定                 |
 | 後端         | 自建背景 worker（tsx ＋ concurrently）                      | 內容與語音兩條 lane 的持久化生成佇列                       |
 | 資料庫       | `node:sqlite`（WAL）                                        | 課程、圖形版本、進度、工作區、音檔、每日用量               |
-| Sponsor 技術 | **ElevenLabs**（`eleven_multilingual_v2`、with-timestamps） | 逐頁語音合成與字元級字幕對齊                               |
+| Sponsor 技術 | **ElevenLabs**（`eleven_v3`、with-timestamps） | 整章語音合成與字元級字幕對齊                               |
 | 部署         | Render Blueprint ＋ 持久化磁碟                              | 單一服務同時執行網站與 worker                              |
 | 測試         | Vitest 5、Playwright                                        | 核心／服務／worker 單元測試與瀏覽器回歸測試                |
 
@@ -94,7 +95,7 @@ flowchart TB
 ```bash
 git clone https://github.com/Jack-hehe/methelia.git
 cd methelia
-git switch feat/methelia-mvp-release
+git switch main
 npm ci
 
 # 填入 AI_BASE_URL / AI_MODEL / AI_API_KEY
@@ -116,7 +117,7 @@ Windows PowerShell 請改用 `npm.cmd`／`npx.cmd`，並用 `Copy-Item .env.exam
 
 ## 作品展示
 
-- 作品展示網址：_待補_（Render 部署，HTTP Basic 保護，帳號 `demo`）
+- 作品展示網址：[methelia.com](https://methelia.com)（Render 部署，HTTP Basic 保護，帳號 `demo`）
 - 評選影片：_待補_
 
 ## 限制與未來工作
@@ -142,7 +143,7 @@ Windows PowerShell 請改用 `npm.cmd`／`npx.cmd`，並用 `Copy-Item .env.exam
 
 | 項目                | 來源                                                                                                   | 使用方式與授權                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| ElevenLabs TTS      | [with-timestamps API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps) | 依帳號訂閱方案呼叫，逐頁合成旁白與字幕；金鑰只存在 `.env.local` 與 Render 環境變數 |
+| ElevenLabs TTS      | [with-timestamps API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps) | 依帳號訂閱方案呼叫，整章合成旁白並對齊字幕；金鑰只存在 `.env.local` 與 Render 環境變數 |
 | OpenRouter          | <https://openrouter.ai>                                                                                | 模型代理服務，依其服務條款與各模型供應商規範使用                                   |
 | Next.js / React     | <https://nextjs.org> · <https://react.dev>                                                             | MIT                                                                                |
 | Zod                 | <https://zod.dev>                                                                                      | MIT                                                                                |

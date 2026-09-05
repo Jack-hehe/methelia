@@ -20,9 +20,10 @@ That is the whole bet: content can be about anything, while practice stays verif
 
 ## Core features
 
+- **20 ready-to-build projects.** Five connected chapters per course cover websites, Python projects and 17 interactive laboratories across mathematics, science, design and other domains. Every course has English and Traditional Chinese content, persistent experiments and a prepared narration cache. See [the course and component guide](docs/featured-courses-release.md).
 - **A goal becomes a graph, not a playlist.** The planner emits learning nodes with prerequisites and an ordered route. The Learning Map draws it, opens fullscreen, pans and zooms, and lets you re-enter any finished node without losing your position in the course.
 - **Chapters are generated whole, just in time.** A chapter is never streamed at you sentence by sentence while you read. Every page, example, checkpoint and line of narration is generated and validated before you see page one, and stays immutable while you work through it.
-- **Narration is aligned, not estimated.** Each page goes to ElevenLabs as one with-timestamps request, and short subtitles are cut from the returned character alignment. When alignment and text disagree we show an error rather than invent timings. Playback stops at the end of a page instead of dragging you forward.
+- **Narration is aligned, not estimated.** Each chapter goes to ElevenLabs as one with-timestamps request. Its pages share one audio file with section cues; short subtitles use the returned character alignment. Playback pauses at page boundaries, while manually choosing the next page starts it automatically.
 - **The workspace matches the activity.** New website lessons open an editor and live preview directly; Python lessons use a real in-browser Pyodide runtime; terminal lessons operate on virtual files. Concept lessons need no code workspace. The existing website demo retains its teaching terminal. Files persist in SQLite and can be exported as a ZIP.
 - **The teacher demonstrates without doing your homework.** A demonstration section replays a pre-validated find/replace against an isolated copy of the files and shows the result. Your own work is untouched, and the exercise that follows is still yours to do.
 - **Checkpoints are server-side.** `file.includes`, `file.exists`, `directory.exists`, `cwd.equals`, or a quiz answer — every one is evaluated in the backend against saved state. A client that POSTs "I finished" gets nothing.
@@ -54,7 +55,7 @@ flowchart TB
     worker -->|schema-constrained request| llm
     llm -->|JSON| validator
     validator -->|written only if valid| db
-    worker -->|one request per page| tts
+    worker -->|one request per chapter| tts
     tts -->|MP3 + character alignment| db
 ```
 
@@ -72,7 +73,7 @@ Five things are worth knowing about how the pieces fit:
 
 **The learner's code runs nowhere near the host.** The website preview is a sandboxed iframe with no same-origin access and a CSP that blocks external loads. The terminal is not a shell — it is an interpreter over a virtual filesystem stored in the database.
 
-Roughly 8,000 lines of TypeScript, and about the same again in tests.
+The TypeScript codebase includes the learning engine, reusable laboratories, authored courses and browser regression tests.
 
 ## Tech stack
 
@@ -83,7 +84,7 @@ Roughly 8,000 lines of TypeScript, and about the same again in tests.
 | Backend      | Next.js Route Handler (Node.js 22), Zod 4                  | API, anonymous sessions, protocol validation, checkpoint evaluation     |
 | Backend      | Custom background worker (tsx + concurrently)              | Durable generation queue with separate content and speech lanes         |
 | Database     | `node:sqlite` (WAL)                                        | Courses, graph revisions, progress, workspace, audio, daily usage       |
-| Sponsor tech | **ElevenLabs** (`eleven_multilingual_v2`, with-timestamps) | Per-page synthesis and character-level subtitle alignment               |
+| Sponsor tech | **ElevenLabs** (`eleven_v3`, with-timestamps) | Whole-chapter synthesis and character-level subtitle alignment               |
 | Deployment   | Render Blueprint + persistent disk                         | One service running both the website and the worker                     |
 | Testing      | Vitest 5, Playwright                                       | Core, service and worker unit tests plus browser regression tests       |
 
@@ -94,7 +95,7 @@ Needs **Node.js 22.17 or newer** — SQLite comes from Node's built-in `node:sql
 ```bash
 git clone https://github.com/Jack-hehe/methelia.git
 cd methelia
-git switch feat/methelia-mvp-release
+git switch main
 npm ci
 
 # Fill in AI_BASE_URL / AI_MODEL / AI_API_KEY and
@@ -116,7 +117,7 @@ On Windows PowerShell use `npm.cmd`/`npx.cmd` and `Copy-Item .env.example .env.l
 
 ## Demo
 
-- Live demo: _to be added_ (Render, behind HTTP Basic; username `demo`)
+- Live demo: [methelia.com](https://methelia.com) (Render, behind HTTP Basic; username `demo`)
 - Judging video: _to be added_
 
 ## Limitations and future work
@@ -142,7 +143,7 @@ Next, roughly in order:
 
 | Item                | Source                                                                                                 | Usage and license                                                                                                                             |
 | ------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| ElevenLabs TTS      | [with-timestamps API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps) | Called under the account's subscription for per-page narration and subtitles; keys live only in `.env.local` and Render environment variables |
+| ElevenLabs TTS      | [with-timestamps API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps) | Called under the account's subscription for chapter narration and aligned subtitles; keys live only in `.env.local` and Render environment variables |
 | OpenRouter          | <https://openrouter.ai>                                                                                | Model gateway, used under its terms and each provider's rules                                                                                 |
 | Next.js / React     | <https://nextjs.org> · <https://react.dev>                                                             | MIT                                                                                                                                           |
 | Zod                 | <https://zod.dev>                                                                                      | MIT                                                                                                                                           |

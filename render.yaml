@@ -5,7 +5,7 @@ services:
     runtime: node
     plan: 1c-2g
     region: singapore
-    branch: feat/methelia-mvp-release
+    branch: main
     numInstances: 1
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start:render

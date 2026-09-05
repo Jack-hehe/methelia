@@ -31,7 +31,7 @@ Preparation also accepts `--course=<id>`, `--language=en`, `--language=zh-TW` an
 
 ## Functional verification
 
-On 2026-09-06, the full unit suite passed 293 tests. A production build passed. Real-browser suites passed:
+On 2026-09-06, the merged `main` branch passed all 294 unit tests, a production build and all 59 cases in a combined real-browser run:
 
 - 19 featured-course cases: all 17 laboratories, catalog enrollment, saved controls, reload, demonstration takeover, exports and save conflicts.
 - 5 coding cases: actual Pyodide execution, bilingual generated HTML, ZIP contents, cumulative website files, keyboard interaction and adventure replay.
