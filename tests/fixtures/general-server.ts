@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { generalChapter, generalGraph } from "./general-course";
+import { fixtureIntakeQuestion } from "./intake-question";
 
 const dataDir = mkdtempSync(join(tmpdir(), "methelia-browser-"));
 const model = createServer(async (req, res) => {
@@ -14,6 +15,28 @@ const model = createServer(async (req, res) => {
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const input = JSON.parse(JSON.parse(raw).messages[1].content).input;
+    if (input.task === "intake-question") {
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify(
+                  fixtureIntakeQuestion(
+                    input.goal,
+                    input.field,
+                    input.answers,
+                    input.language,
+                  ),
+                ),
+              },
+            },
+          ],
+        }),
+      );
+      return;
+    }
     const environment = /Python/i.test(input.goal)
       ? "python"
       : /Linux/i.test(input.goal)
@@ -70,6 +93,14 @@ const model = createServer(async (req, res) => {
         scopeNote: "受限虛擬檔案環境，不支援安裝套件或系統程序。",
       });
     }
+    if (input.language === "zh-TW") {
+      if ("sections" in content)
+        content.sections[0].body = "比較起點與修改後的結果，理解這個概念。";
+      else if ("outcome" in content)
+        content.outcome = "理解並應用這個主題的基本步驟";
+      else if ("reason" in content)
+        content.reason = "利用相關範例延伸理解，完成後返回主線。";
+    }
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify({
@@ -87,6 +118,7 @@ model.listen(0, "127.0.0.1", () => {
     throw new Error("Missing model address");
   const env = {
     ...process.env,
+    METHELIA_TEST_BUILD: "1",
     METHELIA_DATA_DIR: dataDir,
     AI_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
     AI_MODEL: "local-test",

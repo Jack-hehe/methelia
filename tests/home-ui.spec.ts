@@ -3,9 +3,12 @@ test("homepage catalog reveals below the first screen and arrows flank each rail
   page,
 }) => {
   await page.goto("/?home=1");
+  await expect(page.getByRole("button", { name: "Try a Lesson" })).toHaveCount(
+    0,
+  );
   await expect(
-    page.getByRole("button", { name: "Try a Lesson" }),
-  ).toBeEnabled();
+    page.getByRole("textbox", { name: "What do you want to learn?" }),
+  ).toBeVisible();
   const catalog = page.locator(".home-catalog");
   const reveal = catalog.locator(".catalog-reveal").first();
   expect((await catalog.boundingBox())!.y).toBeGreaterThanOrEqual(1000);
@@ -69,9 +72,9 @@ test("brand opens home while Courses always opens explore", async ({
     .getByRole("button", { name: "Methelia", exact: true })
     .click();
   await page.getByRole("link", { name: "Methelia", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Try a Lesson" }),
-  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Try a Lesson" })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("button", { name: "使用完整文字模式" }),
   ).toHaveCount(0);

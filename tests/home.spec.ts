@@ -10,19 +10,20 @@ test("the Methelia logo on explore opens the learning home instead of resuming a
   await page.goto("/explore");
   await page.getByRole("link", { name: "Methelia", exact: true }).click();
   // The explicit home destination must remain home after session restoration.
-  await expect(
-    page.getByRole("button", { name: "先體驗一堂課" }),
-  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "先體驗一堂課" })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("textbox", { name: "你想學什麼？" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: /我想學習/ })).toBeVisible();
   await page.getByRole("link", { name: "Methelia", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "我的課程", exact: true }),
+    page.getByRole("link", { name: "課程", exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "我的課程", exact: true }).click();
+  await page.getByRole("link", { name: "課程", exact: true }).click();
+  await page.locator(".saved-course").click();
   await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
   await page.reload();
   await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
@@ -40,13 +41,14 @@ test("the course logo returns home and stays there after refreshing while retain
     page.getByRole("textbox", { name: "你想學什麼？" }),
   ).toBeVisible();
   await page.reload();
-  await expect(
-    page.getByRole("button", { name: "先體驗一堂課" }),
-  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "先體驗一堂課" })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("textbox", { name: "你想學什麼？" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "我的課程", exact: true }).click();
+  await page.getByRole("link", { name: "課程", exact: true }).click();
+  await page.locator(".saved-course").click();
   await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
 });
 

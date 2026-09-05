@@ -92,7 +92,8 @@ export function Landing({
               onChange={(e) => onGoalChange(e.target.value)}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              placeholder={idea.text}
+              // The rotating ideas stop on focus; keep a prompt in the box.
+              placeholder={idea.text || copy.goal}
               maxLength={1500}
               required
             />
@@ -115,29 +116,18 @@ export function Landing({
             </div>
           </form>
 
-          <div className="demo-line">
-            <button
-              className="lesson-button"
-              onClick={onDemo}
-              disabled={busy || !ready}
-            >
-              <Play size={14} aria-hidden="true" /> <span>{copy.demo}</span>
-            </button>
-            {onMyCourses && (
+          {/* Returning learners already have a course; the box is the only entry. */}
+          {!onMyCourses && (
+            <div className="demo-line">
               <button
-                className="text-button"
-                onClick={onMyCourses}
+                className="lesson-button"
+                onClick={onDemo}
                 disabled={busy || !ready}
               >
-                {language === "en" ? "Continue learning" : "我的課程"}
+                <Play size={14} aria-hidden="true" /> <span>{copy.demo}</span>
               </button>
-            )}
-            <small>
-              {language === "en"
-                ? "Prebuilt website demo"
-                : "預先製作的網站範例"}
-            </small>
-          </div>
+            </div>
+          )}
         </main>
       </div>
       <CourseCatalog language={language} home />

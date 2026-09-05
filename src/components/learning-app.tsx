@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, X } from "lucide-react";
 import type { Snapshot } from "../core/state";
 import { api } from "./api";
+import { localizedError } from "../core/language";
 import { CoursePlayer } from "./course-player";
 import { LearnerIntake } from "./learner-intake";
 import { Landing } from "./landing";
@@ -103,14 +104,24 @@ export function LearningApp() {
   }
 
   async function start(mode: "demo" | "live") {
+    let selectedLanguage = language;
+    try {
+      const saved = localStorage.getItem("methelia-home-language");
+      if (saved === "en" || saved === "zh") selectedLanguage = saved;
+    } catch {}
     setBusy(true);
     setError("");
     try {
       const c = await api<Snapshot>("courses", {
-        goal: mode === "demo" ? "體驗：從零打造我的第一個網站" : goal,
+        goal:
+          mode === "demo"
+            ? selectedLanguage === "en"
+              ? "Build my first website"
+              : "體驗：從零打造我的第一個網站"
+            : goal,
         mode,
         requestId: crypto.randomUUID(),
-        language: mode === "demo" || language === "zh" ? "zh-TW" : "en",
+        language: selectedLanguage === "zh" ? "zh-TW" : "en",
       });
       setCourse(c);
       showHome(false, c.id);
@@ -124,13 +135,16 @@ export function LearningApp() {
   const showingLanding = sessionStatus === "ready" && (!course || home);
 
   useEffect(() => {
-    if (!showingLanding) return;
     const previous = document.documentElement.lang;
-    document.documentElement.lang = copy.lang;
+    document.documentElement.lang = showingLanding
+      ? copy.lang
+      : course?.language === "en"
+        ? "en"
+        : "zh-Hant";
     return () => {
       document.documentElement.lang = previous;
     };
-  }, [showingLanding, copy.lang]);
+  }, [showingLanding, copy.lang, course?.language]);
 
   // A session that has not loaded is not evidence that no course exists.
   // Keep both SSR and the first client render neutral until the destination is known.
@@ -170,9 +184,19 @@ export function LearningApp() {
           role="alert"
           lang={showingLanding ? copy.lang : undefined}
         >
-          <span>{showingLanding ? homeError(error, language) : error}</span>
+          <span>
+            {showingLanding
+              ? homeError(error, language)
+              : localizedError(error, course?.language)}
+          </span>
           <button
-            aria-label={showingLanding ? copy.dismiss : "關閉訊息"}
+            aria-label={
+              showingLanding
+                ? copy.dismiss
+                : course?.language === "en"
+                  ? "Dismiss message"
+                  : "關閉訊息"
+            }
             onClick={() => setError("")}
           >
             <X size={16} />
@@ -186,7 +210,21 @@ export function LearningApp() {
             course={course}
             onChange={setCourse}
             onHome={() => showHome(true)}
-            themeControl={<ThemeToggle dark={dark} onToggle={toggle} />}
+            onCancel={() => {
+              setCourse(null);
+              showHome(true, "");
+            }}
+            themeControl={
+              <ThemeToggle
+                dark={dark}
+                onToggle={toggle}
+                label={
+                  course.language === "en"
+                    ? "Toggle light and dark mode"
+                    : "切換深淺色"
+                }
+              />
+            }
           />
         ) : (
           <CoursePlayer
@@ -194,7 +232,17 @@ export function LearningApp() {
             onChange={setCourse}
             onError={setError}
             onHome={() => showHome(true)}
-            themeControl={<ThemeToggle dark={dark} onToggle={toggle} />}
+            themeControl={
+              <ThemeToggle
+                dark={dark}
+                onToggle={toggle}
+                label={
+                  course.language === "en"
+                    ? "Toggle light and dark mode"
+                    : "切換深淺色"
+                }
+              />
+            }
           />
         )
       ) : (

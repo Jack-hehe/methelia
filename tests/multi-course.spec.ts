@@ -171,16 +171,21 @@ test("creating a course from a selected course's home pins the new course for re
   await page.request.post("/api/sessions", { data: {} });
   const first = await createDemo(page, "Original course");
   await page.goto(`/?home=1&course=${first.id}`);
-  await page.getByRole("button", { name: "先體驗一堂課" }).click();
-  await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
+  await page
+    .getByRole("textbox", { name: "你想學什麼？" })
+    .fill("Learn website planning");
+  await page.getByRole("button", { name: "開始學習", exact: true }).click();
+  await expect(page.getByRole("radiogroup")).toBeVisible();
   const { course }: { course: Snapshot } = await (
     await page.request.post("/api/sessions", { data: {} })
   ).json();
   expect(course.id).not.toBe(first.id);
   await expect(page).toHaveURL(new RegExp(`course=${course.id}`));
-  await page.getByLabel("下一頁", { exact: true }).click();
+  await page.getByRole("radio").first().click();
+  await page.getByRole("button", { name: "繼續", exact: true }).click();
+  await expect(page.getByRole("checkbox").first()).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
+  await expect(page.getByRole("checkbox").first()).toBeVisible();
   await page.goto("/explore");
   await expect(page.locator(".saved-course")).toHaveCount(2);
 });

@@ -1,56 +1,71 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Check, LoaderCircle } from "lucide-react";
 import type { LearnerProfile, Snapshot } from "../core/state";
+import {
+  intakeFields,
+  intakePolicy,
+  readIntakeSelection,
+  writeIntakeSelection,
+  skippedIntakeAnswer,
+  type IntakeQuestion,
+} from "../core/intake-question";
 import { api } from "./api";
+import { localizedError } from "../core/language";
 import styles from "./learner-intake.module.css";
 
-const fields = [
-  "experience",
-  "purpose",
-  "priorKnowledge",
-  "depth",
-  "studyPlan",
-] as const;
-
-function draftKey(courseId: string) {
-  return `methelia-intake-draft:${courseId}`;
-}
-
-function readLocalDraft(course: Snapshot): Partial<LearnerProfile> | null {
+const draftKey = (id: string) => `methelia-intake-draft:${id}`;
+const firstUnanswered = (answers: Partial<LearnerProfile>) => {
+  const index = intakeFields.findIndex((field) => !answers[field]?.trim());
+  return index < 0 ? intakeFields.length - 1 : index;
+};
+function readDraft(course: Snapshot) {
+  const answers = course.intake?.answers || {};
+  const fallback = { answers, step: firstUnanswered(answers), dirty: false };
   try {
     const stored = JSON.parse(
       localStorage.getItem(draftKey(course.id)) || "null",
     );
+    if (!stored || stored.baseRevision !== (course.intake?.revision || 0))
+      return fallback;
+    const step =
+      Number.isInteger(stored.step) &&
+      stored.step >= 0 &&
+      stored.step <= firstUnanswered(answers)
+        ? stored.step
+        : fallback.step;
+    const field = intakeFields[step];
+    const value = stored.answers?.[field];
     if (
-      !stored ||
-      stored.baseRevision !== (course.intake?.revision || 0) ||
-      !stored.answers ||
-      typeof stored.answers !== "object"
+      typeof value !== "string" ||
+      value.length > 800 ||
+      (field === "depth" &&
+        !["foundation", "applied", "advanced"].includes(value))
     )
-      return null;
-    const result: Partial<LearnerProfile> = { ...course.intake?.answers };
-    for (const field of fields) {
-      const value = stored.answers[field];
-      if (field === "depth") {
-        if (["foundation", "applied", "advanced"].includes(value))
-          result.depth = value;
-      } else if (typeof value === "string" && value.length <= 800) {
-        result[field] = value;
-      }
-    }
-    return result;
+      return { ...fallback, step };
+    return {
+      answers: { ...answers, [field]: value },
+      step,
+      dirty: value !== answers[field],
+    };
   } catch {
-    return null;
+    return fallback;
   }
 }
-
-function clearLocalDraft(courseId: string) {
+function persist(
+  id: string,
+  baseRevision: number,
+  step: number,
+  answers: Partial<LearnerProfile>,
+) {
   try {
-    localStorage.removeItem(draftKey(courseId));
+    localStorage.setItem(
+      draftKey(id),
+      JSON.stringify({ baseRevision, step, answers }),
+    );
   } catch {
-    /* Server save remains available when browser storage is disabled. */
+    /* Server saving also works without browser storage. */
   }
 }
 
@@ -58,177 +73,142 @@ export function LearnerIntake({
   course,
   onChange,
   onHome,
+  onCancel,
   themeControl,
 }: {
   course: Snapshot;
   onChange: (course: Snapshot) => void;
   onHome: () => void;
+  onCancel: () => void;
   themeControl: ReactNode;
 }) {
   const english = course.language === "en";
-  const [localDraft] = useState(() => readLocalDraft(course));
+  const [initial] = useState(() => readDraft(course));
   const [answers, setAnswers] = useState<Partial<LearnerProfile>>(
-    localDraft || course.intake?.answers || {},
+    initial.answers,
   );
+  const [step, setStep] = useState(initial.step);
   const [revision, setRevision] = useState(course.intake?.revision || 0);
+  const [dirty, setDirty] = useState(initial.dirty);
+  const [question, setQuestion] = useState<IntakeQuestion | null>(null);
+  const [preparing, setPreparing] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [dirty, setDirty] = useState(Boolean(localDraft));
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [questionError, setQuestionError] = useState("");
+  const [retry, setRetry] = useState(0);
   const saving = useRef(false);
-  const complete = fields.every((field) => answers[field]?.trim());
-  const answered = fields.filter((field) => answers[field]?.trim()).length;
-  const questions = english
-    ? ([
-        {
-          key: "experience",
-          title: "How much experience do you have with this goal?",
-          label: "Experience details",
-          options: [
-            "Starting from scratch",
-            "Tried the basics",
-            "Already use it regularly",
-            "Not sure",
-          ],
-        },
-        {
-          key: "purpose",
-          title: "What would you like to do with what you learn?",
-          label: "Purpose details",
-          options: [
-            "Solve an everyday problem",
-            "Use it at work or in a project",
-            "Prepare for an exam",
-            "Explore my interests",
-            "Not sure",
-          ],
-        },
-        {
-          key: "priorKnowledge",
-          title: "What do you already know, and where do you get stuck?",
-          label: "Knowledge and obstacles details",
-          options: [
-            "Everything is new to me",
-            "I know the terms but need practice",
-            "I can do the basics but get stuck on harder tasks",
-            "Not sure",
-          ],
-        },
-        {
-          key: "depth",
-          title: "How deeply would you like to learn?",
-          label: "Learning depth",
-          options: [],
-        },
-        {
-          key: "studyPlan",
-          title: "How much time do you have, and how would you like to start?",
-          label: "Time and approach details",
-          options: [
-            "10 minutes at a time; start with examples",
-            "20–30 minutes; learn by doing",
-            "45 minutes or more; understand the principles",
-            "Not sure; start with a short practical example",
-          ],
-        },
-      ] as const)
-    : ([
-        {
-          key: "experience",
-          title: "對這個學習目標，你目前有多少經驗？",
-          label: "經驗補充",
-          options: [
-            "完全從零開始",
-            "試過一些基本操作",
-            "已經經常使用",
-            "不確定",
-          ],
-        },
-        {
-          key: "purpose",
-          title: "學會之後，你最想拿來做什麼？",
-          label: "目的補充",
-          options: [
-            "解決日常問題",
-            "用在工作或專案",
-            "準備考試",
-            "探索興趣",
-            "不確定",
-          ],
-        },
-        {
-          key: "priorKnowledge",
-          title: "你已經會哪些內容？最容易卡在哪裡？",
-          label: "已會與卡點補充",
-          options: [
-            "都是新內容",
-            "聽過名詞，但缺少練習",
-            "會基本操作，複雜任務容易卡住",
-            "不確定",
-          ],
-        },
-        {
-          key: "depth",
-          title: "你希望學到什麼程度？",
-          label: "學習深度",
-          options: [],
-        },
-        {
-          key: "studyPlan",
-          title: "每次可以花多久？想從哪種方式開始？",
-          label: "時間與方式補充",
-          options: [
-            "每次 10 分鐘，從例子開始",
-            "每次 20–30 分鐘，邊做邊學",
-            "每次 45 分鐘以上，先理解原理",
-            "不確定，先從簡短實例開始",
-          ],
-        },
-      ] as const);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const cancelDialog = useRef<HTMLDialogElement>(null);
+  const cancelled = useRef(false);
+  const field = intakeFields[step];
+  const activeQuestion = question?.field === field ? question : null;
+  const policy = intakePolicy(field);
+  const selection = readIntakeSelection(
+    answers[field],
+    activeQuestion?.options || [],
+  );
+  const locked = busy || preparing;
+  const answered = intakeFields.filter((key) => answers[key]?.trim()).length;
 
-  function update<K extends keyof LearnerProfile>(
-    key: K,
-    value: LearnerProfile[K],
-  ) {
-    const next = { ...answers, [key]: value };
-    // Persist in the input event, before a refresh can interrupt an effect or request.
-    try {
-      localStorage.setItem(
-        draftKey(course.id),
-        JSON.stringify({ answers: next, baseRevision: revision }),
+  useEffect(() => {
+    let current = true;
+    setPreparing(true);
+    setQuestion(null);
+    setQuestionError("");
+    void api<{ question: IntakeQuestion }>(
+      `courses/${course.id}/intake/question`,
+      { field, baseRevision: revision },
+    )
+      .then((result) => {
+        if (current && !cancelled.current) setQuestion(result.question);
+      })
+      .catch((cause: unknown) => {
+        if (current) setQuestionError(localizedError(cause, course.language));
+      })
+      .finally(() => {
+        if (current) setPreparing(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [course.id, field, revision, retry]);
+
+  useEffect(() => {
+    if (activeQuestion && !preparing)
+      heading.current?.focus({ preventScroll: true });
+  }, [activeQuestion, preparing]);
+
+  function update(value: string) {
+    if (value.length > 800) {
+      setError(
+        english ? "Please shorten your answer." : "回答較長，請稍微精簡一下。",
       );
-    } catch {
-      /* Explicit server saving still works without browser storage. */
-    }
-    setAnswers(next);
-    setDirty(true);
-    setSaved(false);
-  }
-
-  async function save(finalize = false, leave = false) {
-    if (saving.current || (finalize && !complete)) return;
-    if (leave && !dirty) {
-      onHome();
       return;
     }
+    const next = { ...answers, [field]: value };
+    setAnswers(next);
+    setDirty(true);
+    setError("");
+    persist(course.id, revision, step, next);
+  }
+
+  async function save(action: "stay" | "next" | "back" | "home", skip = false) {
+    if (
+      saving.current ||
+      preparing ||
+      (action === "next" && !skip && !answers[field]?.trim()) ||
+      (skip && !policy.optional)
+    )
+      return;
     saving.current = true;
     setBusy(true);
     setError("");
     try {
-      const next = await api<Snapshot>(
-        `courses/${course.id}/intake`,
-        { answers, baseRevision: revision },
-        finalize ? "POST" : "PUT",
-      );
-      setRevision(next.intake?.revision || 0);
-      setAnswers(next.intake?.answers || answers);
-      clearLocalDraft(course.id);
-      setDirty(false);
-      setSaved(true);
-      onChange(next);
-      if (leave) onHome();
+      let nextAnswers = skip
+        ? { ...answers, [field]: skippedIntakeAnswer }
+        : answers;
+      let nextRevision = revision;
+      if (dirty || skip) {
+        const next = await api<Snapshot>(
+          `courses/${course.id}/intake`,
+          { answers: { [field]: nextAnswers[field] }, baseRevision: revision },
+          "PUT",
+        );
+        // Earlier edits invalidate dependent answers; only trust the returned snapshot.
+        nextAnswers = next.intake?.answers || {};
+        nextRevision = next.intake?.revision || 0;
+        setAnswers(nextAnswers);
+        setRevision(nextRevision);
+        setDirty(false);
+        persist(course.id, nextRevision, step, nextAnswers);
+        onChange(next);
+      }
+      if (action === "next" && step === intakeFields.length - 1) {
+        const next = await api<Snapshot>(
+          `courses/${course.id}/intake`,
+          { answers: nextAnswers, baseRevision: nextRevision },
+          "POST",
+        );
+        try {
+          localStorage.removeItem(draftKey(course.id));
+        } catch {
+          /* Optional storage. */
+        }
+        onChange(next);
+      } else if (action === "home") {
+        onHome();
+      } else {
+        const destination =
+          action === "next"
+            ? Math.min(step + 1, firstUnanswered(nextAnswers))
+            : action === "back"
+              ? Math.max(0, step - 1)
+              : step;
+        setStep(destination);
+        persist(course.id, nextRevision, destination, nextAnswers);
+      }
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(localizedError(cause, course.language));
     } finally {
       saving.current = false;
       setBusy(false);
@@ -236,20 +216,48 @@ export function LearnerIntake({
   }
 
   async function reload() {
-    if (saving.current) return;
+    if (saving.current || preparing) return;
     saving.current = true;
     setBusy(true);
     try {
       const latest = await api<Snapshot>(`courses/${course.id}`);
-      setAnswers(latest.intake?.answers || {});
-      setRevision(latest.intake?.revision || 0);
-      clearLocalDraft(course.id);
+      const latestAnswers = latest.intake?.answers || {};
+      const latestRevision = latest.intake?.revision || 0;
+      const latestStep = firstUnanswered(latestAnswers);
+      setAnswers(latestAnswers);
+      setRevision(latestRevision);
+      setStep(latestStep);
       setDirty(false);
-      setSaved(true);
       setError("");
+      setRetry((value) => value + 1);
+      persist(course.id, latestRevision, latestStep, latestAnswers);
       onChange(latest);
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(localizedError(cause, course.language));
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function cancel() {
+    if (saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    try {
+      await api(`courses/${course.id}/intake/cancel`, {
+        baseRevision: revision,
+      });
+      cancelled.current = true;
+      try {
+        localStorage.removeItem(draftKey(course.id));
+      } catch {
+        /* Optional storage. */
+      }
+      onCancel();
+    } catch (cause) {
+      cancelDialog.current?.close();
+      setError(localizedError(cause, course.language));
     } finally {
       saving.current = false;
       setBusy(false);
@@ -257,153 +265,201 @@ export function LearnerIntake({
   }
 
   return (
-    <main className={styles.shell} lang={english ? "en" : "zh-TW"}>
+    <main
+      className={styles.shell}
+      lang={english ? "en" : "zh-TW"}
+      data-preparing={preparing}
+    >
       <header className={styles.header}>
         <button
           className={styles.back}
-          onClick={() => void save(false, true)}
-          disabled={busy}
+          onClick={() => void save("home")}
+          disabled={locked}
         >
-          <ArrowLeft size={17} aria-hidden="true" />
+          <ArrowLeft size={16} aria-hidden="true" />
           {english ? "Save and return home" : "儲存並回首頁"}
         </button>
-        <span className={styles.brand}>methelia</span>
+        <button
+          className={styles.cancel}
+          disabled={busy}
+          onClick={() => cancelDialog.current?.showModal()}
+        >
+          {english ? "Cancel creation" : "取消製作"}
+        </button>
         {themeControl}
       </header>
       <div className={styles.content}>
         <div className={styles.intro}>
           <span className={styles.eyebrow}>
-            {english ? "A course that starts with you" : "從你的起點出發"}
-          </span>
-          <h1>
-            {english ? "Arranging your learning path" : "正在安排你的學習路徑"}
-          </h1>
-          <p>
             {english
-              ? "Five short questions help us choose a useful starting point. Your answers can be brief, and “not sure” is fine."
-              : "先用五個小問題了解你，讓第一章從合適的地方開始。回答可以很簡短，不確定也沒關係。"}
-          </p>
-          <div className={styles.goal}>
-            <span>{english ? "Your goal" : "你的學習目標"}</span>
-            <strong>{course.goal}</strong>
+              ? "A path shaped around you"
+              : "從你的起點，找到學習的方向"}
+          </span>
+          <p className={styles.goal}>{course.goal}</p>
+          <div
+            className={styles.progress}
+            aria-label={
+              english
+                ? `Question ${step + 1} of 5`
+                : `第 ${step + 1} 題，共 5 題`
+            }
+          >
+            {intakeFields.map((key, index) => (
+              <span
+                key={key}
+                className={`${styles.marker} ${index === step ? styles.current : ""} ${answers[key]?.trim() && index !== step ? styles.complete : ""}`}
+                aria-current={index === step ? "step" : undefined}
+              >
+                {index < step && answers[key]?.trim() ? (
+                  <Check size={11} aria-hidden="true" />
+                ) : null}
+              </span>
+            ))}
+            <span className={styles.count}>
+              {String(step + 1).padStart(2, "0")} <span>/ 05</span>
+            </span>
           </div>
         </div>
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            void save(true);
+            void save("next");
           }}
+          className={styles.card}
+          aria-busy={locked}
         >
-          <div className={styles.questions}>
-            {questions.map((question, index) => (
-              <fieldset
-                key={question.key}
-                className={styles.question}
-                disabled={busy}
+          {preparing ? (
+            <div className={styles.preparing} role="status">
+              <span className={styles.orbit}>
+                <LoaderCircle size={29} aria-hidden="true" />
+              </span>
+              <h1>
+                {english
+                  ? "Finding your next question"
+                  : "正在整理適合你的問題"}
+              </h1>
+              <p>
+                {english
+                  ? "Connecting your learning goal with what you have shared."
+                  : "結合你想學的主題與剛才的回答，找到更適合你的起點。"}
+              </p>
+            </div>
+          ) : activeQuestion ? (
+            <fieldset className={styles.question} disabled={busy} key={field}>
+              <h1 ref={heading} tabIndex={-1} id="intake-question">
+                {activeQuestion.title}
+              </h1>
+              <p id="intake-description" className={styles.description}>
+                {activeQuestion.description}
+              </p>
+              <div
+                className={styles.options}
+                role={policy.multiple ? "group" : "radiogroup"}
+                aria-labelledby="intake-question"
+                aria-describedby="intake-description"
               >
-                <legend>
-                  <span className={styles.number}>{index + 1}</span>
-                  {question.title}
-                </legend>
-                {question.key === "depth" ? (
-                  <>
-                    <div className={styles.options}>
-                      {(
-                        [
-                          [
-                            "foundation",
-                            english
-                              ? "Build a solid foundation"
-                              : "建立基礎理解",
-                          ],
-                          [
-                            "applied",
-                            english
-                              ? "Complete practical tasks independently"
-                              : "能獨立完成實際任務",
-                          ],
-                          [
-                            "advanced",
-                            english
-                              ? "Analyze principles and complex problems"
-                              : "深入原理與複雜問題",
-                          ],
-                        ] as const
-                      ).map(([value, label]) => (
-                        <label className={styles.option} key={value}>
-                          <input
-                            type="radio"
-                            name="depth"
-                            value={value}
-                            checked={answers.depth === value}
-                            onChange={() => update("depth", value)}
-                          />
-                          <span>{label}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.unsure}
-                      onClick={() => update("depth", "foundation")}
-                    >
-                      {english
-                        ? "Not sure — start with a foundation"
-                        : "不確定，先從基礎開始"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className={styles.options}>
-                      {question.options.map((option) => (
-                        <label className={styles.option} key={option}>
-                          <input
-                            type="radio"
-                            name={question.key}
-                            checked={answers[question.key] === option}
-                            onChange={() => update(question.key, option)}
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <label className={styles.detail}>
-                      <span>
-                        {question.label}
-                        <small>
-                          {english
-                            ? " · optional; edit a choice or write your own answer"
-                            : " · 可補充、修改選項或直接回答"}
-                        </small>
-                      </span>
-                      <textarea
-                        aria-label={question.label}
-                        rows={2}
-                        maxLength={800}
-                        value={answers[question.key] || ""}
-                        onChange={(event) =>
-                          update(question.key, event.target.value)
-                        }
-                        placeholder={
-                          english
-                            ? "A sentence or two is enough…"
-                            : "一兩句就好…"
-                        }
-                      />
-                    </label>
-                  </>
-                )}
-              </fieldset>
-            ))}
-          </div>
-          {error && (
+                {activeQuestion.options.map((option, index) => (
+                  <label className={styles.option} key={option.value}>
+                    <input
+                      type={policy.multiple ? "checkbox" : "radio"}
+                      name={field}
+                      value={option.value}
+                      checked={
+                        policy.multiple
+                          ? selection.selected.includes(option.value)
+                          : answers[field] === option.value
+                      }
+                      onChange={() =>
+                        policy.multiple
+                          ? update(
+                              writeIntakeSelection(
+                                selection.selected.includes(option.value)
+                                  ? selection.selected.filter(
+                                      (value) => value !== option.value,
+                                    )
+                                  : [...selection.selected, option.value],
+                                selection.detail,
+                              ),
+                            )
+                          : update(option.value)
+                      }
+                    />
+                    <span className={styles.optionIndex} aria-hidden="true">
+                      {String.fromCharCode(65 + index)}
+                    </span>
+                    <span className={styles.optionCopy}>
+                      <strong>{option.label}</strong>
+                      {option.description && <span>{option.description}</span>}
+                    </span>
+                    <span className={styles.selected} aria-hidden="true">
+                      <Check size={15} />
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {field === "depth" ? (
+                <button
+                  type="button"
+                  className={styles.unsure}
+                  onClick={() => update("foundation")}
+                >
+                  {english
+                    ? "Not sure — start with a foundation"
+                    : "不確定，先從基礎開始"}
+                </button>
+              ) : (
+                <label className={styles.detail}>
+                  <span>
+                    {english ? "Add your own answer" : "補充你的回答"}
+                    <small>
+                      {english ? "Optional" : "也可以直接寫下你的想法"}
+                    </small>
+                  </span>
+                  <textarea
+                    aria-label={
+                      english ? "Add your own answer" : "補充你的回答"
+                    }
+                    rows={2}
+                    maxLength={800}
+                    value={
+                      policy.multiple
+                        ? selection.detail
+                        : answers[field] === skippedIntakeAnswer
+                          ? ""
+                          : answers[field] || ""
+                    }
+                    placeholder={activeQuestion.placeholder}
+                    onChange={(event) =>
+                      update(
+                        policy.multiple
+                          ? writeIntakeSelection(
+                              selection.selected,
+                              event.target.value,
+                            )
+                          : event.target.value,
+                      )
+                    }
+                  />
+                </label>
+              )}
+            </fieldset>
+          ) : null}
+          {(error || questionError) && (
             <div className={styles.error} role="alert">
-              <p>{error}</p>
+              <p>{error || questionError}</p>
+              {questionError && (
+                <button
+                  type="button"
+                  onClick={() => setRetry((value) => value + 1)}
+                  disabled={locked}
+                >
+                  {english ? "Try again" : "重新整理問題"}
+                </button>
+              )}
               <button
                 type="button"
-                className={styles.unsure}
-                disabled={busy}
                 onClick={() => void reload()}
+                disabled={locked}
               >
                 {english
                   ? "Reload saved answers (replaces these edits)"
@@ -412,53 +468,111 @@ export function LearnerIntake({
             </div>
           )}
           <footer className={styles.actions}>
-            <div className={styles.status} role="status" aria-live="polite">
-              {busy ? (
-                <>
-                  <LoaderCircle size={16} className="spin" aria-hidden="true" />
-                  {english ? "Saving your answers…" : "正在儲存回答…"}
-                </>
-              ) : saved ? (
-                <>
-                  <Check size={16} aria-hidden="true" />
-                  {english
-                    ? "Saved. You can return to this page anytime."
-                    : "已儲存，之後可回到這裡繼續。"}
-                </>
-              ) : (
-                <>
-                  {english
-                    ? `${answered} of 5 answered${dirty ? " · Unsaved changes" : ""}`
-                    : `已回答 ${answered} / 5 題${dirty ? " · 尚未儲存" : ""}`}
-                </>
-              )}
-            </div>
+            <button
+              type="button"
+              className={styles.previous}
+              disabled={locked || step === 0}
+              onClick={() => void save("back")}
+            >
+              <ArrowLeft size={16} aria-hidden="true" />
+              {english ? "Previous" : "上一題"}
+            </button>
             <div className={styles.buttons}>
+              {policy.optional && (
+                <button
+                  type="button"
+                  className={styles.save}
+                  disabled={locked}
+                  onClick={() => void save("next", true)}
+                >
+                  {english ? "Skip" : "跳過"}
+                </button>
+              )}
               <button
                 type="button"
                 className={styles.save}
-                disabled={busy || !dirty}
-                onClick={() => void save()}
+                disabled={locked || !dirty}
+                onClick={() => void save("stay")}
               >
                 {english ? "Save answers" : "儲存回答"}
               </button>
               <button
                 type="submit"
                 className={styles.submit}
-                disabled={busy || !complete}
+                disabled={locked || !activeQuestion || !answers[field]?.trim()}
               >
-                {english ? "Arrange my course" : "開始安排課程"}
-                <ArrowRight size={17} aria-hidden="true" />
+                {busy ? (
+                  <LoaderCircle
+                    size={16}
+                    className={styles.spinner}
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {step === 4
+                  ? english
+                    ? "Create the first chapter"
+                    : "開始製作第一章"
+                  : english
+                    ? "Continue"
+                    : "繼續"}
+                <ArrowRight size={16} aria-hidden="true" />
               </button>
             </div>
-            <p className={styles.hint}>
-              {english
-                ? "Course creation starts after you submit all five answers."
-                : "五題回答完成並送出後，才會開始規劃課程與製作第一章。"}
-            </p>
           </footer>
         </form>
+        <p className={styles.hint} role="status">
+          {policy.multiple
+            ? english
+              ? "Choose one or more · "
+              : "可多選 · "
+            : ""}
+          {busy
+            ? english
+              ? "Saving your answers…"
+              : "正在儲存回答…"
+            : dirty
+              ? english
+                ? "Your draft is kept on this device."
+                : "草稿已保留在這個裝置。"
+              : english
+                ? `${answered} of 5 answered · Your course begins after the final step.`
+                : `已回答 ${answered} / 5 題 · 完成後開始製作第一章。`}
+        </p>
       </div>
+      <dialog
+        ref={cancelDialog}
+        className={styles.cancelDialog}
+        aria-labelledby="cancel-title"
+        onCancel={(event) => {
+          if (busy) event.preventDefault();
+        }}
+      >
+        <h2 id="cancel-title">
+          {english ? "Cancel this course?" : "取消這次製作？"}
+        </h2>
+        <p>
+          {english
+            ? "This unfinished draft will be removed. Your other courses will stay."
+            : "這次尚未完成的回答與草稿會移除，其他課程會保留。"}
+        </p>
+        <div className={styles.buttons}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => cancelDialog.current?.close()}
+          >
+            {english ? "Keep going" : "繼續設定"}
+          </button>
+          <button
+            type="button"
+            className={styles.submit}
+            disabled={busy}
+            onClick={() => void cancel()}
+          >
+            {english ? "Confirm cancellation" : "確認取消"}
+          </button>
+        </div>
+      </dialog>
     </main>
   );
 }
