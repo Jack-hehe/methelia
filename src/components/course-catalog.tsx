@@ -162,18 +162,18 @@ export function CourseCatalog({
         <div className="catalog-head">
           <div>
             <p className="eyebrow">
-              {en ? "LEARN BY MAKING" : "動手做，真正學會"}
+              {en ? "FOLLOW YOUR CURIOSITY" : "從好奇開始"}
             </p>
             <h2>
               {en
-                ? "Make something you understand."
-                : "完成作品，也理解背後的原理。"}
+                ? "Learn anything you want."
+                : "學你想學的任何事。"}
             </h2>
           </div>
           <p>
             {en
-              ? "Guided projects. Real experiments. Your own discoveries."
-              : "從問題出發，一步一步完成實驗、遊戲與作品。"}
+              ? "Explore through visuals, animation, and hands-on experiences—one idea at a time."
+              : "透過圖像、動畫與親手探索，一步步理解你感興趣的世界。"}
           </p>
         </div>
       )}
