@@ -29,6 +29,8 @@ node --import tsx --env-file=.env.local scripts/verify-featured-audio.ts --requi
 
 Preparation also accepts `--course=<id>`, `--language=en`, `--language=zh-TW` and `--first-chapters`. After changing scripts or voice configuration, regenerate affected assets before release. Keep the prepared voice/model configuration consistent with Render. Never commit `.env.local`.
 
+The release includes all 200 MP3/cue pairs (approximately 154 minutes). On 2026-09-06, `verify-featured-audio.ts --require-all` decoded all 200 real audio files with no missing assets and valid page/caption timing. Actual prepared English narration was also played in the browser while checking idle captions, navigation and persisted controls; the Chinese Python project produced a localized website preview and a valid ZIP.
+
 ## Functional verification
 
 On 2026-09-06, the merged `main` branch passed all 294 unit tests, a production build and all 59 cases in a combined real-browser run:
