@@ -1,7 +1,7 @@
 # Methelia MVP design
 
 Date: 2026-09-05
-Status: Consolidated design; awaiting review of this written specification.
+Status: Approved by user on 2026-09-05; initial implementation underway. Current capabilities and explicit implementation limits are recorded in README.md.
 Canonical vocabulary: [CONTEXT.md](../../../CONTEXT.md).
 
 ## 1. Product outcome and scope
@@ -66,16 +66,16 @@ Confirming a branch supplies the revision on which its preview was based. The se
 
 One Learning Node is delivered by one complete Chapter Package. A package contains:
 
-| Field | Meaning |
-| --- | --- |
-| `schemaVersion` | Version of the supported protocol |
-| `id`, `nodeId`, `nodeDefinitionHash` | Immutable package identity and validated node binding |
-| `objective` | The node objective this chapter teaches |
-| `document.sections` | All ordered Lesson Sections and component instances |
-| `script.segments` | Full narration text, section references, and cue anchors |
-| `checkpoints` | Practice pauses linked to explicit completion conditions |
-| `completion` | Conditions required to finish the node |
-| `workspaceSetup` | Initial file additions and explicit, non-destructive setup requirements |
+| Field                                | Meaning                                                                 |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| `schemaVersion`                      | Version of the supported protocol                                       |
+| `id`, `nodeId`, `nodeDefinitionHash` | Immutable package identity and validated node binding                   |
+| `objective`                          | The node objective this chapter teaches                                 |
+| `document.sections`                  | All ordered Lesson Sections and component instances                     |
+| `script.segments`                    | Full narration text, section references, and cue anchors                |
+| `checkpoints`                        | Practice pauses linked to explicit completion conditions                |
+| `completion`                         | Conditions required to finish the node                                  |
+| `workspaceSetup`                     | Initial file additions and explicit, non-destructive setup requirements |
 
 A Lesson Section has a stable ID, an intent, an allowlisted template, and typed component slots. Initial intents are `explain`, `demonstrate`, `practice`, and `check`. Clarification occurs in the Help Drawer or a separate Support Node, never as newly generated content inserted into an active chapter.
 
@@ -142,17 +142,17 @@ The learner can review/remove suggestions, preview the result in the Learning Ma
 
 ## 10. Backend boundaries and storage
 
-| Module | Owns | Interface/dependencies |
-| --- | --- | --- |
-| Protocol | Schemas, registry, validation | Pure validation; no provider or database dependency |
-| Course planning | Goal to graph and revision proposals | Model adapter and protocol validation |
-| Chapter generation | Node/context to complete package | Model adapter and protocol validation |
-| Narration | Script to stored audio and alignment | Fish adapter and artifact storage |
-| Graph management | Revision validation and atomic activation | SQLite repositories |
-| Workspace | Virtual files, command adapter, evidence | Workspace repository and bounded evaluators |
-| Learning progress | Cursor, checkpoints, node completion | Package bindings and progress repository |
-| Help | Answers and optional branch proposals | Model adapter, active chapter and graph context |
-| Worker | Durable generation orchestration | Jobs and module interfaces |
+| Module             | Owns                                      | Interface/dependencies                              |
+| ------------------ | ----------------------------------------- | --------------------------------------------------- |
+| Protocol           | Schemas, registry, validation             | Pure validation; no provider or database dependency |
+| Course planning    | Goal to graph and revision proposals      | Model adapter and protocol validation               |
+| Chapter generation | Node/context to complete package          | Model adapter and protocol validation               |
+| Narration          | Script to stored audio and alignment      | Fish adapter and artifact storage                   |
+| Graph management   | Revision validation and atomic activation | SQLite repositories                                 |
+| Workspace          | Virtual files, command adapter, evidence  | Workspace repository and bounded evaluators         |
+| Learning progress  | Cursor, checkpoints, node completion      | Package bindings and progress repository            |
+| Help               | Answers and optional branch proposals     | Model adapter, active chapter and graph context     |
+| Worker             | Durable generation orchestration          | Jobs and module interfaces                          |
 
 SQLite entities are `learner_sessions`, `courses`, `graph_revisions`, `chapter_packages`, `learning_workspaces`, `progress_events`, `help_messages`, `generation_jobs`, and `audio_artifacts`. The last two make background recovery and audio caching explicit. Graphs and chapter protocols are versioned JSON documents; frequently queried identities/statuses have separate indexed columns.
 
@@ -162,23 +162,23 @@ Persist the active graph revision, current node/package, satisfied checkpoints, 
 
 Key API surface:
 
-| Endpoint | Responsibility |
-| --- | --- |
-| `POST /api/sessions` | Create or recover the anonymous session |
-| `POST /api/courses` | Submit goal and enqueue planning |
-| `GET /api/courses/:courseId` | Active graph, progress and generation status |
-| `GET /api/chapters/:chapterId` | Authorized immutable chapter and audio metadata |
-| `GET /api/chapters/:chapterId/status` | Content/speech readiness |
-| `POST /api/chapters/:chapterId/retry` | Idempotent retry of failed preparation |
-| `GET /api/audio/:artifactId` | Authorized audio with range support |
-| `POST /api/progress/events` | Validate and persist progress/checkpoint events |
-| `POST /api/help/messages` | Answer and optionally recommend nodes |
-| `POST /api/branches/preview` | Validate proposal against a base revision |
-| `POST /api/branches/confirm` | Atomically activate an accepted revision |
-| `GET /api/workspace?courseId=…` | Read the course's shared workspace |
-| `PUT /api/workspace/files` | Save with course ID and base workspace revision |
-| `POST /api/workspace/commands` | Run a supported command in that workspace |
-| `GET /api/workspace/export?courseId=…` | Download the website files |
+| Endpoint                               | Responsibility                                  |
+| -------------------------------------- | ----------------------------------------------- |
+| `POST /api/sessions`                   | Create or recover the anonymous session         |
+| `POST /api/courses`                    | Submit goal and enqueue planning                |
+| `GET /api/courses/:courseId`           | Active graph, progress and generation status    |
+| `GET /api/chapters/:chapterId`         | Authorized immutable chapter and audio metadata |
+| `GET /api/chapters/:chapterId/status`  | Content/speech readiness                        |
+| `POST /api/chapters/:chapterId/retry`  | Idempotent retry of failed preparation          |
+| `GET /api/audio/:artifactId`           | Authorized audio with range support             |
+| `POST /api/progress/events`            | Validate and persist progress/checkpoint events |
+| `POST /api/help/messages`              | Answer and optionally recommend nodes           |
+| `POST /api/branches/preview`           | Validate proposal against a base revision       |
+| `POST /api/branches/confirm`           | Atomically activate an accepted revision        |
+| `GET /api/workspace?courseId=…`        | Read the course's shared workspace              |
+| `PUT /api/workspace/files`             | Save with course ID and base workspace revision |
+| `POST /api/workspace/commands`         | Run a supported command in that workspace       |
+| `GET /api/workspace/export?courseId=…` | Download the website files                      |
 
 Generation entry points have request deduplication and session concurrency limits to avoid duplicate paid calls. Persist errors for diagnostics with secret redaction. Do not log complete private prompts or source files by default.
 

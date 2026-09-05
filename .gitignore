@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+.env*
+!.env.example
+.data/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.superpowers/
+.tmp_doc_review/
+.worktrees/
+.claude/settings.local.json
