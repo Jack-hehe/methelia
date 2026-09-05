@@ -4,6 +4,7 @@ import { LoaderCircle, X } from "lucide-react";
 import type { Snapshot } from "../core/state";
 import { api } from "./api";
 import { CoursePlayer } from "./course-player";
+import { LearnerIntake } from "./learner-intake";
 import { Landing } from "./landing";
 import { useHomeLanguage } from "./use-home-language";
 import { homeCopy, homeError } from "./home-language";
@@ -64,7 +65,8 @@ export function LearningApp() {
   }
 
   useEffect(() => {
-    if (!course || course.status === "failed") return;
+    if (!course || course.status === "failed" || course.status === "intake")
+      return;
     const pending =
       course.status === "planning" ||
       Object.values(course.chapters).some(
@@ -178,13 +180,23 @@ export function LearningApp() {
         </div>
       )}
       {course && !home ? (
-        <CoursePlayer
-          course={course}
-          onChange={setCourse}
-          onError={setError}
-          onHome={() => showHome(true)}
-          themeControl={<ThemeToggle dark={dark} onToggle={toggle} />}
-        />
+        course.status === "intake" ? (
+          <LearnerIntake
+            key={course.id}
+            course={course}
+            onChange={setCourse}
+            onHome={() => showHome(true)}
+            themeControl={<ThemeToggle dark={dark} onToggle={toggle} />}
+          />
+        ) : (
+          <CoursePlayer
+            course={course}
+            onChange={setCourse}
+            onError={setError}
+            onHome={() => showHome(true)}
+            themeControl={<ThemeToggle dark={dark} onToggle={toggle} />}
+          />
+        )
       ) : (
         <Landing
           homeHref={

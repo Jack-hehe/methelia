@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { synthesize } from "../src/server/speech";
+import { synthesize, speechConfig } from "../src/server/speech";
 import { demoChapter, demoGraph } from "../src/core/fixtures";
 
 beforeEach(() => {
@@ -32,6 +32,21 @@ function responseFor(text: string) {
     normalized_alignment: null,
   };
 }
+it("pins Chinese language for Flash without sending unsupported language to Multilingual v2", async () => {
+  vi.stubEnv("ELEVENLABS_MODEL", "eleven_flash_v2_5");
+  const profile = speechConfig(undefined, "zh-TW").profile;
+  expect(profile.languageCode).toBe("zh");
+  const fetcher = vi.fn(async (_url, options) => {
+    expect(JSON.parse(options.body).language_code).toBe("zh");
+    return Response.json(responseFor("第2頁。Hello!"));
+  });
+  vi.stubGlobal("fetch", fetcher);
+  await synthesize(chapter(), profile);
+  expect(
+    speechConfig({ ...profile, model: "eleven_multilingual_v2" }).profile
+      .languageCode,
+  ).toBeUndefined();
+});
 it("uses ElevenLabs once with original character alignment for Chinese and English captions", async () => {
   const fetcher = vi.fn(async (url: string, options: RequestInit) => {
     expect(url).toBe(

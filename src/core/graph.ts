@@ -1,4 +1,73 @@
 import { validateGraph, type Graph, type LearningNode } from "./protocol";
+export function addExtension(
+  graph: Graph,
+  anchorId: string,
+  nodes: LearningNode[],
+  extension: Pick<
+    NonNullable<Graph["extensions"]>[number],
+    "id" | "title" | "depth"
+  >,
+): Graph {
+  if (!graph.nodes.some((node) => node.id === anchorId))
+    throw new Error("Unknown extension anchor");
+  if (!nodes.length || nodes.length > 6)
+    throw new Error("Choose one to six extension nodes");
+  const normalize = (value: string) =>
+    value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  const titles = new Set(graph.nodes.map((node) => normalize(node.title)));
+  const objectives = new Set(
+    graph.nodes.map((node) => normalize(node.objective)),
+  );
+  for (const node of nodes) {
+    const title = normalize(node.title),
+      objective = normalize(node.objective);
+    if (titles.has(title) || objectives.has(objective))
+      throw new Error("Extension repeats an existing title or objective");
+    titles.add(title);
+    objectives.add(objective);
+  }
+  const result = structuredClone(graph);
+  result.extensions = [
+    ...(result.extensions || []),
+    { ...extension, anchorId, nodeIds: nodes.map((node) => node.id) },
+  ];
+  nodes.forEach((node, index) => {
+    const previous = index ? nodes[index - 1].id : anchorId;
+    result.nodes.push({
+      ...structuredClone(node),
+      kind: "support",
+      prerequisites: [previous],
+    });
+    if (index) result.edges.push({ from: previous, to: node.id });
+  });
+  return validateGraph(result);
+}
+
+export function nextLearningNode(
+  graph: Graph,
+  currentId: string,
+  extensionId?: string,
+): LearningNode | undefined {
+  if (extensionId !== undefined) {
+    const extension = graph.extensions?.find((item) => item.id === extensionId);
+    if (!extension) return;
+    const index = extension.nodeIds.indexOf(currentId);
+    const nextId =
+      currentId === extension.anchorId
+        ? extension.nodeIds[0]
+        : index >= 0
+          ? extension.nodeIds[index + 1]
+          : undefined;
+    return graph.nodes.find((node) => node.id === nextId);
+  }
+  if (
+    graph.extensions?.some((extension) => extension.nodeIds.includes(currentId))
+  )
+    return;
+  const nextId = graph.edges.find((edge) => edge.from === currentId)?.to;
+  return graph.nodes.find((node) => node.id === nextId);
+}
+
 export function insertBranch(
   graph: Graph,
   afterId: string,

@@ -79,7 +79,9 @@ test("sidebar toggles independently and stays fixed across node selection, dragg
   await expect(detail).toHaveCount(0);
   const originalCanvas = await map.locator(".map-canvas").boundingBox();
   await node.click();
-  await expect(detail.getByRole("heading")).toHaveText("用 HTML 建立骨架");
+  await expect(detail.getByRole("heading", { level: 3 })).toHaveText(
+    "用 HTML 建立骨架",
+  );
   const before = await expectSidebar(map);
   const a = (await node.boundingBox())!;
   await drag(page, { x: a.x + a.width / 2, y: a.y + a.height / 2 }, 70, 40);
@@ -95,7 +97,9 @@ test("sidebar toggles independently and stays fixed across node selection, dragg
   expect(await expectSidebar(map)).toEqual(before);
   await map.locator(".map-node").nth(2).click();
   await expect(detail).toHaveCount(1);
-  await expect(detail.getByRole("heading")).toHaveText("CSS：顏色與間距");
+  await expect(detail.getByRole("heading", { level: 3 })).toHaveText(
+    "CSS：顏色與間距",
+  );
   expect(await expectSidebar(map)).toEqual(before);
   await page.mouse.click(canvas.x + 20, canvas.y + 25);
   await expect(detail).toBeVisible();
@@ -105,7 +109,9 @@ test("sidebar toggles independently and stays fixed across node selection, dragg
     originalCanvas,
   );
   await map.getByLabel("展開節點資訊", { exact: true }).click();
-  await expect(detail.getByRole("heading")).toHaveText("CSS：顏色與間距");
+  await expect(detail.getByRole("heading", { level: 3 })).toHaveText(
+    "CSS：顏色與間距",
+  );
   await map.getByLabel("收起節點資訊", { exact: true }).click();
   await node.focus();
   await node.press("Enter");
@@ -126,7 +132,7 @@ test("all nodes update the same sidebar and panning the selected node offscreen 
   for (const node of await map.locator(".map-node").all()) {
     const title = await node.locator("strong").innerText();
     await node.click();
-    await expect(detail.getByRole("heading")).toHaveText(title);
+    await expect(detail.getByRole("heading", { level: 3 })).toHaveText(title);
     await expect(detail).toHaveCount(1);
     expect(await expectSidebar(map)).toEqual(bounds);
   }
@@ -165,9 +171,9 @@ test("canceling a selected preview node leaves the sidebar toggle usable", async
   await map.locator(".map-node.proposed").click();
   await map.getByRole("button", { name: "取消新增", exact: true }).click();
   await map.getByLabel("展開節點資訊", { exact: true }).click();
-  await expect(map.locator(".node-detail").getByRole("heading")).toHaveText(
-    "認識網站的三種語言",
-  );
+  await expect(
+    map.locator(".node-detail").getByRole("heading", { level: 3 }),
+  ).toHaveText("認識網站的三種語言");
   await expectSidebar(map);
 });
 

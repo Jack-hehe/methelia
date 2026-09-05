@@ -10,162 +10,253 @@ import { Store } from "../src/server/db";
 import { LearningService } from "../src/server/service";
 import { demoGraph, demoChapter } from "../src/core/fixtures";
 import { generalGraph, generalChapter } from "./fixtures/general-course";
-it("synthesizes page audio sequentially, retries only a failed page, and reuses ready pages", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "methelia-speech-worker-"));
+it("a blocked prefetch cannot delay a new foreground course", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "methelia-priority-"));
   const store = new Store(join(dir, "methelia.sqlite"));
   const service = new LearningService(store);
-  const session = service.session();
-  const course = service.createCourse(
-    session,
-    "Website",
-    "demo",
-    "fish-worker",
-  );
-  const pkg = service.getChapter(session, course.id, "web");
-  pkg.chapter!.script = pkg.chapter!.script.map((s, i) => ({
-    ...s,
-    text: ["Page one.", "Page two.", "Page three."][i],
-  }));
-  pkg.speech = "pending";
-  store.putPackage(course.id, pkg);
-  store.enqueue("fish-one", course.id, "speech", pkg.id);
-  const requests: string[] = [];
-  let failSecondPage = true;
+  let release!: () => void,
+    prefetchStarted = false;
+  const blocked = new Promise<void>((r) => {
+    release = r;
+  });
   const server = createServer(async (req, res) => {
-    let body = "";
-    for await (const chunk of req) body += chunk;
-    const input = JSON.parse(body);
-    requests.push(input.text);
-    if (input.text === "Page two." && failSecondPage) {
-      failSecondPage = false;
-      res.statusCode = 503;
-      res.end("unavailable");
-      return;
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    const input = JSON.parse(JSON.parse(raw).messages[1].content).input;
+    if (input.goal === "first" && input.node?.id === "html") {
+      prefetchStarted = true;
+      await blocked;
     }
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify({
-        audio_base64: "YXVkaW8=",
-        alignment: {
-          characters: [input.text],
-          character_start_times_seconds: [0],
-          character_end_times_seconds: [2],
-        },
+        choices: [
+          {
+            message: {
+              content: JSON.stringify(
+                input.node ? generalChapter(input.node) : generalGraph("none"),
+              ),
+            },
+          },
+        ],
       }),
     );
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
-  if (!address || typeof address === "string")
-    throw new Error("No test server address");
+  if (!address || typeof address === "string") throw Error("No address");
+  const env = {
+    ...process.env,
+    METHELIA_DATA_DIR: dir,
+    AI_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
+    AI_API_KEY: "test",
+    AI_MODEL: "local-test",
+    ELEVENLABS_API_KEY: "",
+    ELEVENLABS_VOICE_ID: "",
+  };
+  vi.stubEnv("AI_BASE_URL", env.AI_BASE_URL);
+  vi.stubEnv("AI_API_KEY", "test");
+  vi.stubEnv("AI_MODEL", "local-test");
   const child = spawn(
     process.execPath,
-    [
-      "--import",
-      pathToFileURL(resolve("tests/fixtures/elevenlabs-fetch.mjs")).href,
-      "--import",
-      "tsx",
-      resolve("src/server/worker.ts"),
-    ],
-    {
-      env: {
-        ...process.env,
-        METHELIA_DATA_DIR: dir,
-        AI_API_KEY: "",
-        ELEVENLABS_API_KEY: "test",
-        ELEVENLABS_VOICE_ID: "teacher-test",
-        ELEVENLABS_MODEL: "eleven_multilingual_v2",
-        METHELIA_TEST_SPEECH_URL: `http://127.0.0.1:${address.port}`,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    },
+    ["--import", "tsx", resolve("src/server/worker.ts")],
+    { env, stdio: "ignore", windowsHide: true },
   );
-  let errors = "";
-  child.stderr.on("data", (data) => {
-    errors += String(data);
-  });
-  const waitJob = async (id: string) => {
-    const deadline = Date.now() + 10000;
-    while (Date.now() < deadline) {
-      const row = store.db
-        .prepare("SELECT status FROM generation_jobs WHERE id=?")
-        .get(id);
-      if (row?.status === "done" || row?.status === "failed") return row.status;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    throw new Error("Worker timeout: " + errors);
-  };
   try {
-    expect(await waitJob("fish-one"), errors).toBe("failed");
-    const partial = service.getChapter(session, course.id, "web");
-    expect(partial).toMatchObject({
-      speech: "failed",
-      speechProfile: {
-        provider: "elevenlabs",
-        voiceId: "teacher-test",
-        model: "eleven_multilingual_v2",
-      },
-      pageAudio: {
-        languages: {
-          status: "ready",
-          cues: [{ sectionId: "languages", start: 0, end: 2 }],
-          captions: [
-            { sectionId: "languages", text: "Page one.", start: 0, end: 2 },
-          ],
-        },
-        structure: { status: "failed" },
-      },
+    const session = service.session();
+    service.createCourse(session, "first", "live", "first");
+    await vi.waitFor(() => expect(prefetchStarted).toBe(true), {
+      timeout: 10000,
     });
-    expect(requests).toEqual(["Page one.", "Page two."]);
-    vi.stubEnv("ELEVENLABS_API_KEY", "test");
-    vi.stubEnv("ELEVENLABS_VOICE_ID", "different-voice");
-    vi.stubEnv("ELEVENLABS_MODEL", "eleven_flash_v2_5");
-    service.retry(session, course.id, "web");
-    expect(await waitJob("speech:" + pkg.id), errors).toBe("done");
-    const ready = service.getChapter(session, course.id, "web");
-    expect(ready).toMatchObject({
-      speech: "ready",
-      speechProfile: {
-        provider: "elevenlabs",
-        voiceId: "teacher-test",
-        model: "eleven_multilingual_v2",
-      },
-      pageAudio: {
-        languages: { status: "ready" },
-        structure: {
-          status: "ready",
-          captions: [
-            { sectionId: "structure", text: "Page two.", start: 0, end: 2 },
-          ],
-        },
-        check: { status: "ready" },
-      },
-    });
-    expect(
-      store.db.prepare("SELECT COUNT(*) AS n FROM audio_artifacts").get(),
-    ).toMatchObject({ n: 3 });
-    store.enqueue("fish-duplicate", course.id, "speech", pkg.id);
-    expect(await waitJob("fish-duplicate"), errors).toBe("done");
-    expect(requests).toEqual([
-      "Page one.",
-      "Page two.",
-      "Page two.",
-      "Page three.",
-    ]);
+    const started = Date.now();
+    const second = service.createCourse(session, "second", "live", "second");
+    await vi.waitFor(
+      () =>
+        expect(service.getCourse(session, second.id).chapters.web?.status).toBe(
+          "ready",
+        ),
+      { timeout: 5000 },
+    );
+    console.log(
+      `Foreground chapter ready while prefetch blocked: ${Date.now() - started}ms`,
+    );
   } finally {
-    vi.unstubAllEnvs();
-    if (child.exitCode === null && child.signalCode === null) {
-      const exited = once(child, "exit");
-      child.kill();
-      await exited;
-    }
+    release();
+    child.kill();
+    await once(child, "exit");
+    server.closeAllConnections();
     await new Promise<void>((r) => server.close(() => r()));
+    vi.unstubAllEnvs();
     store.db.close();
     rmSync(dir, { recursive: true, force: true });
   }
-}, 25000);
+}, 20000);
+it.each(["new chapter", "unvoiced legacy pages"])(
+  "synthesizes %s in one request, retries a failed request, and reuses its one artifact",
+  async (mode) => {
+    const dir = mkdtempSync(join(tmpdir(), "methelia-speech-worker-"));
+    const store = new Store(join(dir, "methelia.sqlite"));
+    const service = new LearningService(store);
+    const session = service.session();
+    const course = service.createCourse(
+      session,
+      "Website",
+      "demo",
+      "fish-worker",
+    );
+    const pkg = service.getChapter(session, course.id, "web");
+    pkg.chapter!.script = pkg.chapter!.script.map((s, i) => ({
+      ...s,
+      text: ["Page one.", "Page two.", "Page three."][i],
+    }));
+    pkg.speech = "pending";
+    if (mode === "unvoiced legacy pages") {
+      delete pkg.narrationMode;
+      pkg.pageAudio = {};
+    }
+    store.putPackage(course.id, pkg);
+    store.enqueue("fish-one", course.id, "speech", pkg.id);
+    const requests: string[] = [];
+    let failChapter = true;
+    const server = createServer(async (req, res) => {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      const input = JSON.parse(body);
+      requests.push(input.text);
+      if (failChapter) {
+        failChapter = false;
+        res.statusCode = 503;
+        res.end("unavailable");
+        return;
+      }
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          audio_base64: "YXVkaW8=",
+          alignment: {
+            characters: Array.from(input.text),
+            character_start_times_seconds: Array.from(
+              input.text,
+              (_, i) => i / 10,
+            ),
+            character_end_times_seconds: Array.from(
+              input.text,
+              (_, i) => (i + 1) / 10,
+            ),
+          },
+        }),
+      );
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (!address || typeof address === "string")
+      throw new Error("No test server address");
+    const child = spawn(
+      process.execPath,
+      [
+        "--import",
+        pathToFileURL(resolve("tests/fixtures/elevenlabs-fetch.mjs")).href,
+        "--import",
+        "tsx",
+        resolve("src/server/worker.ts"),
+      ],
+      {
+        env: {
+          ...process.env,
+          METHELIA_DATA_DIR: dir,
+          AI_API_KEY: "",
+          ELEVENLABS_API_KEY: "test",
+          ELEVENLABS_VOICE_ID: "teacher-test",
+          ELEVENLABS_MODEL: "eleven_multilingual_v2",
+          METHELIA_TEST_SPEECH_URL: `http://127.0.0.1:${address.port}`,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      },
+    );
+    let errors = "";
+    child.stderr.on("data", (data) => {
+      errors += String(data);
+    });
+    const waitJob = async (id: string) => {
+      const deadline = Date.now() + 10000;
+      while (Date.now() < deadline) {
+        const row = store.db
+          .prepare("SELECT status FROM generation_jobs WHERE id=?")
+          .get(id);
+        if (row?.status === "done" || row?.status === "failed")
+          return row.status;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      throw new Error("Worker timeout: " + errors);
+    };
+    try {
+      expect(await waitJob("fish-one"), errors).toBe("failed");
+      const partial = service.getChapter(session, course.id, "web");
+      expect(partial).toMatchObject({
+        speech: "failed",
+        speechProfile: {
+          provider: "elevenlabs",
+          voiceId: "teacher-test",
+          model: "eleven_multilingual_v2",
+        },
+        narrationMode: "chapter",
+      });
+      expect(partial.pageAudio).toBeUndefined();
+      expect(partial.cues).toEqual([]);
+      expect(
+        store.db.prepare("SELECT COUNT(*) AS n FROM audio_artifacts").get()?.n,
+      ).toBe(0);
+      const fullText = "Page one.\nPage two.\nPage three.";
+      expect(requests).toEqual([fullText]);
+      vi.stubEnv("ELEVENLABS_API_KEY", "test");
+      vi.stubEnv("ELEVENLABS_VOICE_ID", "different-voice");
+      vi.stubEnv("ELEVENLABS_MODEL", "eleven_flash_v2_5");
+      service.retry(session, course.id, "web");
+      expect(await waitJob("speech:" + pkg.id), errors).toBe("done");
+      const ready = service.getChapter(session, course.id, "web");
+      expect(ready).toMatchObject({
+        speech: "ready",
+        speechProfile: {
+          provider: "elevenlabs",
+          voiceId: "teacher-test",
+          model: "eleven_multilingual_v2",
+        },
+        narrationMode: "chapter",
+      });
+      expect(ready.pageAudio).toBeUndefined();
+      expect(ready.cues.map((cue) => cue.sectionId)).toEqual(
+        pkg.chapter!.script.map((entry) => entry.sectionId),
+      );
+      expect(ready.captions?.map((caption) => caption.sectionId)).toEqual(
+        pkg.chapter!.script.map((entry) => entry.sectionId),
+      );
+      for (let i = 1; i < ready.cues.length; i++)
+        expect(ready.cues[i].start).toBeGreaterThanOrEqual(
+          ready.cues[i - 1].end,
+        );
+      expect(store.db.prepare("SELECT id FROM audio_artifacts").all()).toEqual([
+        { id: pkg.id },
+      ]);
+      store.enqueue("fish-duplicate", course.id, "speech", pkg.id);
+      expect(await waitJob("fish-duplicate"), errors).toBe("done");
+      expect(requests).toEqual([fullText, fullText]);
+    } finally {
+      vi.unstubAllEnvs();
+      if (child.exitCode === null && child.signalCode === null) {
+        const exited = once(child, "exit");
+        child.kill();
+        await exited;
+      }
+      await new Promise<void>((r) => server.close(() => r()));
+      store.db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  25000,
+);
 
 it("prepares the next chapter while current narration is blocked and preserves content after speech fails", async () => {
   const dir = mkdtempSync(join(tmpdir(), "methelia-independent-lanes-"));

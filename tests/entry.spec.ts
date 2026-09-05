@@ -41,7 +41,6 @@ test("finishing speech preparation preserves a manual demonstration until playba
     route.fulfill({ contentType: "audio/wav", body: wav }),
   );
   await page.goto("/");
-  await page.getByLabel("開啟實作區", { exact: true }).click();
   await page.getByRole("button", { name: "看老師示範", exact: true }).click();
   await page.getByRole("button", { name: "看修改結果" }).click();
   const preview = page.frameLocator('iframe[title="實作網站預覽"]');
@@ -204,7 +203,9 @@ for (const status of ["generating", "failed"] as const) {
     await expect(page.getByLabel("切換字幕", { exact: true })).toBeVisible();
     await expect(page.getByLabel("切換字幕", { exact: true })).toBeDisabled();
     await expect(page.locator("[data-section]")).toHaveCount(0);
-    await expect(page.getByLabel("開啟實作區", { exact: true })).toBeDisabled();
+    await expect(
+      page.getByRole("region", { name: "實作區", exact: true }),
+    ).toHaveCount(0);
     if (status === "failed") {
       await expect(
         page.getByRole("button", { name: "重試章節" }),

@@ -27,7 +27,9 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next-validation/types/**/*.ts",
+    ".next-validation/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules", ".superpowers"]
 }

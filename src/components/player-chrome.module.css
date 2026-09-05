@@ -1,0 +1,59 @@
+.shell {
+  position: relative;
+  --controls-space: 80px;
+  --header-space: 64px;
+}
+.captionLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 35;
+}
+.shell .captionLayer > :global(.subtitle-line) {
+  bottom: calc(var(--controls-space) + 8px + env(safe-area-inset-bottom, 0px));
+}
+.shell > :global(.canvas-controls),
+.shell > :global(.course-header) {
+  transition:
+    transform 220ms ease,
+    opacity 180ms ease,
+    margin 220ms ease;
+}
+.hidden > :global(.canvas-controls) {
+  transform: translateY(100%);
+  margin-bottom: calc(-1 * var(--controls-space));
+  opacity: 0;
+  pointer-events: none;
+}
+.hidden > :global(.course-header) {
+  transform: translateY(-100%);
+  margin-top: calc(-1 * var(--header-space));
+  opacity: 0;
+  pointer-events: none;
+}
+.hidden > :global(.lesson-canvas) {
+  margin: 0;
+  border-radius: 0;
+}
+.hidden {
+  cursor: none;
+}
+.hidden:fullscreen > :global(.course-header) {
+  margin-top: 0;
+}
+@media (max-width: 800px) {
+  .shell {
+    --controls-space: 120px;
+  }
+}
+@media (max-width: 650px) {
+  .shell {
+    --header-space: 56px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell > :global(.canvas-controls),
+  .shell > :global(.course-header) {
+    transition: none;
+  }
+}

@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import { Store } from "../src/server/db";
 import { LearningService } from "../src/server/service";
+import { pageAudioForChapter } from "../src/server/page-audio";
 let store: Store;
 beforeEach(() => {
   store = new Store(":memory:");
@@ -48,12 +49,9 @@ it("keeps existing Fish audio until an explicit whole-chapter rebuild creates a 
       voiceId: "teacher-new",
       model: "eleven_multilingual_v2",
     },
-    pageAudio: {
-      languages: { status: "pending" },
-      structure: { status: "pending" },
-      check: { status: "pending" },
-    },
+    narrationMode: "chapter",
   });
+  expect(updated.chapters.web.pageAudio).toBeUndefined();
   expect(updated.progress.web).toMatchObject({
     sectionId: "structure",
     time: 0,
@@ -119,4 +117,84 @@ it("rejects stale or foreign audio rebuild requests before creating jobs", () =>
       .prepare("SELECT count(*) AS n FROM generation_jobs WHERE kind='speech'")
       .get()?.n,
   ).toBe(0);
+});
+
+it("keeps ready page audio unchanged and converts only an explicit rebuild", () => {
+  const { service, session, course, pkg } = legacyCourse();
+  delete pkg.narrationMode;
+  pkg.cues = [];
+  pkg.pageAudio = pageAudioForChapter(pkg.chapter!);
+  for (const [sectionId, page] of Object.entries(pkg.pageAudio)) {
+    page.status = "ready";
+    page.cues = [{ sectionId, start: 0, end: 2 }];
+  }
+  store.putPackage(course.id, pkg);
+  service.scheduleSpeech(service.owned(session, course.id), pkg);
+  expect(service.retry(session, course.id, "web").chapters.web).toEqual(pkg);
+  const rebuilt = service.retry(session, course.id, "web", {
+    packageId: pkg.id,
+    rebuild: true,
+  }).chapters.web;
+  expect(rebuilt.id).not.toBe(pkg.id);
+  expect(rebuilt.narrationMode).toBe("chapter");
+  expect(rebuilt.pageAudio).toBeUndefined();
+  expect(store.getPackage(pkg.id)).toEqual(pkg);
+});
+
+it.each(["schedule", "retry"])(
+  "converts unvoiced page packages during %s and pins English narration",
+  (action) => {
+    vi.stubEnv("ELEVENLABS_MODEL", "eleven_flash_v2_5");
+    const service = new LearningService(store);
+    const session = service.session();
+    const course = service.createCourse(
+      session,
+      "English lesson",
+      "demo",
+      "en",
+      "en",
+    );
+    const pkg = service.getChapter(session, course.id, "web");
+    delete pkg.narrationMode;
+    pkg.pageAudio = pageAudioForChapter(pkg.chapter!);
+    pkg.speech = "not_requested";
+    store.putPackage(course.id, pkg);
+    if (action === "schedule")
+      service.scheduleSpeech(service.owned(session, course.id), pkg, false);
+    else service.retry(session, course.id, "web");
+    const pending = service.getChapter(session, course.id, "web");
+    expect(pending).toMatchObject({
+      narrationMode: "chapter",
+      speech: "pending",
+      speechProfile: { languageCode: "en" },
+    });
+    expect(pending.pageAudio).toBeUndefined();
+    expect(
+      store.db
+        .prepare(
+          "SELECT count(*) AS n FROM generation_jobs WHERE kind='speech' AND status='queued'",
+        )
+        .get()?.n,
+    ).toBe(1);
+  },
+);
+
+it("requires a new package to rebuild partially ready page narration even with a pinned current provider", () => {
+  const { service, session, course, pkg } = legacyCourse();
+  delete pkg.narrationMode;
+  pkg.cues = [];
+  pkg.speech = "failed";
+  pkg.speechProfile = {
+    provider: "elevenlabs",
+    voiceId: "teacher-new",
+    model: "eleven_multilingual_v2",
+    languageCode: "zh",
+  };
+  pkg.pageAudio = pageAudioForChapter(pkg.chapter!);
+  pkg.pageAudio.languages.status = "ready";
+  store.putPackage(course.id, pkg);
+  expect(() => service.retry(session, course.id, "web")).toThrow(
+    /重建章節語音/,
+  );
+  expect(store.getPackage(pkg.id)).toEqual(pkg);
 });

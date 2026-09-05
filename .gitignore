@@ -1,11 +1,13 @@
 node_modules/
 .next/
+.next-validation/
 out/
 .env*
 !.env.example
 .data/
 playwright-report/
 test-results/
+test-results-*/
 *.tsbuildinfo
 .superpowers/
 .tmp_doc_review/

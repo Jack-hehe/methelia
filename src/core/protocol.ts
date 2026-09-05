@@ -19,6 +19,11 @@ export const nodeSchema = z
     kind: z.enum(["main", "support"]),
     prerequisites: z.array(id).max(40),
     environment: environmentSchema.optional(),
+    depth: z.enum(["foundation", "applied", "advanced"]).optional(),
+    summary: z.string().max(800).optional(),
+    keyConcepts: z.array(z.string().min(1).max(120)).max(8).optional(),
+    misconceptions: z.array(z.string().min(1).max(200)).max(5).optional(),
+    assessment: z.string().max(500).optional(),
   })
   .strict();
 export const graphSchema = z
@@ -30,6 +35,20 @@ export const graphSchema = z
     requiresConfirmation: z.boolean().optional(),
     nodes: z.array(nodeSchema).min(2).max(50),
     edges: z.array(z.object({ from: id, to: id }).strict()).max(100),
+    extensions: z
+      .array(
+        z
+          .object({
+            id,
+            anchorId: id,
+            nodeIds: z.array(id).min(1).max(6),
+            title: z.string().min(1).max(120),
+            depth: z.enum(["foundation", "applied", "advanced"]),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
   })
   .strict();
 const card = z
@@ -40,6 +59,30 @@ const card = z
   })
   .strict();
 export const componentSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("lesson.article"),
+      paragraphs: z.array(z.string().min(1).max(800)).min(1).max(4),
+      takeaway: z.string().min(1).max(300),
+      figure: z
+        .object({
+          items: z
+            .array(
+              z
+                .object({
+                  label: z.string().min(1).max(60),
+                  description: z.string().min(1).max(250),
+                })
+                .strict(),
+            )
+            .min(2)
+            .max(5),
+          caption: z.string().min(1).max(250),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict(),
   z
     .object({
       type: z.literal("concept.canvas"),
@@ -70,6 +113,7 @@ export const componentSchema = z.discriminatedUnion("type", [
       path: text,
       language: z.enum(["html", "css", "javascript", "python", "bash", "text"]),
       example: z.string().max(30000),
+      expectedOutput: z.string().max(4000).optional(),
     })
     .strict(),
   z
@@ -176,12 +220,14 @@ export const templateRegistry: Record<
   readonly Component["type"][]
 > = {
   narrative: [
+    "lesson.article",
     "concept.canvas",
     "dom.explorer",
     "steps.sequence",
     "diagram.flow",
   ],
   focus: [
+    "lesson.article",
     "concept.canvas",
     "dom.explorer",
     "quiz.choice",
@@ -190,6 +236,7 @@ export const templateRegistry: Record<
     "diagram.flow",
   ],
   split: [
+    "lesson.article",
     "dom.explorer",
     "code.editor",
     "browser.preview",
@@ -222,21 +269,61 @@ export function validateGraph(input: unknown): Graph {
     throw new Error("Node title/objective exceeds presentation limits");
   const ids = new Set(graph.nodes.map((n) => n.id));
   if (ids.size !== graph.nodes.length) throw new Error("Duplicate node ID");
+  const extensions = graph.extensions || [];
+  const extensionIds = new Set<string>();
+  const owned = new Set<string>();
+  const internalEdges = new Set<string>();
+  for (const extension of extensions) {
+    if (extensionIds.has(extension.id))
+      throw new Error("Duplicate extension ID");
+    extensionIds.add(extension.id);
+    if (!ids.has(extension.anchorId))
+      throw new Error("Unknown extension anchor");
+    if (extension.nodeIds.includes(extension.anchorId))
+      throw new Error("Extension anchor cycle");
+    extension.nodeIds.forEach((nodeId, index) => {
+      if (owned.has(nodeId))
+        throw new Error("Extension node has multiple owners");
+      owned.add(nodeId);
+      const node = graph.nodes.find((item) => item.id === nodeId);
+      if (!node || node.kind !== "support")
+        throw new Error("Extension requires support nodes");
+      const previous = index
+        ? extension.nodeIds[index - 1]
+        : extension.anchorId;
+      if (node.prerequisites.length !== 1 || node.prerequisites[0] !== previous)
+        throw new Error("Extension prerequisites must follow its chain");
+      if (index) internalEdges.add(`${previous}:${nodeId}`);
+    });
+  }
+  if (owned.has(graph.nodes[0].id))
+    throw new Error("Main root cannot belong to an extension");
   const seenEdges = new Set<string>();
   for (const edge of graph.edges) {
     if (!ids.has(edge.from) || !ids.has(edge.to))
       throw new Error("Unknown edge node");
     const key = `${edge.from}:${edge.to}`;
     if (seenEdges.has(key)) throw new Error("Duplicate edge");
+    if ((owned.has(edge.from) || owned.has(edge.to)) && !internalEdges.has(key))
+      throw new Error("Extension edges must form one isolated chain");
     seenEdges.add(key);
   }
+  for (const key of internalEdges)
+    if (!seenEdges.has(key)) throw new Error("Missing extension chain edge");
+  const traversalEdges = [
+    ...graph.edges,
+    ...extensions.map((extension) => ({
+      from: extension.anchorId,
+      to: extension.nodeIds[0],
+    })),
+  ];
   const visited = new Set<string>(),
     active = new Set<string>();
   function visit(key: string) {
     if (active.has(key)) throw new Error("Graph cycle");
     if (visited.has(key)) return;
     active.add(key);
-    for (const e of graph.edges.filter((e) => e.from === key)) visit(e.to);
+    for (const e of traversalEdges.filter((e) => e.from === key)) visit(e.to);
     active.delete(key);
     visited.add(key);
   }
@@ -250,7 +337,8 @@ export function validateGraph(input: unknown): Graph {
       function walk(key: string) {
         if (reachable.has(key)) return;
         reachable.add(key);
-        for (const e of graph.edges.filter((e) => e.from === key)) walk(e.to);
+        for (const e of traversalEdges.filter((e) => e.from === key))
+          walk(e.to);
       }
       walk(prerequisite);
       if (!reachable.has(node.id))

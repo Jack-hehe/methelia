@@ -9,6 +9,17 @@ export function pageIndex(chapter: Chapter, preferred: string) {
   );
 }
 
+/** Page boundaries use the returned alignment, including silence between sentences. */
+export function chapterSectionAt(pkg: PackageState, time: number): string {
+  const sections = pkg.chapter?.sections || [];
+  let selected = sections[0]?.id || "";
+  for (const section of sections) {
+    const first = pkg.cues.find((c) => c.sectionId === section.id);
+    if (first && first.start <= time) selected = section.id;
+  }
+  return selected;
+}
+
 export function pageTrack(
   pkg: PackageState,
   sectionId: string,

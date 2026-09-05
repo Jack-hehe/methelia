@@ -1,0 +1,253 @@
+.shell {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+}
+.header {
+  max-width: 1100px;
+  min-height: 78px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--catalog-muted);
+  min-height: 44px;
+}
+.brand {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.7px;
+}
+.content {
+  width: min(780px, calc(100% - 40px));
+  margin: 38px auto 0;
+  padding-bottom: 56px;
+}
+.intro {
+  margin-bottom: 34px;
+}
+.eyebrow {
+  color: var(--violet);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.intro h1 {
+  font-size: clamp(27px, 4vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.4;
+  margin: 12px 0;
+}
+.intro p {
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--catalog-muted);
+  max-width: 650px;
+}
+.goal {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 24px;
+  padding: 18px 22px;
+  border-left: 3px solid var(--violet);
+  background: var(--violet-soft);
+  border-radius: 0 12px 12px 0;
+  overflow-wrap: anywhere;
+}
+.goal span {
+  font-size: 12px;
+  color: var(--catalog-muted);
+}
+.goal strong {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.questions {
+  display: grid;
+  gap: 24px;
+}
+.question {
+  min-width: 0;
+  padding: 20px 24px 24px;
+  margin: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 16px;
+}
+.question legend {
+  padding: 0 6px;
+  max-width: 100%;
+  font-weight: 500;
+  line-height: 1.8;
+}
+.number {
+  display: inline-grid;
+  place-items: center;
+  background: var(--violet-soft);
+  color: var(--violet);
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  margin-right: 10px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.option {
+  position: relative;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 44px;
+}
+.option:has(input:checked) {
+  background: var(--violet-soft);
+  border-color: var(--violet);
+}
+.option:has(input:focus-visible) {
+  outline: 2px solid var(--violet);
+  outline-offset: 3px;
+}
+.option input {
+  accent-color: var(--violet);
+  margin: 0;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.detail {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--catalog-muted);
+}
+.detail small {
+  font: inherit;
+}
+.detail textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 66px;
+  max-height: 260px;
+  padding: 11px 13px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.detail textarea:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+}
+.unsure {
+  color: var(--violet);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding: 12px 0 0;
+  line-height: 1.6;
+  min-height: 44px;
+  text-align: left;
+}
+.actions {
+  margin-top: 26px;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+  font-size: 13px;
+  color: var(--catalog-muted);
+}
+.buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+.save,
+.submit {
+  border-radius: 10px;
+  padding: 13px 20px;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: 500;
+}
+.save {
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.submit {
+  color: var(--bg);
+  background: var(--violet);
+}
+.hint {
+  color: var(--catalog-muted);
+  text-align: right;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.error {
+  padding: 16px 20px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  color: var(--danger);
+  margin-top: 22px;
+}
+.error p {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .header {
+    padding: 12px 18px;
+    gap: 10px;
+  }
+  .brand {
+    display: none;
+  }
+  .content {
+    width: calc(100% - 32px);
+    margin-top: 22px;
+  }
+  .question {
+    padding: 16px;
+  }
+  .question legend {
+    font-size: 14px;
+  }
+  .option {
+    flex-grow: 1;
+  }
+  .buttons {
+    flex-direction: column-reverse;
+  }
+  .hint {
+    text-align: left;
+  }
+}

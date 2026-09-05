@@ -308,3 +308,128 @@
 .scope-confirmation li + li {
   margin-top: 8px;
 }
+
+.lesson-article {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.lesson-prose {
+  max-width: 72ch;
+  font-size: clamp(16px, 1.35vw, 20px);
+  line-height: 1.9;
+}
+.lesson-prose p {
+  margin: 0 0 20px;
+  white-space: pre-line;
+}
+.lesson-takeaway {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 26px;
+  border-radius: 14px;
+  background: var(--violet-soft);
+  margin-top: 26px;
+}
+.lesson-takeaway svg {
+  flex-shrink: 0;
+  color: var(--violet);
+}
+.lesson-takeaway p {
+  margin: 8px 0 0;
+  line-height: 1.8;
+}
+.lesson-figure {
+  margin: 28px 0;
+  padding: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+.lesson-figure ol {
+  display: flex;
+  gap: 28px;
+  padding: 0;
+  list-style: none;
+}
+.lesson-figure li {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  animation: lesson-reveal 0.65s both;
+}
+.figure-marker {
+  display: flex;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  background: var(--violet-soft);
+  color: var(--violet);
+  font-size: 22px;
+  margin-bottom: 18px;
+}
+.figure-arrow {
+  position: absolute;
+  right: -25px;
+  top: 14px;
+  color: var(--violet);
+}
+.lesson-figure strong {
+  font-size: 17px;
+}
+.lesson-figure p {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.lesson-figure figcaption {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.lesson-reading-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 22px;
+}
+.lesson-reading-cards article {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.lesson-reading-cards h3 {
+  font-size: 22px;
+  margin: 18px 0 12px;
+}
+.lesson-reading-cards p {
+  font-size: 16px;
+  line-height: 1.9;
+  white-space: pre-line;
+}
+@keyframes lesson-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 700px) {
+  .lesson-figure ol {
+    flex-direction: column;
+  }
+  .figure-arrow {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lesson-figure li {
+    animation: none;
+  }
+}

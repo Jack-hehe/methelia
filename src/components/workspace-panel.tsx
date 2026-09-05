@@ -14,7 +14,12 @@ import {
   FileCode,
   ChevronUp,
 } from "lucide-react";
-import { normalizePath, type Workspace } from "../core/workspace";
+import {
+  normalizePath,
+  runCommand,
+  saveFiles,
+  type Workspace,
+} from "../core/workspace";
 import { chapterEnvironment, type Chapter } from "../core/protocol";
 import type { Cue } from "../core/narration";
 import { guidanceFrame } from "../core/guidance";
@@ -30,6 +35,7 @@ export function WorkspacePanel({
   chapter: sourceChapter,
   activeSectionId,
   embedded = false,
+  localReview = false,
   cues,
   audioTime,
   audioReady,
@@ -47,6 +53,7 @@ export function WorkspacePanel({
   chapter: Chapter;
   activeSectionId: string;
   embedded?: boolean;
+  localReview?: boolean;
   cues: Cue[];
   audioTime: number;
   audioReady: boolean;
@@ -109,6 +116,15 @@ export function WorkspacePanel({
     end: (i + 1) * 10,
   }));
   const syncedDemo = audioReady && !manualDemo;
+  const [demoTime, setDemoTime] = useState(0);
+  useEffect(() => {
+    if (!demonstrating || syncedDemo) return;
+    const timer = setInterval(
+      () => setDemoTime((t) => Math.min(t + 0.05, guides.length * 10)),
+      50,
+    );
+    return () => clearInterval(timer);
+  }, [demonstrating, syncedDemo, guides.length]);
   useEffect(() => {
     // Finishing synthesis must not interrupt a manual demonstration.
     if (audioPlaying) setManualDemo(false);
@@ -116,9 +132,7 @@ export function WorkspacePanel({
   const frame = guidanceFrame(
     chapter,
     syncedDemo ? cues : manualCues,
-    syncedDemo
-      ? audioTime
-      : Math.floor(manualStep / 2) * 10 + (manualStep % 2 ? 8 : 1),
+    syncedDemo ? audioTime : demoTime,
   );
   const guide = frame.section?.guide;
   const dirty = path !== null && draft !== baseDraft;
@@ -233,11 +247,17 @@ export function WorkspacePanel({
       throw new Error(
         "檔案已在其他地方更新。你的草稿仍保留在編輯器，請先複製保存後重新載入。",
       );
-    const updated = await api<Workspace>(
-      "workspace/files",
-      { courseId, files: { [path]: draft }, baseRevision: workspace.revision },
-      "PUT",
-    );
+    const updated = localReview
+      ? saveFiles(workspace, { [path]: draft }, workspace.revision)
+      : await api<Workspace>(
+          "workspace/files",
+          {
+            courseId,
+            files: { [path]: draft },
+            baseRevision: workspace.revision,
+          },
+          "PUT",
+        );
     setBaseDraft(draft);
     onChange(updated);
     return updated;
@@ -277,10 +297,12 @@ export function WorkspacePanel({
       setBaseDraft(workspace.files[file]);
       setOutput((v) => (v + `\n${workspace.cwd} $ ${input}\n`).slice(-30000));
     } else {
-      const result = await api<{ workspace: Workspace; output: string }>(
-        "workspace/commands",
-        { courseId, command: input },
-      );
+      const result = localReview
+        ? runCommand(workspace, input)
+        : await api<{ workspace: Workspace; output: string }>(
+            "workspace/commands",
+            { courseId, command: input },
+          );
       onChange(result.workspace);
       setOutput((v) =>
         input === "clear"
@@ -310,11 +332,13 @@ export function WorkspacePanel({
       return;
     }
     void action(async () => {
-      await save();
-      const result = await api<{ workspace: Workspace; output: string }>(
-        "workspace/commands",
-        { courseId, command: `cd ${next}` },
-      );
+      const latest = await save();
+      const result = localReview
+        ? runCommand(latest, `cd ${next}`)
+        : await api<{ workspace: Workspace; output: string }>(
+            "workspace/commands",
+            { courseId, command: `cd ${next}` },
+          );
       if (result.workspace.cwd !== next)
         throw new Error(result.output || "無法開啟目錄。");
       onChange(result.workspace);
@@ -331,6 +355,7 @@ export function WorkspacePanel({
     void action(async () => {
       await save();
       setManualStep(0);
+      setDemoTime(0);
       setManualDemo(!audioReady);
       setShowExample(false);
       onDemonstrating(true);
@@ -418,9 +443,29 @@ export function WorkspacePanel({
       <div className="studio-columns">
         {environment === "python" ? (
           <PythonRunner
-            key={`${activeSectionId}:${demonstrating ? "demo" : showExample ? "example" : "practice"}`}
+            key={`${courseId}:${chapter.nodeId}:${activeSectionId}:${localReview ? "review" : "main"}:${demonstrating ? "demo" : showExample ? "example" : "practice"}:${pythonEntry}`}
+            sessionKey={`${courseId}:${chapter.nodeId}:${activeSectionId}:${localReview ? "review" : "main"}:${demonstrating ? "demo" : showExample ? "example" : "practice"}:${pythonEntry}`}
             files={visibleFiles}
             entryPath={pythonEntry}
+            expectedOutput={
+              demonstrating || showExample ? undefined : example?.expectedOutput
+            }
+            beforeRun={
+              demonstrating || showExample
+                ? undefined
+                : async () => {
+                    if (actionInFlight.current)
+                      throw new Error("正在儲存，請稍後再執行。");
+                    actionInFlight.current = true;
+                    setBusy(true);
+                    try {
+                      await save();
+                    } finally {
+                      actionInFlight.current = false;
+                      setBusy(false);
+                    }
+                  }
+            }
           />
         ) : environment === "terminal" ? (
           <section
@@ -484,7 +529,11 @@ export function WorkspacePanel({
               <span>網頁預覽</span>
               <span className="live-label">
                 <i />
-                {demonstrating || showExample ? "DEMO" : "LIVE"}
+                {demonstrating || showExample
+                  ? "DEMO"
+                  : localReview
+                    ? "REVIEW"
+                    : "LIVE"}
               </span>
             </div>
             <iframe title="實作網站預覽" sandbox="allow-scripts" srcDoc={src} />
@@ -498,16 +547,25 @@ export function WorkspacePanel({
             <span>
               {shellAvailable ? <Terminal size={16} /> : <Code2 size={16} />}{" "}
               {shellAvailable ? "Terminal" : "檔案編輯器"}{" "}
-              <small>{demonstrating ? "示範副本" : "你的工作區"}</small>
+              <small>
+                {demonstrating
+                  ? "示範副本"
+                  : localReview
+                    ? "複習副本 · 修改不會保存到作品"
+                    : "你的工作區"}
+              </small>
             </span>
-            <a
-              aria-label="匯出作品"
-              href={
-                "/api/workspace/export?courseId=" + encodeURIComponent(courseId)
-              }
-            >
-              <Download size={16} />
-            </a>
+            {!localReview && (
+              <a
+                aria-label="匯出作品"
+                href={
+                  "/api/workspace/export?courseId=" +
+                  encodeURIComponent(courseId)
+                }
+              >
+                <Download size={16} />
+              </a>
+            )}
           </div>
           {!shellAvailable && !demonstrating && !showExample && (
             <div className="practice-file-tabs" aria-label="工作區檔案">
@@ -545,6 +603,7 @@ export function WorkspacePanel({
                 {frame.files[guide.path]?.split("\n").map((line, i) => (
                   <span
                     className={
+                      frame.typingLine === i ||
                       line.includes(
                         frame.target === "preview"
                           ? guide.replacement
@@ -557,6 +616,12 @@ export function WorkspacePanel({
                   >
                     <i>{i + 1}</i>
                     {line}
+                    {frame.typingLine === i && (
+                      <span
+                        className="demo-typing-caret"
+                        aria-label="老師正在輸入"
+                      />
+                    )}
                     {"\n"}
                   </span>
                 ))}
@@ -580,6 +645,11 @@ export function WorkspacePanel({
                       if (manualStep < guides.length * 2 - 1)
                         setManualStep((s) => s + 1);
                       else setManualStep(0);
+                      setDemoTime(
+                        manualStep % 2 === 0
+                          ? Math.floor(manualStep / 2) * 10 + 6
+                          : 0,
+                      );
                     }}
                   >
                     {manualStep % 2 === 0
@@ -606,7 +676,15 @@ export function WorkspacePanel({
             <div className="terminal-editor">
               <div className="terminal-file-label">
                 {path}
-                <span>{dirty ? "尚未儲存" : "已儲存"}</span>
+                <span>
+                  {localReview
+                    ? dirty
+                      ? "尚未套用到副本"
+                      : "僅保留在複習副本"
+                    : dirty
+                      ? "尚未儲存"
+                      : "已儲存"}
+                </span>
               </div>
               <textarea
                 aria-label="程式碼編輯器"
@@ -615,7 +693,10 @@ export function WorkspacePanel({
                 disabled={busy}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                  if (
+                    (e.ctrlKey || e.metaKey) &&
+                    (e.key === "Enter" || e.key.toLowerCase() === "s")
+                  ) {
                     e.preventDefault();
                     saveEditor();
                   }
@@ -624,7 +705,7 @@ export function WorkspacePanel({
               <div className="terminal-editor-actions">
                 <small>
                   {environment === "python"
-                    ? "點選執行 Python 查看本次結果"
+                    ? "執行 Python 會先儲存，再顯示結果"
                     : environment === "web"
                       ? "左側即時預覽"
                       : "虛擬工作區檔案"}{" "}
@@ -678,7 +759,7 @@ export function WorkspacePanel({
             <p className="practice-empty">本節沒有可編輯的檔案。</p>
           )}
         </section>
-        {environment === "web" && demonstrating && guide && (
+        {demonstrating && guide && (
           <div
             aria-hidden="true"
             className={"guide-pointer guide-at-" + frame.target}

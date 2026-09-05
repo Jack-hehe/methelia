@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures/course-test";
+import { answerIntake } from "./fixtures/intake-browser";
 
 // Run with playwright.general.config.ts: live API/worker against a local model double.
 test.beforeEach(async ({ baseURL }) => {
@@ -18,6 +19,8 @@ for (const goal of [
     await page.goto("/?home=1");
     await page.getByLabel("你想學什麼？").fill(goal);
     await page.locator('form button[type="submit"]').click();
+    await answerIntake(page);
+    const pages = goal.includes("bread") ? 4 : 3;
     if (goal.includes("Linux")) {
       await expect(
         page.getByRole("heading", { name: "確認這堂課的學習範圍" }),
@@ -28,9 +31,9 @@ for (const goal of [
       ).toBeVisible();
       await page.getByRole("button", { name: "確認範圍並開始" }).click();
     }
-    await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
+    await expect(page.getByLabel("頁碼")).toHaveText(`1 / ${pages}`);
     await page.getByLabel("下一頁", { exact: true }).click();
-    await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
+    await expect(page.getByLabel("頁碼")).toHaveText(`2 / ${pages}`);
     if (goal.includes("bread")) {
       await expect(page.getByLabel("開啟實作區", { exact: true })).toHaveCount(
         0,
@@ -88,8 +91,21 @@ for (const goal of [
     await expect(
       page.getByText("Compare the starting state with the result."),
     ).toBeVisible();
+    if (goal.includes("bread")) {
+      await page.getByLabel("下一頁", { exact: true }).click();
+      await page
+        .getByRole("button", {
+          name: /Keep the recipe and time equal; change only temperature/,
+        })
+        .click();
+      await expect(
+        page.getByText(
+          "Changing only temperature makes the comparison informative.",
+        ),
+      ).toBeVisible();
+    }
     await page.getByRole("button", { name: "下一章：Next steps" }).click();
-    await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
+    await expect(page.getByLabel("頁碼")).toHaveText(`1 / ${pages}`);
     await expect(page.locator(".breadcrumb strong")).toHaveText("Next steps");
     await page.reload();
     await expect(page.locator(".breadcrumb strong")).toHaveText("Next steps");
@@ -102,12 +118,19 @@ test("Python runner stops, bounds execution and output, then runs a fresh progra
   await page.goto("/?home=1");
   await page.getByLabel("你想學什麼？").fill("Learn Python");
   await page.locator('form button[type="submit"]').click();
+  await answerIntake(page);
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
   await page.getByLabel("下一頁", { exact: true }).click();
   const editor = page.getByLabel("程式碼編輯器");
   const run = page.getByRole("button", { name: "執行 Python" });
   const status = page.locator(".python-run-status");
   const error = page.locator(".python-error");
+  await editor.fill("import sys, io\nsys.stdout = io.StringIO()");
+  await run.click();
+  await expect(status).toHaveText("執行完成", { timeout: 60000 });
+  await editor.fill("print(5)");
+  await run.click();
+  await expect(page.getByLabel("Python 標準輸出")).toHaveText("5\n");
   await editor.fill("while True: pass");
   await run.click();
   await expect(status).toHaveText("執行中…", { timeout: 60000 });
@@ -124,6 +147,16 @@ test("Python runner stops, bounds execution and output, then runs a fresh progra
   await editor.fill("print(2 + 3)");
   await run.click();
   await expect(status).toHaveText("執行完成");
+  await expect(page.getByLabel("Python 標準輸出")).toHaveText("5\n");
+  const warmStart = Date.now();
+  await editor.fill("print(7 + 8)");
+  await run.click();
+  await expect(page.getByLabel("Python 標準輸出")).toHaveText("15\n", {
+    timeout: 3000,
+  });
+  console.log(`Warm Python run including save/UI: ${Date.now() - warmStart}ms`);
+  await editor.fill("print(2 + 3)");
+  await run.click();
   await expect(page.getByLabel("Python 標準輸出")).toHaveText("5\n");
   await expect(
     page.getByRole("button", { name: "驗證我的練習" }),

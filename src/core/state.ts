@@ -11,8 +11,10 @@ export type SpeechProfile = {
   provider: "elevenlabs";
   voiceId: string;
   model: string;
+  languageCode?: "zh" | "en";
 };
 export type PackageState = {
+  narrationMode?: "chapter";
   id: string;
   nodeHash: string;
   status: "queued" | "generating" | "ready" | "failed";
@@ -31,6 +33,52 @@ export type Message = {
   role: "user" | "assistant";
   text: string;
   nodes?: LearningNode[];
+  nodeId?: string;
+};
+export type LearningDepth = "foundation" | "applied" | "advanced";
+export type LearnerProfile = {
+  experience: string;
+  purpose: string;
+  priorKnowledge: string;
+  depth: LearningDepth;
+  studyPlan: string;
+};
+export type LearningAttempt = {
+  nodeId: string;
+  sectionId: string;
+  passed: boolean;
+  answer?: number;
+  at: number;
+  usedHelp: boolean;
+  actual?: string;
+  expected?: string;
+};
+export type NodeNote = {
+  packageId?: string;
+  summary: { title: string; body: string }[];
+  checkpoints: {
+    sectionId: string;
+    title: string;
+    attempts: number;
+    firstPassed: boolean;
+    lastPassed: boolean;
+    records?: Pick<
+      LearningAttempt,
+      "passed" | "at" | "usedHelp" | "actual" | "expected"
+    >[];
+  }[];
+  questions: string[];
+  personal: string;
+  revision: number;
+};
+export type DifficultyAdjustment = {
+  id: string;
+  fromNodeId: string;
+  nodeId: string;
+  previousDepth: LearningDepth;
+  depth: LearningDepth;
+  reason: string;
+  reverted?: boolean;
 };
 export type BranchPreview = {
   id: string;
@@ -38,6 +86,8 @@ export type BranchPreview = {
   afterId: string;
   rejoinId: string;
   nodes: LearningNode[];
+  extension?: { id: string; title: string; depth: LearningDepth };
+  reason?: string;
 };
 export type Progress = {
   time: number;
@@ -54,7 +104,19 @@ export type Course = {
   language?: "zh-TW" | "en";
   scopeAccepted?: boolean;
   mode: "demo" | "live";
-  status: "planning" | "ready" | "failed";
+  status: "intake" | "planning" | "ready" | "failed";
+  learningVersion?: 1;
+  intake?: { answers: Partial<LearnerProfile>; revision: number };
+  learnerProfile?: LearnerProfile;
+  attempts?: LearningAttempt[];
+  notes?: Record<string, NodeNote>;
+  adjustments?: DifficultyAdjustment[];
+  extensionSession?: {
+    extensionId: string;
+    returnNodeId: string;
+    mainWorkspace: Workspace;
+  };
+  extensionWorkspaces?: Record<string, Workspace>;
   error?: string;
   graph: Graph | null;
   revision: number;

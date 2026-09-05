@@ -1,0 +1,110 @@
+.legend {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 20;
+}
+.legend summary {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  border-radius: 50%;
+  list-style: none;
+}
+.legend summary::-webkit-details-marker {
+  display: none;
+}
+.legend summary:focus-visible {
+  outline: 2px solid var(--violet, #7763be);
+  outline-offset: 2px;
+}
+.legend > div {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  min-width: 210px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 28px #30223e18;
+}
+.legend p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.sectionLabel {
+  font-weight: 600;
+}
+.detailSection,
+.notes {
+  margin-top: 20px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.detailSection h4,
+.notes h4 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.detailSection ul,
+.notes ul {
+  padding-left: 18px;
+}
+.notes {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.notes h5 {
+  font-size: 12px;
+  margin: 14px 0 4px;
+}
+.notes p {
+  white-space: pre-wrap;
+}
+.source {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.notes label {
+  display: block;
+  margin: 18px 0 8px;
+  font-weight: 600;
+}
+.notes textarea,
+.depthSelect {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+.notes textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+.depthSelect {
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+.previewDetails {
+  max-height: min(35vh, 300px);
+  overflow-y: auto;
+  padding-right: 10px;
+}
+@media (max-width: 800px) {
+  .depthSelect,
+  .notes textarea {
+    font-size: 16px;
+  }
+}
+.subheader {
+  z-index: 12;
+}

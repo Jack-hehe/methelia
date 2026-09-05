@@ -2,6 +2,12 @@
 
 Methelia is an AI-native learning environment that generates structured courses across subjects and presents them through narrated, interactive web experiences. Subject coverage and available practice tools are distinct.
 
+The product's core is helping learners understand and apply essential ideas through purposeful combinations of concise explanations, visuals, animations, challenges and practice. Authoring starts with a target ability and evidence of understanding, then chooses teaching activities and supported capabilities. Page count, text volume and clicks are not evidence of mastery. See [Learning experience principles](docs/learning-experience-principles.md) for the user's intended direction and an explicit distinction between existing and proposed capabilities.
+
+New live courses now start with five intake questions and persist a learner profile before planning. They generate only the active chapter, suggest conservative next-node depth changes from recorded checkpoint attempts, preserve the main route when adding optional extensions, and keep source-based notes plus revisioned personal notes. Extension workspaces and main-route return state are separate; review edits use isolated copies. Legacy courses retain their prepared content and prefetch behavior. See [Adaptive learning flow](docs/adaptive-learning-flow.md) for the implemented boundaries and further product direction.
+
+Python courses eagerly initialize one sandboxed interpreter owned by the course UI, not individual workspace views. Page changes preserve that interpreter and scoped results; submitted jobs can finish after the view closes. Stop/timeouts discard and prewarm a fresh worker. Learner code still runs only on an explicit Run action. Exiting the course UI disposes the session.
+
 ## Language
 
 **Learning Goal**:
@@ -57,12 +63,12 @@ The complete generated delivery unit for one Learning Node, containing its entir
 _Avoid_: Sentence stream, partial page generation
 
 **Narration Cursor**:
-The current narrated position within the selected Lesson Section, synchronizing subtitles, playback progress, and guided interaction without changing pages.
+The absolute time within a whole-chapter audio track. Playback pauses at the selected Lesson Section's end and retains the page for practice. Manual timeline navigation selects a paused page; explicit page/chapter navigation requests autoplay. Idle playback chrome hides after 2.5 seconds and restores on activity or pause.
 _Avoid_: Video timestamp, page position
 
-**Page Audio Track**:
-The complete narration for one Lesson Section, with its own subtitles and timing. All Page Audio Tracks in a Chapter Package are prepared before narrated learning begins.
-_Avoid_: Sentence audio, teacher video, chapter-wide playback
+**Chapter Audio Track**:
+One audio artifact generated from the complete ordered chapter script in a single synthesis request, with absolute per-section cues and captions. Existing page audio remains a legacy read format; new or rebuilt packages use whole-chapter narration. See [Chapter narration](docs/chapter-narration.md).
+_Avoid_: Sentence audio, teacher video, one request per page
 
 **Course Planner**:
 The service that turns a learner's goal into a complete Course Graph without generating detailed Lesson Sections.
@@ -85,11 +91,11 @@ Evidence emitted by a Learning Component that a Lesson Section's learning requir
 _Avoid_: Button click, page completion
 
 **Learning Branch**:
-A temporary path added to address a prerequisite gap or learner-requested topic before returning to the main course.
+An optional extension from a selected anchor node to address a prerequisite gap or learner-requested topic. Its internal chain does not replace main-route edges; entering it saves the main learning position and workspace for return.
 _Avoid_: Side course, optional playlist
 
 **Rejoin Point**:
-The named Learning Node where a Learning Branch reconnects to the main Course Graph.
+For legacy linear branches, the named node where the branch reconnects. New extensions instead save an explicit return position when entered; this can differ from the anchor and includes the main workspace and saved page progress.
 _Avoid_: Return page, redirect
 
 **Graph Revision**:

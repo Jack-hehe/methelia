@@ -66,6 +66,19 @@ export function SpeechSettings({
           額度，課程內容與實作檔案不變。
         </p>
         {preparing && <p role="status">本章語音準備中，完成後才能重建。</p>}
+        {pkg?.speechProfile && (
+          <p>
+            本章語言：
+            {pkg.speechProfile.languageCode === "zh"
+              ? "中文"
+              : pkg.speechProfile.languageCode === "en"
+                ? "英文"
+                : "自動辨識（舊版語音）"}
+            。
+            {pkg.speechProfile.model === "eleven_multilingual_v2" &&
+              "目前這份語音使用的模型不支援指定語言；重建後才會套用新的語音設定。"}
+          </p>
+        )}
         {error && (
           <p className="speech-dialog-error" role="alert">
             {error}

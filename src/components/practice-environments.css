@@ -166,3 +166,143 @@
     gap: 5px;
   }
 }
+
+/* Read the code first, then its result. Keep actions and evidence legible. */
+.practice-python .studio-terminal {
+  grid-column: 1;
+  grid-row: 1;
+}
+.practice-python .python-runner {
+  grid-column: 2;
+  grid-row: 1;
+  border-left: 1px solid var(--line);
+}
+.practice-environment .terminal-editor textarea {
+  font:
+    14px/1.85 ui-monospace,
+    Consolas,
+    monospace;
+  padding: 20px;
+}
+.practice-environment .terminal-output,
+.practice-environment .demo-source {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.practice-environment .practice-pane-header button {
+  font-size: 13px;
+  padding: 9px 14px;
+  background: var(--violet);
+  color: white;
+}
+.practice-environment .terminal-file-label,
+.practice-environment .terminal-editor-actions small,
+.python-run-status,
+.practice-footnote {
+  font-size: 12px;
+}
+.practice-environment .python-output {
+  font-size: 15px;
+}
+.practice-environment .guide-pointer {
+  z-index: 20;
+  filter: drop-shadow(0 3px 8px #0005);
+  pointer-events: none;
+}
+.practice-environment .guide-pointer span {
+  background: var(--violet);
+  color: white;
+  padding: 10px 16px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+.practice-python .guide-at-terminal {
+  left: 22%;
+}
+.practice-python .guide-at-preview {
+  left: 73%;
+}
+.check-evidence {
+  margin: 16px 0;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-left: 4px solid #d4942a;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.check-evidence.passed {
+  border-left-color: #23856b;
+}
+.check-evidence strong {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.check-evidence-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.check-evidence-columns span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.check-evidence pre {
+  font:
+    13px/1.8 ui-monospace,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--violet-soft);
+  border-radius: 8px;
+}
+@media (max-width: 700px) {
+  .practice-python .studio-terminal,
+  .practice-python .python-runner {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .practice-python .studio-terminal {
+    order: -1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .practice-environment .guide-pointer {
+    transition: none;
+  }
+}
+.python-expected {
+  padding: 18px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--violet-soft);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.python-expected pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+
+.demo-typing-caret {
+  display: inline-block;
+  height: 1.2em;
+  width: 3px;
+  background: var(--violet);
+  vertical-align: middle;
+  animation: teacher-caret 0.65s step-end infinite;
+}
+@keyframes teacher-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-typing-caret {
+    animation: none;
+  }
+}

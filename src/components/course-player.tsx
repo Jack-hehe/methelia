@@ -14,16 +14,35 @@ import {
 } from "lucide-react";
 import type { Snapshot, Progress, BranchPreview } from "../core/state";
 import { chapterEnvironment, type LearningNode } from "../core/protocol";
-import { routeNodes } from "../core/graph";
-import { pageIndex, pageTrack } from "../core/lesson-pages";
+import { nextLearningNode, routeNodes } from "../core/graph";
+import { pageIndex, pageTrack, chapterSectionAt } from "../core/lesson-pages";
+import { emptyWorkspace, type Workspace } from "../core/workspace";
 import { api } from "./api";
 import { LessonSection } from "./lesson-section";
 import { WorkspacePanel } from "./workspace-panel";
 import { LearningMap } from "./learning-map";
 import { HelpDrawer } from "./help-drawer";
 import { AudioControls } from "./audio-controls";
+import type { CheckFeedback } from "../core/check-feedback";
+import { usePlaybackChrome } from "./use-playback-chrome";
+import chromeStyles from "./player-chrome.module.css";
+import { PythonRuntimeProvider } from "./python-runtime-provider";
 
-export function CoursePlayer({
+export function CoursePlayer(props: Parameters<typeof CoursePlayerContent>[0]) {
+  const python = Boolean(
+    props.course.graph?.nodes.some((n) => n.environment === "python") ||
+    Object.values(props.course.chapters).some(
+      (p) => p.chapter?.environment === "python",
+    ),
+  );
+  return (
+    <PythonRuntimeProvider key={props.course.id} enabled={python}>
+      <CoursePlayerContent {...props} />
+    </PythonRuntimeProvider>
+  );
+}
+
+function CoursePlayerContent({
   course,
   onChange,
   onError,
@@ -54,7 +73,25 @@ export function CoursePlayer({
     packageId: string;
     sectionId: string;
   }>();
+  const [reviewWorkspace, setReviewWorkspace] = useState<Workspace | null>(
+    null,
+  );
+  const [autoPlayTarget, setAutoPlayTarget] = useState<{
+    courseId: string;
+    nodeId: string;
+    sectionId?: string;
+  }>();
+  const playbackSequence = useRef(0);
   const shell = useRef<HTMLDivElement>(null);
+  const [captionTarget, setCaptionTarget] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const evidencePanel = useRef<HTMLDivElement>(null);
+  const [checkResult, setCheckResult] = useState<{
+    key: string;
+    feedback: CheckFeedback;
+    passed: boolean;
+  } | null>(null);
   const content = useRef<HTMLDivElement>(null);
   const leaveWorkspace = useRef<(() => Promise<void>) | null>(null);
   const progressQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -66,7 +103,11 @@ export function CoursePlayer({
   const nodeId = review || course.currentNodeId,
     pkg = course.chapters[nodeId],
     chapter = pkg?.chapter;
+  const chapterAudio = pkg?.narrationMode === "chapter" && !pkg.pageAudio;
   const node = course.graph?.nodes.find((n) => n.id === nodeId);
+  const displayedWorkspace = review
+    ? (reviewWorkspace ?? emptyWorkspace())
+    : course.workspace;
   const storedProgress: Progress = course.progress[nodeId] || {
     time: 0,
     sectionId: "",
@@ -86,7 +127,19 @@ export function CoursePlayer({
     : 0;
   const section = chapter?.sections[index],
     sectionId = section?.id || "";
+  const chromeHidden = usePlaybackChrome(
+    shell,
+    audioPlaying && !map && !help && !busy,
+    `${pkg?.id}:${sectionId}`,
+  );
   activeKey.current = `${pkg?.id}:${sectionId}`;
+  useEffect(() => {
+    if (checkResult?.key === activeKey.current)
+      evidencePanel.current?.scrollIntoView({
+        block: "nearest",
+        behavior: "auto",
+      });
+  }, [checkResult]);
   const track = pkg ? pageTrack(pkg, sectionId) : null;
   const canEnter = Boolean(chapter && pkg.status === "ready");
   const environment = chapter
@@ -95,22 +148,37 @@ export function CoursePlayer({
   const hasWorkspace = environment !== "none";
   const workspacePage =
     section &&
-    (["terminal", "code.editor", "file.tree"].includes(
-      section.component.type,
-    ) ||
+    (Boolean(section.guide) ||
+      ["terminal", "code.editor", "file.tree"].includes(
+        section.component.type,
+      ) ||
       section.template === "workspace");
   const workOpen = Boolean(
     canEnter && hasWorkspace && (practice || workspacePage),
   );
   const route = course.graph ? routeNodes(course.graph) : [];
   const allDone = Boolean(
-    course.graph && course.completed.length === course.graph.nodes.length,
+    route.length && route.every((item) => course.completed.includes(item.id)),
   );
   const lastPage = Boolean(chapter && index === chapter.sections.length - 1);
-  const nextNodeId = course.graph?.edges.find(
-    (edge) => edge.from === nodeId,
-  )?.to;
-  const nextNode = course.graph?.nodes.find((n) => n.id === nextNodeId);
+  const extension = course.graph?.extensions?.find(
+    (item) => item.id === course.extensionSession?.extensionId,
+  );
+  const nextNode = course.graph
+    ? nextLearningNode(
+        course.graph,
+        nodeId,
+        course.extensionSession?.extensionId,
+      )
+    : undefined;
+  const adjustment =
+    !review &&
+    course.adjustments?.find(
+      (item) =>
+        item.fromNodeId === nodeId &&
+        item.nodeId === nextNode?.id &&
+        !course.chapterIds[item.nodeId],
+    );
   const pendingPractice = chapter?.sections.find(
     (s) => s.completion && !progress.done.includes(s.id),
   );
@@ -119,12 +187,49 @@ export function CoursePlayer({
     leavingPage.current = false;
     setPractice(false);
     setDemonstrating(false);
-    setAudioPlaying(false);
-    setPlaybackRequest(undefined);
     seenGuide.current = "";
     setAudioTime(track?.start || 0);
     content.current?.scrollTo({ top: 0 });
   }, [pkg?.id, sectionId]);
+  useEffect(() => {
+    setPlaybackRequest(undefined);
+    setAudioPlaying(false);
+  }, [pkg?.id]);
+  useEffect(() => {
+    if (
+      !autoPlayTarget ||
+      autoPlayTarget.courseId !== course.id ||
+      autoPlayTarget.nodeId !== nodeId ||
+      !chapter ||
+      !pkg ||
+      busy ||
+      map ||
+      help
+    )
+      return;
+    const id = autoPlayTarget.sectionId || chapter.sections[0].id;
+    const targetTrack = pageTrack(pkg, id);
+    if (!targetTrack.ready || progress.subtitleOnly) return;
+    setSelection({ nodeId, sectionId: id });
+    setPlaybackRequest({
+      time: targetTrack.start,
+      play: true,
+      id: ++playbackSequence.current,
+      packageId: pkg.id,
+      sectionId: id,
+    });
+    setAutoPlayTarget(undefined);
+  }, [
+    autoPlayTarget,
+    pkg,
+    chapter,
+    nodeId,
+    course.id,
+    busy,
+    map,
+    help,
+    progress.subtitleOnly,
+  ]);
   useEffect(() => {
     const changed = () =>
       setFullscreen(document.fullscreenElement === shell.current);
@@ -189,7 +294,11 @@ export function CoursePlayer({
   function saveAudio(time: number) {
     const key = `${pkg?.id}:${sectionId}`;
     if (leavingPage.current || activeKey.current !== key) return;
-    void persist(time).catch((e) => onError((e as Error).message));
+    void persist(
+      time,
+      {},
+      chapterAudio ? chapterSectionAt(pkg, time) : sectionId,
+    ).catch((e) => onError((e as Error).message));
   }
   async function turnPage(target: number) {
     if (
@@ -198,6 +307,7 @@ export function CoursePlayer({
       target >= chapter.sections.length ||
       target === index ||
       busy ||
+      leavingPage.current ||
       map ||
       help
     )
@@ -213,6 +323,7 @@ export function CoursePlayer({
         const start = pageTrack(pkg!, id).start;
         await persist(start, {}, id);
         setSelection({ nodeId, sectionId: id });
+        setAutoPlayTarget({ courseId: course.id, nodeId, sectionId: id });
         setPractice(false);
         setDemonstrating(false);
       } catch (error) {
@@ -254,14 +365,13 @@ export function CoursePlayer({
     setPlaybackRequest((r) => ({
       time,
       play,
-      id: (r?.id || 0) + 1,
+      id: ++playbackSequence.current,
       packageId: pkg?.id || "",
       sectionId,
     }));
   }
   function narration(time: number) {
     setAudioTime(time);
-    // Guided behavior stays on the selected page. It never turns a page.
     const a = shell.current?.querySelector("audio");
     if (section?.guide && a && !a.paused && seenGuide.current !== sectionId) {
       seenGuide.current = sectionId;
@@ -269,17 +379,52 @@ export function CoursePlayer({
       setDemonstrating(true);
     }
   }
+  async function navigateAudio(time: number, _play = false, natural = false) {
+    if (!pkg || !chapter || leavingPage.current)
+      throw new Error("正在切換頁面，請稍後再試。");
+    const target = chapterSectionAt(pkg, time);
+    leavingPage.current = true;
+    try {
+      if (!natural) {
+        pauseAudio();
+        setAutoPlayTarget(undefined);
+        setPlaybackRequest(undefined);
+      }
+      if (target !== sectionId) await leaveWorkspace.current?.();
+      await persist(time, {}, target);
+      setSelection({ nodeId, sectionId: target });
+      setAudioTime(time);
+      if (target !== sectionId) {
+        setPractice(false);
+        setDemonstrating(false);
+      }
+    } finally {
+      leavingPage.current = false;
+    }
+  }
   async function check(id: string, answer?: number) {
     if (review) return false;
     try {
-      const result = await api<{ passed: boolean; progress: Progress }>(
-        "progress/check",
-        { courseId: course.id, sectionId: id, answer },
-      );
+      const key = activeKey.current;
+      const result = await api<{
+        passed: boolean;
+        progress: Progress;
+        feedback: CheckFeedback;
+        notes?: Snapshot["notes"];
+        adjustments?: Snapshot["adjustments"];
+      }>("progress/check", {
+        courseId: course.id,
+        nodeId,
+        sectionId: id,
+        answer,
+      });
+      setCheckResult({ key, feedback: result.feedback, passed: result.passed });
       const c = current.current;
       onChange({
         ...c,
         progress: { ...c.progress, [nodeId]: result.progress },
+        notes: result.notes ?? c.notes,
+        adjustments: result.adjustments ?? c.adjustments,
       });
       return result.passed;
     } catch (e) {
@@ -289,9 +434,13 @@ export function CoursePlayer({
   }
   async function preview(nodes: LearningNode[]) {
     await action(async () => {
-      const p = await api<BranchPreview>("branches/preview", {
+      const c = current.current;
+      const p = await api<BranchPreview>("extensions/preview", {
         courseId: course.id,
         nodes,
+        afterId: c.currentNodeId,
+        baseRevision: c.revision,
+        depth: "foundation",
       });
       onChange({ ...current.current, preview: p });
       setHelp(false);
@@ -308,10 +457,57 @@ export function CoursePlayer({
       onHome();
     });
   }
+  async function saveLearningPosition() {
+    leavingPage.current = true;
+    const time =
+      shell.current?.querySelector("audio")?.currentTime ?? audioTime;
+    pauseAudio();
+    await leaveWorkspace.current?.();
+    // The selected page is authoritative, including before speech has cues.
+    // Mapping time zero through an ungenerated track would lose the saved page.
+    if (canEnter) await persist(time, {}, sectionId);
+    await progressQueue.current;
+  }
+  async function switchLearningRoute(
+    work: () => Promise<Snapshot>,
+    closeMap = true,
+    autoPlay = false,
+  ) {
+    try {
+      await saveLearningPosition();
+      const saved = await work();
+      const returningToMain = Boolean(
+        course.extensionSession && !saved.extensionSession,
+      );
+      setAutoPlayTarget(
+        autoPlay &&
+          !returningToMain &&
+          saved.currentNodeId !== course.currentNodeId
+          ? { courseId: saved.id, nodeId: saved.currentNodeId }
+          : undefined,
+      );
+      current.current = saved;
+      onChange(saved);
+      setReview(null);
+      setSelection({ nodeId: "", sectionId: "" });
+      setPractice(false);
+      setCheckResult(null);
+      if (closeMap) setMap(false);
+    } finally {
+      leavingPage.current = false;
+    }
+  }
+  async function leaveExtension() {
+    await action(() =>
+      switchLearningRoute(() =>
+        api<Snapshot>("extensions/leave", { courseId: course.id }),
+      ),
+    );
+  }
   const nextDisabled =
     busy ||
     Boolean(review) ||
-    allDone ||
+    (allDone && !course.extensionSession) ||
     Boolean(
       chapter?.sections.some(
         (s) => s.completion && !progress.done.includes(s.id),
@@ -346,10 +542,13 @@ export function CoursePlayer({
     <div
       ref={shell}
       className={
-        "course-shell paged-course " + (workOpen ? "with-workspace" : "")
+        `course-shell paged-course ${chromeStyles.shell} ${chromeHidden ? chromeStyles.hidden : ""} ` +
+        (workOpen ? "with-workspace" : "")
       }
+      data-controls-hidden={chromeHidden}
     >
-      <header className="course-header">
+      <div ref={setCaptionTarget} className={chromeStyles.captionLayer} />
+      <header className="course-header" inert={chromeHidden}>
         <button className="brand" disabled={busy} onClick={() => void home()}>
           Methelia
         </button>
@@ -452,10 +651,30 @@ export function CoursePlayer({
                 <span className="canvas-chapter">
                   {review
                     ? "複習"
-                    : `第 ${route.findIndex((n) => n.id === nodeId) + 1} 章`}{" "}
+                    : extension
+                      ? `延伸 ${extension.nodeIds.indexOf(nodeId) + 1} / ${extension.nodeIds.length}`
+                      : `第 ${route.findIndex((n) => n.id === nodeId) + 1} 章`}{" "}
                   · {node?.title}
                 </span>
                 <h1>{canEnter ? section?.title : node?.title}</h1>
+                {course.extensionSession && (
+                  <button
+                    className="text-button"
+                    disabled={
+                      busy ||
+                      ["queued", "generating"].includes(pkg?.status ?? "")
+                    }
+                    onClick={() => void leaveExtension()}
+                  >
+                    <ArrowLeft size={14} /> 暫停延伸，返回「
+                    {
+                      course.graph?.nodes.find(
+                        (n) => n.id === course.extensionSession?.returnNodeId,
+                      )?.title
+                    }
+                    」
+                  </button>
+                )}
               </div>
               {fullscreen && canEnter && (
                 <div className="canvas-page-actions">
@@ -508,8 +727,9 @@ export function CoursePlayer({
                   <div className="workspace-page" data-section={sectionId}>
                     <p className="workspace-instruction">{section?.body}</p>
                     <WorkspacePanel
-                      key={`${pkg!.id}:${sectionId}`}
+                      key={`${pkg!.id}:${sectionId}:${review ? "review" : "learning"}`}
                       courseId={course.id}
+                      localReview={Boolean(review)}
                       chapter={chapter!}
                       activeSectionId={sectionId}
                       embedded={Boolean(workspacePage)}
@@ -525,10 +745,11 @@ export function CoursePlayer({
                       registerLeave={(save) => {
                         leaveWorkspace.current = save;
                       }}
-                      workspace={course.workspace}
-                      onChange={(workspace) =>
-                        onChange({ ...current.current, workspace })
-                      }
+                      workspace={displayedWorkspace}
+                      onChange={(workspace) => {
+                        if (review) setReviewWorkspace(workspace);
+                        else onChange({ ...current.current, workspace });
+                      }}
                       onClose={() => setPractice(false)}
                       onError={onError}
                     />
@@ -563,50 +784,116 @@ export function CoursePlayer({
                     index={index}
                     hideHeading
                     done={progress.done.includes(sectionId)}
-                    files={course.workspace.files}
+                    files={displayedWorkspace.files}
                     onCheck={check}
                     onPractice={() => setPractice(true)}
                   />
                 )}
-                {lastPage && !review && !allDone && pendingPractice && (
-                  <div
-                    id="chapter-prerequisite"
-                    className="chapter-prerequisite"
-                    role="status"
-                  >
-                    {pendingPractice.id === sectionId ? (
-                      "完成本頁練習後，就能進入下一章。"
-                    ) : (
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void turnPage(
-                            chapter!.sections.findIndex(
-                              (s) => s.id === pendingPractice.id,
+                {checkResult?.key === activeKey.current &&
+                  checkResult.feedback &&
+                  !(
+                    checkResult.passed &&
+                    section?.component.type === "quiz.choice"
+                  ) && (
+                    <div
+                      ref={evidencePanel}
+                      className={
+                        "check-evidence " +
+                        (checkResult.passed ? "passed" : "needs-work")
+                      }
+                      role="status"
+                    >
+                      <strong>{checkResult.feedback.message}</strong>
+                      <div className="check-evidence-columns">
+                        {checkResult.feedback.expected !== undefined && (
+                          <div>
+                            <span>預期包含 / 目標狀態</span>
+                            <pre>{checkResult.feedback.expected}</pre>
+                          </div>
+                        )}
+                        {checkResult.feedback.actual !== undefined && (
+                          <div>
+                            <span>本次檢查的內容</span>
+                            <pre>{checkResult.feedback.actual}</pre>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                {lastPage && adjustment && (
+                  <div className="chapter-prerequisite" role="status">
+                    <p>{adjustment.reason}</p>
+                    <p>
+                      下一章「{nextNode?.title}」：
+                      {adjustment.reverted
+                        ? "維持原安排"
+                        : `建議${{ foundation: "先鞏固基礎", applied: "增加應用練習", advanced: "深入分析原理" }[adjustment.depth]}`}
+                    </p>
+                    <button
+                      disabled={busy}
+                      aria-pressed={Boolean(adjustment.reverted)}
+                      onClick={() =>
+                        void action(async () =>
+                          onChange(
+                            await api<Snapshot>(
+                              `courses/${course.id}/difficulty`,
+                              {
+                                adjustmentId: adjustment.id,
+                                keep: !adjustment.reverted,
+                              },
                             ),
-                          )
-                        }
-                      >
-                        先完成「{pendingPractice.title}」{" "}
-                        <ChevronLeft size={12} />
-                      </button>
-                    )}
+                          ),
+                        )
+                      }
+                    >
+                      {adjustment.reverted ? "採用建議安排" : "維持原安排"}
+                    </button>
                   </div>
                 )}
+                {lastPage &&
+                  !review &&
+                  (!allDone || course.extensionSession) &&
+                  pendingPractice && (
+                    <div
+                      id="chapter-prerequisite"
+                      className="chapter-prerequisite"
+                      role="status"
+                    >
+                      {pendingPractice.id === sectionId ? (
+                        "完成本頁練習後，就能進入下一章。"
+                      ) : (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void turnPage(
+                              chapter!.sections.findIndex(
+                                (s) => s.id === pendingPractice.id,
+                              ),
+                            )
+                          }
+                        >
+                          先完成「{pendingPractice.title}」{" "}
+                          <ChevronLeft size={12} />
+                        </button>
+                      )}
+                    </div>
+                  )}
               </div>
             )}
           </main>
-          <footer className="canvas-controls">
+          <footer className="canvas-controls" inert={chromeHidden}>
             {pkg ? (
               <>
                 <AudioControls
-                  key={`${pkg.id}:${sectionId}`}
+                  captionTarget={captionTarget}
+                  key={chapterAudio ? pkg.id : `${pkg.id}:${sectionId}`}
                   pkg={pkg}
                   sectionId={sectionId}
                   progress={progress}
                   paused={map || help || busy}
                   playbackRequest={playbackRequest}
                   onTime={narration}
+                  onNavigate={chapterAudio ? navigateAudio : undefined}
                   onSave={saveAudio}
                   onError={onError}
                   onPlayingChange={setAudioPlaying}
@@ -616,6 +903,34 @@ export function CoursePlayer({
                       <span className="audio-preparation-status">
                         {pkg.status === "failed" ? "章節未就緒" : "章節準備中"}
                       </span>
+                    ) : !chapterAudio &&
+                      !review &&
+                      !["pending", "generating"].includes(pkg.speech) ? (
+                      <button
+                        className="speech-prepare"
+                        disabled={busy}
+                        onClick={() =>
+                          void action(async () => {
+                            await saveLearningPosition();
+                            try {
+                              onChange(
+                                await api<Snapshot>(
+                                  `chapters/${pkg.id}/retry`,
+                                  {
+                                    courseId: course.id,
+                                    nodeId,
+                                    rebuildSpeech: true,
+                                  },
+                                ),
+                              );
+                            } finally {
+                              leavingPage.current = false;
+                            }
+                          })
+                        }
+                      >
+                        改用整章語音
+                      </button>
                     ) : (
                       (pkg.speech !== "ready" || progress.subtitleOnly) && (
                         <button
@@ -681,12 +996,14 @@ export function CoursePlayer({
                               await leaveWorkspace.current?.();
                               await progressQueue.current;
                               setReview(null);
+                              setAutoPlayTarget(undefined);
+                              setPlaybackRequest(undefined);
                             })
                           }
                         >
                           回到課程
                         </button>
-                      ) : allDone ? (
+                      ) : allDone && !course.extensionSession ? (
                         Object.keys(course.workspace.files).length ? (
                           <a
                             className="page-nav-button page-nav-next"
@@ -708,26 +1025,42 @@ export function CoursePlayer({
                             pendingPractice ? "chapter-prerequisite" : undefined
                           }
                           aria-label={
-                            nextNode ? `下一章：${nextNode.title}` : "完成課程"
+                            nextNode
+                              ? `下一章：${nextNode.title}`
+                              : course.extensionSession
+                                ? "完成延伸並返回主線"
+                                : "完成課程"
                           }
                           title={
-                            nextNode ? `下一章：${nextNode.title}` : "完成課程"
+                            nextNode
+                              ? `下一章：${nextNode.title}`
+                              : course.extensionSession
+                                ? "完成延伸並返回主線"
+                                : "完成課程"
                           }
                           onClick={() =>
-                            void action(async () => {
-                              pauseAudio();
-                              await leaveWorkspace.current?.();
-                              await progressQueue.current;
-                              onChange(
-                                await api<Snapshot>(
-                                  `courses/${course.id}/advance`,
-                                  {},
-                                ),
-                              );
-                            })
+                            void action(() =>
+                              switchLearningRoute(
+                                () =>
+                                  api<Snapshot>(
+                                    `courses/${course.id}/advance`,
+                                    {
+                                      nodeId,
+                                    },
+                                  ),
+                                true,
+                                true,
+                              ),
+                            )
                           }
                         >
-                          <span>{nextNode ? "下一章" : "完成課程"}</span>{" "}
+                          <span>
+                            {nextNode
+                              ? "下一章"
+                              : course.extensionSession
+                                ? "完成延伸並返回"
+                                : "完成課程"}
+                          </span>{" "}
                           <ChevronRight size={15} />
                         </button>
                       )
@@ -756,14 +1089,31 @@ export function CoursePlayer({
           course={course}
           busy={busy}
           onClose={() => setMap(false)}
-          onAdd={async (topic) => {
-            const preview = await api<BranchPreview>("branches/preview", {
+          onAdd={async (topic, afterId, depth) => {
+            const preview = await api<BranchPreview>("extensions/preview", {
               courseId: course.id,
               topic,
-              baseRevision: course.revision,
-              afterId: course.currentNodeId,
+              depth,
+              baseRevision: current.current.revision,
+              afterId,
             });
             onChange({ ...current.current, preview });
+          }}
+          onEnterExtension={async (extensionId) =>
+            switchLearningRoute(() =>
+              api<Snapshot>("extensions/enter", {
+                courseId: course.id,
+                extensionId,
+              }),
+            )
+          }
+          onSaveNote={async (nodeId, personal, baseRevision) => {
+            const saved = await api<Snapshot>(
+              `courses/${course.id}/notes/${nodeId}`,
+              { personal, baseRevision },
+              "PUT",
+            );
+            onChange({ ...current.current, notes: saved.notes });
           }}
           onCancelPreview={async () => {
             onChange(
@@ -775,23 +1125,62 @@ export function CoursePlayer({
           }}
           onReview={(id) =>
             void action(async () => {
+              setAutoPlayTarget(undefined);
+              setPlaybackRequest(undefined);
               pauseAudio();
               await leaveWorkspace.current?.();
               await progressQueue.current;
+              const c = current.current;
+              const reviewedExtension = c.graph?.extensions?.find((item) =>
+                item.nodeIds.includes(id),
+              );
+              const activeExtension = c.extensionSession?.extensionId;
+              const sourceWorkspace = reviewedExtension
+                ? reviewedExtension.id === activeExtension
+                  ? c.workspace
+                  : (c.extensionWorkspaces?.[reviewedExtension.id] ??
+                    emptyWorkspace())
+                : c.extensionSession
+                  ? c.extensionSession.mainWorkspace
+                  : c.workspace;
+              setReviewWorkspace(structuredClone(sourceWorkspace));
               setReview(id);
               setPractice(false);
               setMap(false);
             })
           }
-          onConfirm={async () => {
+          onLeaveExtension={async () => {
+            await leaveExtension();
+            setReview(null);
+            setMap(false);
+          }}
+          onResume={() =>
+            void action(async () => {
+              // Leaving review mode, not entering it: progress saves again.
+              setAutoPlayTarget(undefined);
+              setPlaybackRequest(undefined);
+              pauseAudio();
+              await leaveWorkspace.current?.();
+              await progressQueue.current;
+              setReview(null);
+              setPractice(false);
+              setMap(false);
+            })
+          }
+          onConfirm={async (enterNow = false) => {
             const p = course.preview!;
-            onChange(
-              await api<Snapshot>("branches/confirm", {
-                courseId: course.id,
-                previewId: p.id,
-                baseRevision: p.baseRevision,
-              }),
-            );
+            const confirm = () =>
+              api<Snapshot>(
+                p.extension ? "extensions/confirm" : "branches/confirm",
+                {
+                  courseId: course.id,
+                  previewId: p.id,
+                  baseRevision: p.baseRevision,
+                  ...(p.extension ? { enterNow } : {}),
+                },
+              );
+            if (p.extension && enterNow) await switchLearningRoute(confirm);
+            else onChange(await confirm());
           }}
         />
       )}
@@ -800,7 +1189,18 @@ export function CoursePlayer({
           course={course}
           sectionId={sectionId}
           onClose={() => setHelp(false)}
-          onMessages={(messages) => onChange({ ...current.current, messages })}
+          onMessages={(messages) => {
+            onChange({ ...current.current, messages });
+            void api<Snapshot>(`courses/${course.id}`)
+              .then((saved) =>
+                onChange({ ...current.current, notes: saved.notes }),
+              )
+              .catch((error) =>
+                onError(
+                  error instanceof Error ? error.message : "無法更新學習筆記",
+                ),
+              );
+          }}
           onPreview={(nodes) => void preview(nodes)}
           onError={onError}
         />

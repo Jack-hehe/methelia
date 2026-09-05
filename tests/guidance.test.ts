@@ -4,6 +4,16 @@ import { validateChapter } from "../src/core/protocol";
 import { guidanceFrame } from "../src/core/guidance";
 
 describe("prepared guided demonstrations", () => {
+  it("shows partial typing before the completed replacement", () => {
+    const chapter = demoChapter(demoGraph().nodes[0]);
+    const section = chapter.sections.find((s) => s.guide)!;
+    const cues = [{ sectionId: section.id, start: 0, end: 10 }];
+    const middle = guidanceFrame(chapter, cues, 4);
+    expect(middle.files).not.toEqual(chapter.workspaceSetup);
+    expect(middle.files[section.guide!.path]).not.toContain(
+      section.guide!.replacement,
+    );
+  });
   it("prepares a safe preview click for the JavaScript demonstration result", () => {
     const chapter = demoChapter(demoGraph().nodes.find((n) => n.id === "js")!);
     const section = chapter.sections.find((s) => s.guide)!;

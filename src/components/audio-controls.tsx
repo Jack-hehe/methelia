@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Play,
   Pause,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import type { PackageState, Progress } from "../core/state";
 import { pageTrack } from "../core/lesson-pages";
+import styles from "./audio-controls.module.css";
 const clock = (n: number) =>
   `${Math.floor(n / 60)}:${Math.floor(n % 60)
     .toString()
@@ -22,11 +24,13 @@ export function AudioControls({
   paused,
   playbackRequest,
   onTime,
+  onNavigate,
   onSave,
   onError,
   onPlayingChange,
   statusControl,
   trailingControls,
+  captionTarget,
 }: {
   pkg: PackageState;
   sectionId: string;
@@ -40,13 +44,26 @@ export function AudioControls({
     sectionId: string;
   };
   onTime: (time: number) => void;
+  onNavigate?: (time: number, play: boolean) => Promise<void>;
   onSave: (time: number) => void;
   onError: (e: string) => void;
   onPlayingChange?: (playing: boolean) => void;
   statusControl?: React.ReactNode;
   trailingControls?: React.ReactNode;
+  captionTarget?: HTMLDivElement | null;
 }) {
-  const track = pageTrack(pkg, sectionId);
+  const chapterMode = pkg.narrationMode === "chapter" && !pkg.pageAudio;
+  const page = pageTrack(pkg, sectionId);
+  const track = chapterMode
+    ? {
+        ...page,
+        start: 0,
+        end: Math.max(0, ...pkg.cues.map((c) => c.end)),
+        ready: pkg.speech === "ready" && pkg.cues.length > 0,
+        cues: pkg.cues,
+        captions: pkg.captions || [],
+      }
+    : page;
   const ref = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false),
     [time, setTime] = useState(track.start),
@@ -54,7 +71,16 @@ export function AudioControls({
     [rate, setRate] = useState(1),
     [muted, setMuted] = useState(false),
     [captions, setCaptions] = useState(true),
-    [metadataReady, setMetadataReady] = useState(false);
+    [metadataSource, setMetadataSource] = useState(""),
+    [navigating, setNavigating] = useState(false);
+  const source = `${pkg.id}:${track.url}`;
+  const metadataReady = metadataSource === source;
+  const navigationId = useRef(0);
+  const navigationActive = useRef(false);
+  const scrubbing = useRef(false);
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
+  const appliedRequest = useRef<number | undefined>(undefined);
   const lastSaved = useRef(0),
     alive = useRef(true);
   const enabled =
@@ -62,43 +88,148 @@ export function AudioControls({
     Boolean(pkg.chapter) &&
     track.ready &&
     !progress.subtitleOnly;
-  const end = pkg.pageAudio
-    ? duration || track.end
-    : Math.min(track.end, duration || track.end);
+  const end =
+    pkg.pageAudio || chapterMode
+      ? (metadataReady && duration) || track.end
+      : Math.min(track.end, duration || track.end);
   const limit = (value: number) => Math.max(track.start, Math.min(value, end));
+  const nextPageStart = chapterMode
+    ? pkg.cues.find(
+        (cue) => cue.sectionId !== sectionId && cue.start > page.start,
+      )?.start
+    : undefined;
+  // Stay inside this section even when adjacent aligned cues share a boundary.
+  const playbackEnd = Math.max(
+    page.start,
+    Math.min(
+      page.end || end,
+      end,
+      nextPageStart === undefined ? end : nextPageStart - 0.01,
+    ),
+  );
+  const pageLimit = (value: number) =>
+    Math.max(page.start, Math.min(value, playbackEnd));
+  const boundaryState = useRef({ playbackEnd, onTime, onSave });
+  boundaryState.current = { playbackEnd, onTime, onSave };
+  useEffect(() => {
+    if (!playing || !enabled || !metadataReady) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const check = () => {
+      const audio = ref.current;
+      if (
+        !audio ||
+        audio.paused ||
+        navigationActive.current ||
+        scrubbing.current
+      )
+        return;
+      const boundary = boundaryState.current;
+      const remaining =
+        (boundary.playbackEnd - audio.currentTime) / audio.playbackRate;
+      // timeupdate can be hundreds of milliseconds apart. Check independently,
+      // allowing a small scheduling margin before the next page's first word.
+      if (remaining <= 0.025) {
+        audio.pause();
+        audio.currentTime = boundary.playbackEnd;
+        setTime(boundary.playbackEnd);
+        boundary.onTime(boundary.playbackEnd);
+        boundary.onSave(boundary.playbackEnd);
+        return;
+      }
+      timer = setTimeout(check, Math.min(25, (remaining - 0.025) * 1000));
+    };
+    // Let the matching playback request seek before enforcing the new page.
+    timer = setTimeout(check, 0);
+    return () => clearTimeout(timer);
+  }, [playing, enabled, metadataReady, sectionId, source, playbackRequest?.id]);
   useEffect(() => {
     alive.current = true;
+    setMetadataSource("");
+    setDuration(0);
+    setPlaying(false);
+    setNavigating(false);
+    scrubbing.current = false;
+    navigationActive.current = false;
+    appliedRequest.current = undefined;
+    navigationId.current++;
     const audio = ref.current;
     return () => {
       alive.current = false;
       audio?.pause();
     };
-  }, [enabled, track.url]);
+  }, [enabled, source]);
   useEffect(() => {
     if (paused) ref.current?.pause();
   }, [paused]);
   useEffect(() => {
     if (
       !playbackRequest ||
+      appliedRequest.current === playbackRequest.id ||
       playbackRequest.packageId !== pkg.id ||
       playbackRequest.sectionId !== sectionId ||
       !enabled ||
       !metadataReady ||
+      (playbackRequest.play && paused) ||
       !ref.current
     )
       return;
+    appliedRequest.current = playbackRequest.id;
+    navigationId.current++;
+    navigationActive.current = false;
+    setNavigating(false);
     seek(playbackRequest.time);
     if (playbackRequest.play && !paused)
-      void ref.current.play().catch(() => onError("請按播放開始本頁解說。"));
+      void ref.current.play().catch(() => onError("請按播放開始解說。"));
     else ref.current.pause();
-  }, [playbackRequest?.id, metadataReady, enabled]);
-  function seek(value: number) {
+  }, [playbackRequest?.id, metadataReady, enabled, sectionId, paused]);
+  function seek(value: number, notify = true) {
     if (!ref.current) return;
     const safe = limit(value);
     ref.current.currentTime = safe;
     setTime(safe);
-    onTime(safe);
+    if (notify) onTime(safe);
   }
+  async function navigate(value: number) {
+    const audio = ref.current;
+    if (!audio || !enabled || !metadataReady) return;
+    navigationActive.current = true;
+    audio.pause();
+    const safe = limit(value);
+    const request = ++navigationId.current;
+    const originalSource = source;
+    setNavigating(true);
+    try {
+      await onNavigate?.(safe, false);
+      if (
+        !alive.current ||
+        sourceRef.current !== originalSource ||
+        request !== navigationId.current
+      )
+        return;
+      // onNavigate already persisted and synchronized the selected page. Do not
+      // report this as natural playback through a callback from the old page.
+      seek(safe, !onNavigate);
+      if (!onNavigate) onSave(safe);
+    } catch (error) {
+      if (alive.current && sourceRef.current === originalSource) {
+        setTime(audio.currentTime);
+        onError(
+          error instanceof Error ? error.message : "無法切換解說進度，請重試。",
+        );
+      }
+    } finally {
+      if (alive.current && request === navigationId.current) {
+        navigationActive.current = false;
+        setNavigating(false);
+      }
+    }
+  }
+  const markers = chapterMode
+    ? pkg.chapter?.sections.flatMap((section, index) => {
+        const cue = pkg.cues.find((item) => item.sectionId === section.id);
+        return cue ? [{ section, index, time: cue.start }] : [];
+      }) || []
+    : [];
   const text = track.captions.length
     ? track.captions.find((c) => time >= c.start && time < c.end)?.text
     : pkg.chapter?.script.find((s) => s.sectionId === sectionId)?.text;
@@ -106,27 +237,41 @@ export function AudioControls({
     <div className="audio-dock">
       {enabled && (
         <audio
+          key={source}
           ref={ref}
           src={track.url}
           preload="metadata"
           onLoadedMetadata={() => {
             const a = ref.current!;
-            const max = pkg.pageAudio
+            const measuredDuration = Number.isFinite(a.duration)
               ? a.duration
-              : Math.min(track.end, a.duration);
-            setDuration(a.duration);
+              : track.end;
+            const max =
+              pkg.pageAudio || chapterMode
+                ? measuredDuration
+                : Math.min(track.end, measuredDuration);
+            setDuration(measuredDuration);
             const restored =
-              progress.sectionId === sectionId ? progress.time : track.start;
+              chapterMode || progress.sectionId === sectionId
+                ? progress.time
+                : track.start;
             a.currentTime = Math.max(track.start, Math.min(restored, max));
+            a.playbackRate = rate;
+            a.muted = muted;
             setTime(a.currentTime);
             onTime(a.currentTime);
-            setMetadataReady(true);
+            setMetadataSource(source);
           }}
           onTimeUpdate={() => {
-            if (!alive.current) return;
+            if (!alive.current || scrubbing.current || navigationActive.current)
+              return;
             const a = ref.current!;
-            const safe = limit(a.currentTime);
-            if (a.currentTime >= end) {
+            // Paused timeline seeks can intentionally land in the silence
+            // between aligned sections. Keep the displayed and saved time exact.
+            const safe = a.paused
+              ? limit(a.currentTime)
+              : pageLimit(a.currentTime);
+            if (!a.paused && a.currentTime >= playbackEnd) {
               a.pause();
               if (a.currentTime !== safe) a.currentTime = safe;
             }
@@ -145,23 +290,34 @@ export function AudioControls({
             if (alive.current) {
               setPlaying(false);
               onPlayingChange?.(false);
-              onSave(limit(ref.current?.currentTime || track.start));
+              if (!navigationActive.current)
+                onSave(limit(ref.current?.currentTime ?? page.start));
             }
           }}
           onEnded={() => {
             setPlaying(false);
             onPlayingChange?.(false);
-            onTime(end);
+            onTime(playbackEnd);
           }}
-          onError={() => onError("本頁語音無法播放，請重整後重試。")}
+          onError={() => onError("語音無法播放，請重整後重試。")}
         />
       )}
-      {enabled && captions && text && (
-        <div className="subtitle-line" aria-live="off">
-          {text}
-        </div>
-      )}
-      <div className="timeline">
+      {enabled &&
+        captions &&
+        text &&
+        (captionTarget
+          ? createPortal(
+              <div className="subtitle-line" aria-live="off">
+                {text}
+              </div>,
+              captionTarget,
+            )
+          : captionTarget === undefined && (
+              <div className="subtitle-line" aria-live="off">
+                {text}
+              </div>
+            ))}
+      <div className={`timeline ${chapterMode ? styles.chapterTimeline : ""}`}>
         <input
           type="range"
           aria-label="解說進度"
@@ -170,19 +326,54 @@ export function AudioControls({
           max={Math.max(0.1, end - track.start)}
           value={Math.max(0, time - track.start)}
           step="0.1"
-          disabled={!enabled || !metadataReady}
-          onChange={(e) => seek(track.start + Number(e.target.value))}
+          disabled={!enabled || !metadataReady || navigating}
+          onPointerDown={(e) => {
+            scrubbing.current = true;
+            ref.current?.pause();
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerUp={(e) => {
+            if (!scrubbing.current) return;
+            scrubbing.current = false;
+            void navigate(track.start + Number(e.currentTarget.value));
+          }}
+          onPointerCancel={() => {
+            scrubbing.current = false;
+            setTime(ref.current?.currentTime || track.start);
+          }}
+          onChange={(e) => {
+            const target = track.start + Number(e.target.value);
+            if (scrubbing.current) setTime(target);
+            else void navigate(target);
+          }}
         />
+        {markers.map((marker) => (
+          <button
+            key={marker.section.id}
+            type="button"
+            className={styles.pageMarker}
+            data-page-marker={marker.section.id}
+            aria-label={`第 ${marker.index + 1} 頁：${marker.section.title}，${clock(marker.time)}`}
+            aria-current={sectionId === marker.section.id ? "step" : undefined}
+            title={`第 ${marker.index + 1} 頁 · ${marker.section.title} · ${clock(marker.time)}`}
+            style={{
+              left: `${Math.max(0, Math.min(100, (marker.time / (end || 1)) * 100))}%`,
+            }}
+            disabled={!enabled || !metadataReady || navigating}
+            onClick={() => void navigate(marker.time)}
+          />
+        ))}
       </div>
       <div className="audio-transport">
         <button
           className="play-button"
-          disabled={!enabled || !metadataReady || paused}
+          disabled={!enabled || !metadataReady || paused || navigating}
           aria-label={playing ? "暫停解說" : "播放解說"}
           onClick={() => {
             if (playing) ref.current?.pause();
             else {
-              if (time >= end - 0.05) seek(track.start);
+              if ((ref.current?.currentTime ?? time) >= playbackEnd - 0.05)
+                seek(page.start);
               void ref.current?.play().catch(() => onError("請再按一次播放。"));
             }
           }}
@@ -191,7 +382,10 @@ export function AudioControls({
         </button>
         <div className="audio-time-slot">
           {statusControl || (
-            <span className="audio-clock" aria-label="本頁解說時間">
+            <span
+              className="audio-clock"
+              aria-label={chapterMode ? "本章解說時間" : "本頁解說時間"}
+            >
               {clock(Math.max(0, time - track.start))}{" "}
               <span>/ {clock(Math.max(0, end - track.start))}</span>
             </span>
@@ -201,8 +395,8 @@ export function AudioControls({
           className="icon-button audio-rewind"
           aria-label="倒退十秒"
           title="倒退十秒"
-          disabled={!enabled}
-          onClick={() => seek(time - 10)}
+          disabled={!enabled || !metadataReady || navigating}
+          onClick={() => void navigate(time - 10)}
         >
           <SkipBack size={17} />
         </button>

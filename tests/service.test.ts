@@ -88,7 +88,8 @@ it("deduplicates course creation without generating a second course", () => {
 it("initializes new chapter packages for page audio and retains page-local progress evidence", () => {
   const { service, session, course } = setup();
   const pkg = service.getChapter(session, course.id, "web");
-  expect(pkg).toHaveProperty("pageAudio", {});
+  expect(pkg).toHaveProperty("narrationMode", "chapter");
+  expect(pkg.pageAudio).toBeUndefined();
   service.check(session, course.id, "check", 1);
   const progress = service.saveProgress(session, course.id, "web", {
     sectionId: "structure",

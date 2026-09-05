@@ -4,8 +4,13 @@ import { z } from "zod";
 import { zipSync, strToU8 } from "fflate";
 import { getStore } from "../../../server/db";
 import { LearningService } from "../../../server/service";
-import { generateHelp, modelConfigured } from "../../../server/model";
+import {
+  generateHelp,
+  generateExtension,
+  modelConfigured,
+} from "../../../server/model";
 import { nodeSchema } from "../../../core/protocol";
+import { learnerProfileSchema } from "../../../core/learner-profile";
 import { demoAccess, publicOrigin } from "../../../server/deployment";
 import { UsageLimitError } from "../../../server/usage";
 import { pageAudioArtifactKey } from "../../../server/page-audio";
@@ -97,6 +102,67 @@ async function handle(request: NextRequest) {
         body.mode,
         body.requestId,
         body.language,
+        body.mode === "live",
+      );
+    } else if (
+      path[0] === "courses" &&
+      path[1] &&
+      path[2] === "intake" &&
+      path.length === 3 &&
+      ["PUT", "POST"].includes(request.method)
+    ) {
+      const body = z
+        .object({
+          answers: learnerProfileSchema.partial(),
+          baseRevision: z.number().int().nonnegative(),
+        })
+        .strict()
+        .parse(data);
+      result = service.saveIntake(
+        session,
+        path[1],
+        body.answers,
+        body.baseRevision,
+        request.method === "POST",
+      );
+    } else if (
+      path[0] === "courses" &&
+      path[1] &&
+      path[2] === "notes" &&
+      path[3] &&
+      path.length === 4 &&
+      request.method === "PUT"
+    ) {
+      const body = z
+        .object({
+          personal: z.string().max(10000),
+          baseRevision: z.number().int().nonnegative(),
+        })
+        .strict()
+        .parse(data);
+      result = service.saveNote(
+        session,
+        path[1],
+        path[3],
+        body.personal,
+        body.baseRevision,
+      );
+    } else if (
+      path[0] === "courses" &&
+      path[1] &&
+      path[2] === "difficulty" &&
+      path.length === 3 &&
+      request.method === "POST"
+    ) {
+      const body = z
+        .object({ adjustmentId: short, keep: z.boolean() })
+        .strict()
+        .parse(data);
+      result = service.keepDifficulty(
+        session,
+        path[1],
+        body.adjustmentId,
+        body.keep,
       );
     } else if (
       path[0] === "courses" &&
@@ -119,9 +185,10 @@ async function handle(request: NextRequest) {
       path[0] === "courses" &&
       path[2] === "advance" &&
       request.method === "POST"
-    )
-      result = service.advance(session, path[1]);
-    else if (
+    ) {
+      const body = z.object({ nodeId: short.optional() }).parse(data);
+      result = service.advance(session, path[1], body.nodeId);
+    } else if (
       path[0] === "courses" &&
       path[2] === "retry" &&
       request.method === "POST"
@@ -191,13 +258,18 @@ async function handle(request: NextRequest) {
       request.method === "POST"
     ) {
       const body = courseBody
-        .extend({ sectionId: short, answer: z.number().int().optional() })
+        .extend({
+          sectionId: short,
+          answer: z.number().int().optional(),
+          nodeId: short.optional(),
+        })
         .parse(data);
       result = service.check(
         session,
         body.courseId,
         body.sectionId,
         body.answer,
+        body.nodeId,
       );
     } else if (
       path[0] === "workspace" &&
@@ -262,7 +334,9 @@ async function handle(request: NextRequest) {
         .parse(data);
       const c = service.owned(session, body.courseId);
       const canBranch = Boolean(
-        c.graph?.edges.some((e) => e.from === c.currentNodeId),
+        c.graph &&
+        (c.learningVersion === 1 ||
+          c.graph.edges.some((e) => e.from === c.currentNodeId)),
       );
       const reply =
         c.mode === "demo"
@@ -290,14 +364,131 @@ async function handle(request: NextRequest) {
               sectionId: body.sectionId,
             });
       result = service.appendMessages(session, c.id, [
-        { id: randomUUID(), role: "user", text: body.question },
+        {
+          id: randomUUID(),
+          role: "user",
+          text: body.question,
+          nodeId: c.currentNodeId,
+        },
         {
           id: randomUUID(),
           role: "assistant",
           text: reply.answer,
           nodes: canBranch ? reply.nodes : [],
+          nodeId: c.currentNodeId,
         },
       ]);
+    } else if (
+      path[0] === "extensions" &&
+      path[1] === "preview" &&
+      path.length === 2 &&
+      request.method === "POST"
+    ) {
+      const common = courseBody.extend({
+        depth: z.enum(["foundation", "applied", "advanced"]),
+        afterId: short,
+        baseRevision: z.number().int().nonnegative(),
+      });
+      const body = z
+        .union([
+          common.extend({ topic: z.string().trim().min(1).max(120) }).strict(),
+          common.extend({ nodes: z.array(nodeSchema).min(1).max(6) }).strict(),
+        ])
+        .parse(data);
+      const c = service.owned(session, body.courseId);
+      if (c.revision !== body.baseRevision)
+        throw new Error("Graph conflict: 學習路徑已更新，請重新預覽");
+      if (!c.graph || c.status !== "ready" || c.scopeAccepted === false)
+        throw new Error("課程範圍尚未準備完成");
+      const anchor = c.graph.nodes.find((node) => node.id === body.afterId);
+      if (!anchor) throw new Error("Node not found");
+      if (c.graph.nodes.length >= 50) throw new Error("延伸單元已達上限");
+      const topic =
+        "topic" in body
+          ? body.topic
+          : body.nodes
+              .map((node) => `${node.title}: ${node.objective}`)
+              .join("; ")
+              .slice(0, 2000);
+      const plan =
+        c.mode === "live"
+          ? await generateExtension({
+              topic,
+              depth: body.depth,
+              anchor,
+              graph: c.graph,
+              learnerProfile: c.learnerProfile,
+              language: c.language,
+            })
+          : {
+              title: topic.slice(0, 120),
+              reason: `體驗模式只示範從「${anchor.title}」延伸與返回的流程，教材固定為 HTML 編輯練習。若要製作「${topic.slice(0, 120)}」的專屬內容，請建立正式課程。`,
+              nodes: [
+                {
+                  id: "support-" + randomUUID(),
+                  title: topic.slice(0, 100),
+                  objective:
+                    "透過固定 HTML 編輯練習，體驗延伸單元與返回主線的流程",
+                  minutes: 5,
+                  kind: "support" as const,
+                  prerequisites: [anchor.id],
+                  environment: "web" as const,
+                  depth: body.depth,
+                  summary:
+                    "體驗教材使用固定 HTML 例子，尚未針對輸入主題生成內容。",
+                  keyConcepts: ["HTML 編輯", "延伸單元與主線的關係"],
+                  misconceptions: [],
+                  assessment: "完成固定 HTML 編輯練習後返回主線",
+                },
+              ],
+            };
+      result = service.previewExtension(session, c.id, plan.nodes, {
+        ...plan,
+        depth: body.depth,
+        afterId: body.afterId,
+        baseRevision: body.baseRevision,
+        returnNodeId: c.currentNodeId,
+      });
+    } else if (
+      path[0] === "extensions" &&
+      path[1] === "confirm" &&
+      path.length === 2 &&
+      request.method === "POST"
+    ) {
+      const body = courseBody
+        .extend({
+          previewId: short,
+          baseRevision: z.number().int().nonnegative(),
+          enterNow: z.boolean().optional(),
+        })
+        .strict()
+        .parse(data);
+      result = service.confirmExtension(
+        session,
+        body.courseId,
+        body.previewId,
+        body.baseRevision,
+        body.enterNow,
+      );
+    } else if (
+      path[0] === "extensions" &&
+      path[1] === "enter" &&
+      path.length === 2 &&
+      request.method === "POST"
+    ) {
+      const body = courseBody
+        .extend({ extensionId: short })
+        .strict()
+        .parse(data);
+      result = service.enterExtension(session, body.courseId, body.extensionId);
+    } else if (
+      path[0] === "extensions" &&
+      path[1] === "leave" &&
+      path.length === 2 &&
+      request.method === "POST"
+    ) {
+      const body = courseBody.strict().parse(data);
+      result = service.leaveExtension(session, body.courseId);
     } else if (
       path[0] === "branches" &&
       path[1] === "preview" &&

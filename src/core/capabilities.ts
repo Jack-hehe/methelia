@@ -19,6 +19,8 @@ export const learningCapabilities = {
   version: 2,
   templates: templateRegistry,
   components: {
+    "lesson.article":
+      "Non-interactive reading page: 1-4 concise paragraphs, one takeaway, optional figure with 2-5 labelled items (label, description) and caption, rendered as a progressive illustrated process. Use for explanations in any subject; not every page needs interaction.",
     "concept.canvas":
       "Select a card to compare concise explanations. variant=cards is subject independent; web.languages is an explicit HTML/CSS/JS experiment (exactly three cards in that order).",
     "steps.sequence":

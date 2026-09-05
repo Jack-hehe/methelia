@@ -1,0 +1,41 @@
+.chapterTimeline {
+  position: relative;
+  isolation: isolate;
+}
+
+.pageMarker {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 2px solid var(--text-muted, #747d8b);
+  border-radius: 50%;
+  background: var(--panel, #fff);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.pageMarker:first-of-type {
+  transform: translate(0, -50%);
+}
+
+.pageMarker[aria-current="step"] {
+  border-color: var(--accent, #6858d8);
+  background: var(--accent, #6858d8);
+}
+
+.pageMarker:hover:not(:disabled) {
+  box-shadow: 0 0 0 4px rgb(104 88 216 / 18%);
+}
+
+.pageMarker:focus-visible {
+  outline: 2px solid var(--accent, #6858d8);
+  outline-offset: 4px;
+}
+
+.pageMarker:disabled {
+  cursor: default;
+  opacity: 0.55;
+}

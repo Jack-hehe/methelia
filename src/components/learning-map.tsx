@@ -13,9 +13,23 @@ import {
   LoaderCircle,
   PanelRightOpen,
   PanelRightClose,
+  Info,
 } from "lucide-react";
-import type { Snapshot } from "../core/state";
-import { insertBranch, routeNodes } from "../core/graph";
+import type { LearningDepth, Snapshot } from "../core/state";
+import { addExtension, insertBranch, routeNodes } from "../core/graph";
+import { mapPositions } from "./learning-map-layout";
+import styles from "./learning-map.module.css";
+
+const depthLabels = {
+  foundation: "淺入門：能解釋基本概念",
+  applied: "能應用：能獨立完成任務",
+  advanced: "深入原理：能分析與比較方法",
+};
+// Same bounds as the help drawer, so both side panels behave alike.
+const MIN_DETAIL = 320,
+  MAX_DETAIL = 720,
+  DEFAULT_DETAIL = 440,
+  DETAIL_WIDTH_KEY = "methelia:map-detail-width";
 
 type Point = { x: number; y: number };
 type MapGesture = {
@@ -37,14 +51,30 @@ export function LearningMap({
   onAdd,
   onCancelPreview,
   onReview,
+  onResume,
+  onLeaveExtension,
+  onEnterExtension,
+  onSaveNote,
 }: {
   course: Snapshot;
   busy: boolean;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
-  onAdd: (topic: string) => Promise<void>;
+  onConfirm: (enterNow?: boolean) => Promise<void>;
+  onAdd: (
+    topic: string,
+    anchorId: string,
+    depth: LearningDepth,
+  ) => Promise<void>;
   onCancelPreview: () => Promise<void>;
   onReview: (id: string) => void;
+  onResume?: () => void;
+  onLeaveExtension?: () => Promise<void>;
+  onEnterExtension?: (extensionId: string) => Promise<void>;
+  onSaveNote?: (
+    nodeId: string,
+    text: string,
+    revision: number,
+  ) => Promise<void>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
@@ -53,6 +83,16 @@ export function LearningMap({
   const ignoreNodeClick = useRef(false);
   const addButton = useRef<HTMLButtonElement>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailWidth, setDetailWidth] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem(DETAIL_WIDTH_KEY));
+      if (stored >= MIN_DETAIL && stored <= MAX_DETAIL) return stored;
+    } catch {}
+    return DEFAULT_DETAIL;
+  });
+  const draggingDetail = useRef(false);
+  const [depth, setDepth] = useState<LearningDepth>("applied");
+  const [anchorId, setAnchorId] = useState(course.currentNodeId);
   const [adding, setAdding] = useState(false),
     [topic, setTopic] = useState(""),
     [submitting, setSubmitting] = useState(false),
@@ -66,15 +106,24 @@ export function LearningMap({
   const graph = useMemo(
     () =>
       course.preview
-        ? insertBranch(
-            course.graph!,
-            course.preview.afterId,
-            course.preview.nodes,
-          )
+        ? course.preview.extension
+          ? addExtension(
+              course.graph!,
+              course.preview.afterId,
+              course.preview.nodes,
+              course.preview.extension,
+            )
+          : insertBranch(
+              course.graph!,
+              course.preview.afterId,
+              course.preview.nodes,
+            )
         : course.graph!,
     [course.graph, course.preview],
   );
-  const nodes = routeNodes(graph);
+  const nodes = graph.nodes;
+  const mainNodes = routeNodes(graph);
+  const defaultPositions = useMemo(() => mapPositions(graph), [graph]);
   useEffect(() => {
     dialog.current?.showModal();
     const saved = localStorage.getItem("map-positions:" + course.id);
@@ -83,14 +132,11 @@ export function LearningMap({
         setPositions(JSON.parse(saved));
       } catch {}
     }
-    setScale(Math.min(1, (window.innerWidth - 120) / (nodes.length * 265)));
+    fit();
     return () => dialog.current?.close();
   }, []);
   const pos = (id: string) =>
-    positions[id] || {
-      x: nodes.findIndex((n) => n.id === id) * 265 + 50,
-      y: graph.nodes.find((n) => n.id === id)?.kind === "support" ? 360 : 190,
-    };
+    positions[id] || defaultPositions[id] || { x: 50, y: 190 };
   function beginGesture(e: React.PointerEvent<HTMLElement>, nodeId?: string) {
     if (e.button !== 0 || !e.isPrimary || gesture.current) return;
     if (!nodeId && e.target !== e.currentTarget) return;
@@ -178,10 +224,23 @@ export function LearningMap({
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [showDetails, selected]);
-  const currentNode = graph.nodes.find((n) => n.id === course.currentNodeId);
-  const canAdd =
-    Boolean(graph.edges.some((e) => e.from === course.currentNodeId)) &&
-    graph.nodes.length < 50;
+  const anchorNode = graph.nodes.find((n) => n.id === anchorId);
+  const canAdd = Boolean(node) && graph.nodes.length < 50;
+  // The checkpoint decides the wording: finished chapters are reviewed, the
+  // rest are resumed. Untouched chapters offer nothing to go back to.
+  const nodeDone = Boolean(node && course.completed.includes(node.id));
+  const isCurrentNode = Boolean(node && node.id === course.currentNodeId);
+  const isReturnNode = Boolean(
+    node && course.extensionSession?.returnNodeId === node.id,
+  );
+  const visited = Boolean(node && course.progress[node.id]);
+  function openAdd(id?: string) {
+    // The canvas plus button names its own node; the toolbar falls back to the selection.
+    setAnchorId(id ?? node?.id ?? course.currentNodeId);
+    setSelected(id ?? selected);
+    setAdding(true);
+    setError("");
+  }
   function closeAdd() {
     setAdding(false);
     setError("");
@@ -202,25 +261,36 @@ export function LearningMap({
   async function submitTopic() {
     if (!topic.trim()) return;
     await perform(async () => {
-      await onAdd(topic.trim());
+      await onAdd(topic.trim(), anchorId, depth);
       setAdding(false);
       setTopic("");
     });
   }
   const fit = () => {
-    setOffset({ x: 30, y: 40 });
-    setScale(
+    const points = nodes.map((n) => pos(n.id));
+    const left = Math.min(...points.map((p) => p.x)),
+      top = Math.min(...points.map((p) => p.y));
+    const width = Math.max(...points.map((p) => p.x)) - left + 215;
+    const height = Math.max(...points.map((p) => p.y)) - top + 140;
+    const nextScale = Math.max(
+      0.1,
       Math.min(
         1,
-        ((canvas.current?.clientWidth ?? window.innerWidth) - 100) /
-          (nodes.length * 265),
+        ((canvas.current?.clientWidth ?? window.innerWidth) - 60) / width,
+        ((canvas.current?.clientHeight ?? window.innerHeight) - 120) / height,
       ),
     );
+    setScale(nextScale);
+    setOffset({ x: 30 - left * nextScale, y: 40 - top * nextScale });
   };
   return (
     <dialog
       ref={dialog}
       className={"learning-map" + (showDetails ? " details-open" : "")}
+      // Canvas, add button and close button all offset from this one variable.
+      style={
+        { "--map-detail-width": `${detailWidth}px` } as React.CSSProperties
+      }
       aria-label="Learning Map"
       onCancel={(e) => {
         e.preventDefault();
@@ -230,8 +300,27 @@ export function LearningMap({
       }}
     >
       <header className="map-header">
-        <div>
+        <div className="map-title">
           <h2>Learning Map</h2>
+          <div className="map-title-meta">
+            <span>{graph.title}</span>
+            <details className={styles.legend}>
+              <summary aria-label="地圖狀態說明" title="地圖狀態說明">
+                <Info size={18} />
+              </summary>
+              <div>
+                <p>
+                  <BookOpen size={14} /> 正在學習
+                </p>
+                <p>
+                  <Check size={14} /> 已完成
+                </p>
+                <p>
+                  <GitBranch size={14} /> 補強／延伸支線（虛線）
+                </p>
+              </div>
+            </details>
+          </div>
         </div>
         <button
           className="close-map"
@@ -241,14 +330,6 @@ export function LearningMap({
           回到課程 <X size={19} />
         </button>
       </header>
-      <div className="map-subheader">
-        <span>{graph.title}</span>
-        <span>
-          <i className="legend current" /> 正在學習{" "}
-          <i className="legend complete" /> 已完成{" "}
-          <i className="legend support" /> 補強路徑
-        </span>
-      </div>
       <div
         ref={canvas}
         className="map-canvas"
@@ -271,10 +352,17 @@ export function LearningMap({
         >
           <svg
             width={nodes.length * 350 + 500}
-            height="1100"
+            height={Math.max(1100, 800 + (graph.extensions?.length ?? 0) * 200)}
             className="map-edges"
           >
-            {graph.edges.map((e) => {
+            {[
+              ...graph.edges.map((e) => ({ ...e, virtual: false })),
+              ...(graph.extensions ?? []).map((e) => ({
+                from: e.anchorId,
+                to: e.nodeIds[0],
+                virtual: true,
+              })),
+            ].map((e) => {
               const a = pos(e.from),
                 b = pos(e.to);
               return (
@@ -282,6 +370,7 @@ export function LearningMap({
                   key={e.from + e.to}
                   d={`M ${a.x + 215} ${a.y + 65} C ${a.x + 250} ${a.y + 65}, ${b.x - 35} ${b.y + 65}, ${b.x} ${b.y + 65}`}
                   className={
+                    e.virtual ||
                     graph.nodes.find((n) => n.id === e.to)?.kind === "support"
                       ? "branch-edge"
                       : ""
@@ -290,70 +379,129 @@ export function LearningMap({
               );
             })}
           </svg>
-          {nodes.map((n, i) => {
+          {nodes.map((n) => {
+            const extension = graph.extensions?.find((e) =>
+              e.nodeIds.includes(n.id),
+            );
             const p = pos(n.id),
               current = n.id === course.currentNodeId,
               done = course.completed.includes(n.id),
               preview = course.preview?.nodes.some((x) => x.id === n.id);
             return (
-              <button
+              <div
                 key={n.id}
-                ref={selected === n.id ? selectedElement : undefined}
-                aria-expanded={selected === n.id && showDetails}
-                aria-controls={
-                  selected === n.id && showDetails
-                    ? "learning-node-detail"
-                    : undefined
-                }
+                className="map-node-slot"
                 style={{ left: p.x, top: p.y }}
-                className={
-                  "map-node " +
-                  (current ? "current " : "") +
-                  (done ? "complete " : "") +
-                  (preview ? "proposed " : "") +
-                  (selected === n.id ? "selected" : "")
-                }
-                onPointerDown={(e) => beginGesture(e, n.id)}
-                onClick={(e) => {
-                  if (ignoreNodeClick.current && e.detail !== 0) {
-                    ignoreNodeClick.current = false;
-                    return;
-                  }
-                  setSelected(n.id);
-                  setDetailsOpen(true);
-                }}
               >
-                <span className="node-top">
-                  <span>
-                    {n.kind === "support" ? (
-                      <GitBranch size={17} />
-                    ) : done ? (
-                      <Check size={17} />
-                    ) : (
-                      <BookOpen size={17} />
-                    )}
+                <button
+                  ref={selected === n.id ? selectedElement : undefined}
+                  aria-expanded={selected === n.id && showDetails}
+                  aria-controls={
+                    selected === n.id && showDetails
+                      ? "learning-node-detail"
+                      : undefined
+                  }
+                  className={
+                    "map-node " +
+                    (current ? "current " : "") +
+                    (done ? "complete " : "") +
+                    (preview ? "proposed " : "") +
+                    (selected === n.id ? "selected" : "")
+                  }
+                  onPointerDown={(e) => beginGesture(e, n.id)}
+                  onClick={(e) => {
+                    if (ignoreNodeClick.current && e.detail !== 0) {
+                      ignoreNodeClick.current = false;
+                      return;
+                    }
+                    setSelected(n.id);
+                    setDetailsOpen(true);
+                  }}
+                >
+                  <span className="node-top">
+                    <span>
+                      {n.kind === "support" ? (
+                        <GitBranch size={17} />
+                      ) : done ? (
+                        <Check size={17} />
+                      ) : (
+                        <BookOpen size={17} />
+                      )}
+                    </span>
+                    <small>
+                      {preview
+                        ? "建議新增"
+                        : current
+                          ? "正在學習"
+                          : done
+                            ? "已完成"
+                            : extension
+                              ? "延伸單元"
+                              : `第 ${mainNodes.findIndex((x) => x.id === n.id) + 1} 章`}
+                    </small>
                   </span>
-                  <small>
-                    {preview
-                      ? "建議新增"
-                      : current
-                        ? "正在學習"
-                        : done
-                          ? "已完成"
-                          : `第 ${i + 1} 章`}
-                  </small>
-                </span>
-                <strong>{n.title}</strong>
-                <span className="node-meta">
-                  <Clock3 size={12} />
-                  {n.minutes} 分鐘
-                  <span>{n.kind === "support" ? "補強" : "主線課程"}</span>
-                </span>
-              </button>
+                  <strong>{n.title}</strong>
+                  <span className="node-meta">
+                    <Clock3 size={12} />
+                    {n.minutes} 分鐘
+                    <span>
+                      {extension
+                        ? "延伸"
+                        : n.kind === "support"
+                          ? "補強"
+                          : "主線課程"}
+                    </span>
+                  </span>
+                </button>
+                {selected === n.id && !adding && !course.preview && (
+                  <button
+                    className="map-node-add"
+                    aria-label={`從「${n.title}」延伸新增單元`}
+                    title={canAdd ? "從這裡延伸" : "已達節點上限"}
+                    disabled={!canAdd || busy || submitting}
+                    onClick={() => openAdd(n.id)}
+                  >
+                    <Plus size={16} />
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
       </div>
+      {node && showDetails && (
+        <div
+          className="node-detail-resize"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="調整側欄寬度"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            draggingDetail.current = true;
+          }}
+          onPointerMove={(event) => {
+            if (!draggingDetail.current) return;
+            setDetailWidth(
+              Math.min(
+                MAX_DETAIL,
+                Math.max(MIN_DETAIL, window.innerWidth - event.clientX),
+              ),
+            );
+          }}
+          onPointerUp={(event) => {
+            if (!draggingDetail.current) return;
+            draggingDetail.current = false;
+            event.currentTarget.releasePointerCapture(event.pointerId);
+            try {
+              localStorage.setItem(DETAIL_WIDTH_KEY, String(detailWidth));
+            } catch {}
+          }}
+          onPointerCancel={() => {
+            draggingDetail.current = false;
+          }}
+        />
+      )}
       {node && showDetails && (
         <aside
           id="learning-node-detail"
@@ -361,19 +509,133 @@ export function LearningMap({
           aria-labelledby="node-detail-title"
         >
           <h3 id="node-detail-title">{node.title}</h3>
+          <p className="section-label">預計學習內容</p>
           <p>{node.objective}</p>
-          <span className="quiet">
-            約 {node.minutes} 分鐘 · {node.prerequisites.length} 個先修節點
-          </span>
-          {course.completed.includes(node.id) && (
-            <button
-              className="text-button"
-              disabled={busy || submitting}
-              onClick={() => onReview(node.id)}
-            >
-              複習這一章 <ArrowRight size={14} />
-            </button>
+          {node.summary && <p>{node.summary}</p>}
+          {node.depth && <p>{depthLabels[node.depth]}</p>}
+          {!!node.keyConcepts?.length && (
+            <section className={styles.detailSection}>
+              <h4>核心概念</h4>
+              <ul>
+                {node.keyConcepts.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+            </section>
           )}
+          {!!node.misconceptions?.length && (
+            <section className={styles.detailSection}>
+              <h4>容易混淆</h4>
+              <ul>
+                {node.misconceptions.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {node.assessment && (
+            <section className={styles.detailSection}>
+              <h4>驗證方式</h4>
+              <p>{node.assessment}</p>
+            </section>
+          )}
+          <div className="node-detail-meta">
+            <p>
+              約 {node.minutes} 分鐘 · {node.prerequisites.length} 個先修節點
+            </p>
+            {!!node.prerequisites.length && (
+              <p>
+                先備：
+                {node.prerequisites
+                  .map(
+                    (id) => graph.nodes.find((n) => n.id === id)?.title ?? id,
+                  )
+                  .join("、")}
+              </p>
+            )}
+          </div>
+          <button
+            className="pill-button quiet-pill"
+            disabled={busy || submitting || !canAdd}
+            onClick={() => openAdd(node.id)}
+          >
+            <Plus size={15} /> 從這裡延伸
+          </button>
+          {(graph.extensions ?? [])
+            .filter(
+              (e) => e.anchorId === node.id || e.nodeIds.includes(node.id),
+            )
+            .map((extension) => (
+              <section className={styles.detailSection} key={extension.id}>
+                <h4>{extension.title}</h4>
+                <p>
+                  {extension.nodeIds.every((id) =>
+                    course.completed.includes(id),
+                  )
+                    ? "已完成延伸"
+                    : "可隨時進入或繼續"}
+                </p>
+                {onEnterExtension && (
+                  <button
+                    className="pill-button quiet-pill"
+                    disabled={
+                      busy ||
+                      submitting ||
+                      Boolean(course.extensionSession) ||
+                      extension.nodeIds.every((id) =>
+                        course.completed.includes(id),
+                      )
+                    }
+                    onClick={() =>
+                      void perform(() => onEnterExtension(extension.id))
+                    }
+                  >
+                    {course.extensionSession?.extensionId === extension.id
+                      ? "正在這條支線"
+                      : "進入延伸"}
+                    <ArrowRight size={14} />
+                  </button>
+                )}
+              </section>
+            ))}
+          {error && <p role="alert">{error}</p>}
+          <div className="node-detail-actions">
+            {nodeDone ? (
+              <button
+                className="pill-button"
+                disabled={busy || submitting}
+                onClick={() => onReview(node.id)}
+              >
+                複習這一章 <ArrowRight size={15} />
+              </button>
+            ) : isCurrentNode ? (
+              <button
+                className="pill-button"
+                disabled={busy || submitting || !onResume}
+                onClick={() => onResume?.()}
+              >
+                回到這一課 <ArrowRight size={15} />
+              </button>
+            ) : isReturnNode ? (
+              <button
+                className="pill-button"
+                disabled={busy || submitting || !onLeaveExtension}
+                onClick={() => void perform(() => onLeaveExtension!())}
+              >
+                回到這一課 <ArrowRight size={15} />
+              </button>
+            ) : visited ? (
+              <button
+                className="pill-button"
+                disabled={busy || submitting}
+                onClick={() => onReview(node.id)}
+              >
+                複習這一章 <ArrowRight size={15} />
+              </button>
+            ) : (
+              <p className="quiet">學到這裡之後就能進入這一章。</p>
+            )}
+          </div>
         </aside>
       )}
       <button
@@ -415,15 +677,53 @@ export function LearningMap({
       {course.preview ? (
         <div className="branch-confirm">
           <div>
-            <strong>節點預覽</strong>
+            <strong>{course.preview.extension?.title ?? "節點預覽"}</strong>
+            {course.preview.reason && <p>{course.preview.reason}</p>}
             <p>
               新增 {course.preview.nodes.length} 個節點，學完後回到「
               {
-                graph.nodes.find((n) => n.id === course.preview!.rejoinId)
-                  ?.title
+                graph.nodes.find(
+                  (n) =>
+                    n.id ===
+                    (course.preview!.extension
+                      ? (course.extensionSession?.returnNodeId ??
+                        course.currentNodeId)
+                      : course.preview!.rejoinId),
+                )?.title
               }
               」。
             </p>
+            {course.preview.extension && (
+              <div className={styles.previewDetails}>
+                <p>
+                  從「
+                  {
+                    graph.nodes.find((n) => n.id === course.preview!.afterId)
+                      ?.title
+                  }
+                  」延伸 · {depthLabels[course.preview.extension.depth]}
+                </p>
+                {course.preview.nodes.map((n) => (
+                  <p key={n.id}>
+                    <strong>{n.title}</strong> · {n.minutes} 分鐘
+                    <br />
+                    {n.objective}
+                    {n.prerequisites.length > 0 && (
+                      <>
+                        <br />
+                        先備：
+                        {n.prerequisites
+                          .map(
+                            (id) =>
+                              graph.nodes.find((x) => x.id === id)?.title ?? id,
+                          )
+                          .join("、")}
+                      </>
+                    )}
+                  </p>
+                ))}
+              </div>
+            )}
             {error && (
               <p className="map-form-error" role="alert">
                 {error}
@@ -441,10 +741,22 @@ export function LearningMap({
             <button
               className="primary-button"
               disabled={busy || submitting}
-              onClick={() => void perform(onConfirm)}
+              onClick={() => void perform(() => onConfirm(false))}
             >
-              確認新增 <Plus size={16} />
+              {course.preview.extension ? "保留稍後學習" : "確認新增"}{" "}
+              <Plus size={16} />
             </button>
+            {course.preview.extension && (
+              <button
+                className="primary-button"
+                disabled={
+                  busy || submitting || Boolean(course.extensionSession)
+                }
+                onClick={() => void perform(() => onConfirm(true))}
+              >
+                現在進入 <ArrowRight size={16} />
+              </button>
+            )}
           </div>
         </div>
       ) : adding ? (
@@ -456,8 +768,8 @@ export function LearningMap({
             void submitTopic();
           }}
         >
-          <h3 id="add-node-title">新增節點</h3>
-          <p>接在「{currentNode?.title}」之後</p>
+          <h3 id="add-node-title">新增延伸單元</h3>
+          <p>從「{anchorNode?.title}」延伸</p>
           <label htmlFor="node-topic">主題</label>
           <div className="node-topic-field">
             <input
@@ -471,6 +783,20 @@ export function LearningMap({
               onChange={(e) => setTopic(e.target.value)}
             />
           </div>
+          <label htmlFor="node-depth">想理解到什麼程度？</label>
+          <select
+            className={styles.depthSelect}
+            id="node-depth"
+            value={depth}
+            disabled={submitting || busy}
+            onChange={(e) => setDepth(e.target.value as LearningDepth)}
+          >
+            {Object.entries(depthLabels).map(([value, label]) => (
+              <option value={value} key={value}>
+                {label}
+              </option>
+            ))}
+          </select>
           {course.mode === "demo" && (
             <small>體驗模式的新增章節使用固定 HTML 範例。</small>
           )}
@@ -502,11 +828,8 @@ export function LearningMap({
           ref={addButton}
           className="map-add"
           disabled={busy || !canAdd}
-          title={!canAdd ? "目前章節後無法再插入節點" : undefined}
-          onClick={() => {
-            setAdding(true);
-            setError("");
-          }}
+          title={!canAdd ? "已達節點上限" : "從選取的節點建立延伸"}
+          onClick={() => openAdd()}
         >
           <Plus size={17} /> 新增節點
         </button>

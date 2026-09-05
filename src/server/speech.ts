@@ -7,13 +7,16 @@ const limits: Record<string, number> = {
   eleven_multilingual_v2: 10000,
   eleven_flash_v2_5: 40000,
 };
-export function speechConfig(pinned?: SpeechProfile) {
+export function speechConfig(
+  pinned?: SpeechProfile,
+  language?: "zh-TW" | "en",
+) {
   const key = process.env.ELEVENLABS_API_KEY?.trim();
   const voiceId = pinned?.voiceId || process.env.ELEVENLABS_VOICE_ID?.trim();
   const model =
     pinned?.model ||
     process.env.ELEVENLABS_MODEL?.trim() ||
-    "eleven_multilingual_v2";
+    "eleven_flash_v2_5";
   if (!key || !voiceId)
     throw new Error(
       "請先設定 ELEVENLABS_API_KEY 與 ELEVENLABS_VOICE_ID。仍可閱讀課程。 ",
@@ -25,6 +28,9 @@ export function speechConfig(pinned?: SpeechProfile) {
       "ELEVENLABS_MODEL 無效，請設定 eleven_multilingual_v2 或 eleven_flash_v2_5。",
     );
   const profile: SpeechProfile = { provider: "elevenlabs", voiceId, model };
+  if (model === "eleven_flash_v2_5" && (pinned?.languageCode || language))
+    profile.languageCode =
+      pinned?.languageCode || (language === "en" ? "en" : "zh");
   return { key, profile, limit: limits[model] };
 }
 
@@ -96,6 +102,7 @@ export async function synthesize(
         body: JSON.stringify({
           text,
           model_id: config.profile.model,
+          language_code: config.profile.languageCode,
           previous_text: context?.previousText,
           next_text: context?.nextText,
         }),

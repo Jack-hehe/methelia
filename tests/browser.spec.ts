@@ -34,10 +34,7 @@ test("text fields have no nested square focus border", async ({ page }) => {
   await question.focus();
   await expect(question).toHaveCSS("box-shadow", "none");
   await page.keyboard.press("Escape");
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" })
-    .click();
+  await page.getByLabel("下一頁", { exact: true }).click();
   const command = page.getByPlaceholder("輸入指令…");
   await command.focus();
   await expect(command).toHaveCSS("box-shadow", "none");
@@ -111,10 +108,7 @@ test("leaving practice for home saves the current editor draft", async ({
   const snapshot = await (
     await page.request.post("/api/sessions", { data: {} })
   ).json();
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" })
-    .click();
+  await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByPlaceholder("輸入指令…").fill("edit index.html");
   await page.getByPlaceholder("輸入指令…").press("Enter");
   await page
@@ -209,6 +203,9 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
   await page.getByRole("button", { name: "播放解說" }).click();
   await expect
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.paused))
+    .toBe(false);
+  await expect
+    .poll(() => audio.evaluate((a: HTMLAudioElement) => a.paused))
     .toBe(true);
   await expect(page.locator("[data-section]")).toHaveAttribute(
     "data-section",
@@ -216,12 +213,11 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
   );
   await page.getByLabel("下一頁", { exact: true }).click();
   await expect
-    .poll(() => audio.evaluate((a: HTMLAudioElement) => a.currentTime))
-    .toBe(1);
-  await expect
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.paused))
-    .toBe(true);
-  await page.getByRole("button", { name: "播放解說" }).click();
+    .toBe(false);
+  expect(
+    await audio.evaluate((a: HTMLAudioElement) => a.currentTime),
+  ).toBeGreaterThanOrEqual(1);
   await expect(
     page.getByRole("region", { name: "實作區", exact: true }),
   ).toBeVisible();
@@ -254,9 +250,11 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
   await expect
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.paused))
     .toBe(true);
-  await expect(
-    page.getByRole("button", { name: "自己試試", exact: true }),
-  ).toHaveClass(/studio-selected/);
+  await expect(page.locator("[data-section]")).toHaveAttribute(
+    "data-section",
+    "structure",
+  );
+  await page.getByRole("button", { name: "自己試試", exact: true }).click();
   await expect(
     preview.getByRole("heading", { name: "我的第一個網站" }),
   ).toBeVisible();
@@ -282,11 +280,11 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.readyState))
     .toBeGreaterThanOrEqual(2);
   await expect
-    .poll(() => audio.evaluate((a: HTMLAudioElement) => a.currentTime))
-    .toBe(0);
-  await expect
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.paused))
-    .toBe(true);
+    .toBe(false);
+  expect(
+    await audio.evaluate((a: HTMLAudioElement) => a.currentTime),
+  ).toBeLessThan(3);
   await expect(
     page.getByRole("region", { name: "實作區", exact: true }),
   ).toHaveCount(0);
@@ -323,7 +321,7 @@ test("chapter and workspace reads enforce session ownership", async ({
     await other.dispose();
   }
 });
-test("learn, inspect map, practice, add branch, and resume", async ({
+test("learn, inspect map, enter an optional extension, practice and resume", async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -350,23 +348,15 @@ test("learn, inspect map, practice, add branch, and resume", async ({
   await page.getByPlaceholder("哪個地方還不太懂？").fill("我不懂 HTML 標籤");
   await page.getByRole("button", { name: "送出問題" }).click();
   await page.getByRole("button", { name: "預覽補強路徑" }).click();
-  await page.getByRole("button", { name: "確認新增" }).click();
-  // The proposed node was already visible before confirmation. Wait for the
-  // transaction to finish before exercising Escape (disabled while pending).
-  await expect(
-    page.getByRole("button", { name: "回到課程", exact: true }),
-  ).toBeEnabled();
-  await expect(page.getByText("HTML 標籤與元素").first()).toBeVisible();
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: /下一章：/ }).click();
+  await page.getByRole("button", { name: "現在進入", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Learning Map" })).toHaveCount(
+    0,
+  );
   await expect(page.locator("[data-section]").first()).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "HTML 標籤與元素", exact: true }).first(),
+    page.getByRole("heading", { name: /HTML 標籤與元素/ }).first(),
   ).toBeVisible();
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" })
-    .click();
+  await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByPlaceholder("輸入指令…").fill("edit index.html");
   await page.getByPlaceholder("輸入指令…").press("Enter");
   const editor = page.getByRole("textbox", { name: "程式碼編輯器" });
@@ -383,10 +373,6 @@ test("learn, inspect map, practice, add branch, and resume", async ({
       .getByRole("heading", { name: "Hello Methelia" }),
   ).toBeVisible();
   await page.reload();
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" })
-    .click();
   await page.getByPlaceholder("輸入指令…").fill("edit index.html");
   await page.getByPlaceholder("輸入指令…").press("Enter");
   await expect(page.getByRole("textbox", { name: "程式碼編輯器" })).toHaveValue(
@@ -416,10 +402,6 @@ test("practice has left live preview, right terminal, and an isolated guided dem
   const map = page.getByRole("button", { name: "開啟 Learning Map" });
   expect((await map.boundingBox())!.x).toBeGreaterThan(1100);
   await page.getByLabel("下一頁", { exact: true }).click();
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" })
-    .click();
   const preview = page.locator('iframe[title="實作網站預覽"]');
   const terminal = page.getByRole("region", { name: "Terminal" });
   const left = (await preview.boundingBox())!;

@@ -2,12 +2,7 @@ import { Store } from "./db";
 import { LearningService } from "./service";
 import { generateGraph, generateChapter } from "./model";
 import { synthesize, speechConfig } from "./speech";
-import {
-  pageAudioArtifactKey,
-  pageAudioForChapter,
-  pageAudioReady,
-  hasLegacySpeech,
-} from "./page-audio";
+import { useChapterNarration } from "./page-audio";
 const store = new Store();
 const service = new LearningService(store);
 type Job = {
@@ -24,93 +19,15 @@ function activePackage(courseId: string, packageId: string) {
     ? store.getPackage(packageId)
     : null;
 }
-async function synthesizePages(courseId: string, packageId: string) {
-  let pkg = activePackage(courseId, packageId);
-  if (!pkg?.chapter || !pkg.pageAudio) return;
-  const chapter = pkg.chapter;
-  store.transaction(() => {
-    const current = activePackage(courseId, packageId);
-    if (!current?.chapter || !current.pageAudio) return;
-    current.pageAudio = pageAudioForChapter(current.chapter, current.pageAudio);
-    current.speech = pageAudioReady(current.chapter, current.pageAudio)
-      ? "ready"
-      : "generating";
-    current.error = undefined;
-    store.putPackage(courseId, current);
-  });
-  for (const [index, entry] of chapter.script.entries()) {
-    pkg = activePackage(courseId, packageId);
-    const page = pkg?.pageAudio?.[entry.sectionId];
-    if (!pkg?.chapter || !page) return;
-    const artifactKey = pageAudioArtifactKey(packageId, entry.sectionId);
-    const saved = store.db
-      .prepare("SELECT 1 FROM audio_artifacts WHERE id=? AND length(audio)>0")
-      .get(artifactKey);
-    if (page.status === "ready" && saved) continue;
-    if (page.status === "failed")
-      throw new Error(page.error || "Page audio generation failed");
-    try {
-      pkg = store.transaction(() => {
-        const current = activePackage(courseId, packageId);
-        const target = current?.pageAudio?.[entry.sectionId];
-        if (!current?.chapter || !target) return null;
-        if (hasLegacySpeech(current))
-          throw new Error(
-            "此章仍有舊語音，請手動重建章節語音以改用 ElevenLabs。",
-          );
-        current.speechProfile = speechConfig(current.speechProfile).profile;
-        target.status = "generating";
-        store.putPackage(courseId, current);
-        return current;
-      });
-      if (!pkg?.chapter) return;
-      const result = await synthesize(
-        { ...pkg.chapter, script: [entry] },
-        pkg.speechProfile,
-        {
-          previousText: chapter.script[index - 1]?.text,
-          nextText: chapter.script[index + 1]?.text,
-        },
-      );
-      store.transaction(() => {
-        const current = activePackage(courseId, packageId);
-        const target = current?.pageAudio?.[entry.sectionId];
-        if (!current || !target) return;
-        store.db
-          .prepare("INSERT OR REPLACE INTO audio_artifacts VALUES(?,?,?)")
-          .run(artifactKey, result.audio, "audio/mpeg");
-        target.cues = result.cues;
-        target.captions = result.captions;
-        target.status = "ready";
-        target.error = undefined;
-        current.speech = pageAudioReady(current.chapter!, current.pageAudio!)
-          ? "ready"
-          : "generating";
-        current.error = undefined;
-        store.putPackage(courseId, current);
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Page audio generation failed";
-      store.transaction(() => {
-        const current = activePackage(courseId, packageId);
-        const target = current?.pageAudio?.[entry.sectionId];
-        if (!current || !target) return;
-        target.status = "failed";
-        target.error = message;
-        current.speech = "failed";
-        current.error = message;
-        store.putPackage(courseId, current);
-      });
-      throw error;
-    }
-  }
-}
 async function work(job: Job) {
   const course = store.getCourse(job.course_id);
   if (!course) return;
   if (job.kind === "graph") {
-    const graph = await generateGraph(course.goal, course.language);
+    const graph = await generateGraph(
+      course.goal,
+      course.language,
+      course.learnerProfile,
+    );
     store.transaction(() => {
       const c = store.getCourse(course.id);
       if (!c || c.graph) return;
@@ -147,6 +64,8 @@ async function work(job: Job) {
       graph: course.graph,
       completed: course.completed,
       language: course.language,
+      learnerProfile: course.learnerProfile,
+      attempts: course.attempts,
     });
     if (chapter.nodeId !== node.id || chapter.objective !== node.objective)
       throw new Error("生成章節與學習目標不一致");
@@ -156,8 +75,10 @@ async function work(job: Job) {
       pkg.chapter = chapter;
       pkg.status = "ready";
       pkg.speech = "not_requested";
-      pkg.pageAudio = pageAudioForChapter(chapter);
+      pkg.narrationMode = "chapter";
+      delete pkg.pageAudio;
       store.putPackage(c.id, pkg);
+      service.refreshNote(c, nodeId);
       if (c.currentNodeId === nodeId) {
         service.initialize(c, chapter);
         service.scheduleSpeech(c, pkg);
@@ -176,10 +97,8 @@ async function work(job: Job) {
     return;
   }
   if (!pkg.chapter) return;
-  if (pkg.pageAudio) {
-    await synthesizePages(course.id, pkg.id);
-    return;
-  }
+  // Ready page packages remain playable until an explicit rebuild.
+  if (pkg.pageAudio && pkg.speech === "ready") return;
   // Recovered/duplicate deliveries must reuse an already committed audio package.
   if (
     pkg.speech === "ready" &&
@@ -193,11 +112,11 @@ async function work(job: Job) {
     const active = store.transaction(() => {
       const current = activePackage(course.id, pkg.id);
       if (!current) return null;
-      if (hasLegacySpeech(current))
-        throw new Error(
-          "此章仍有舊語音，請手動重建章節語音以改用 ElevenLabs。",
-        );
-      current.speechProfile = speechConfig(current.speechProfile).profile;
+      useChapterNarration(current);
+      current.speechProfile = speechConfig(
+        current.speechProfile,
+        course.language || "zh-TW",
+      ).profile;
       current.speech = "generating";
       store.putPackage(course.id, current);
       return current;
@@ -235,13 +154,13 @@ process.on("SIGTERM", () => {
   stop = true;
 });
 console.log("Methelia generation worker ready");
-async function lane(kind: "content" | "speech") {
+async function lane(kind: "content" | "prefetch" | "speech") {
   while (!stop) {
     const lease = Date.now() + 240000;
     const job = store.transaction(() => {
       const row = store.db
         .prepare(
-          `SELECT j.id,j.course_id,j.package_id,j.kind FROM generation_jobs j LEFT JOIN courses c ON c.id=j.course_id WHERE (j.status='queued' OR (j.status='working' AND j.lease<?)) AND ${kind === "speech" ? "j.kind='speech'" : "j.kind IN ('graph','chapter')"} ORDER BY CASE WHEN j.kind='graph' THEN 0 WHEN j.package_id=json_extract(c.data, '$.chapterIds.' || json_quote(json_extract(c.data, '$.currentNodeId'))) THEN 1 ELSE 2 END,j.rowid LIMIT 1`,
+          `SELECT j.id,j.course_id,j.package_id,j.kind FROM generation_jobs j LEFT JOIN courses c ON c.id=j.course_id WHERE (j.status='queued' OR (j.status='working' AND j.lease<?)) AND ${kind === "speech" ? "j.kind='speech'" : kind === "prefetch" ? "j.kind='chapter' AND c.id IS NOT NULL AND j.package_id != COALESCE(json_extract(c.data, '$.chapterIds.' || json_quote(json_extract(c.data, '$.currentNodeId'))), '')" : "(j.kind='graph' OR (j.kind='chapter' AND (c.id IS NULL OR j.package_id = json_extract(c.data, '$.chapterIds.' || json_quote(json_extract(c.data, '$.currentNodeId'))))))"} ORDER BY CASE WHEN j.kind='graph' THEN 0 WHEN j.package_id=json_extract(c.data, '$.chapterIds.' || json_quote(json_extract(c.data, '$.currentNodeId'))) THEN 1 ELSE 2 END,j.rowid LIMIT 1`,
         )
         .get(Date.now()) as Job | undefined;
       if (row)
@@ -301,6 +220,6 @@ async function lane(kind: "content" | "speech") {
     }
   }
 }
-// One bounded lane for content and one for narration, sharing the same durable queue.
-await Promise.all([lane("content"), lane("speech")]);
+// Reserve a foreground lane: a speculative chapter cannot block the learner's request.
+await Promise.all([lane("content"), lane("prefetch"), lane("speech")]);
 store.db.close();

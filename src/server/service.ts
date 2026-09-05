@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Store } from "./db";
 import { demoGraph, demoChapter } from "../core/fixtures";
 import { speechConfig } from "./speech";
-import { hasLegacySpeech, pageAudioForChapter } from "./page-audio";
+import { checkFeedback } from "../core/check-feedback";
+import { useChapterNarration } from "./page-audio";
 import {
   emptyWorkspace,
   normalizePath,
@@ -10,7 +11,15 @@ import {
   saveFiles,
   mergeStarterFiles,
 } from "../core/workspace";
-import { insertBranch, routeNodes } from "../core/graph";
+import {
+  insertBranch,
+  routeNodes,
+  addExtension,
+  nextLearningNode,
+} from "../core/graph";
+import { learnerProfileSchema } from "../core/learner-profile";
+import { learningNote } from "../core/learning-notes";
+import { recommendDepth } from "../core/adaptive-learning";
 import {
   nodeSchema,
   chapterEnvironment,
@@ -24,6 +33,8 @@ import type {
   PackageState,
   Message,
   Progress,
+  LearnerProfile,
+  LearningDepth,
 } from "../core/state";
 export const nodeHash = (node: LearningNode) =>
   createHash("sha256").update(JSON.stringify(node)).digest("hex");
@@ -126,6 +137,7 @@ export class LearningService {
     mode: "demo" | "live",
     requestId: string,
     language: "zh-TW" | "en" = "zh-TW",
+    intake = false,
   ): Snapshot {
     if (!goal.trim() || goal.length > 1500)
       throw new Error("請輸入 1–1500 字的學習目標");
@@ -158,7 +170,16 @@ export class LearningService {
         language,
         scopeAccepted: true,
         mode,
-        status: graph ? "ready" : "planning",
+        status: graph ? "ready" : intake ? "intake" : "planning",
+        ...(intake && mode === "live"
+          ? {
+              learningVersion: 1 as const,
+              intake: { answers: {}, revision: 0 },
+              attempts: [],
+              notes: {},
+              adjustments: [],
+            }
+          : {}),
         graph,
         revision: graph ? 1 : 0,
         currentNodeId: graph?.nodes[0].id || "",
@@ -176,12 +197,80 @@ export class LearningService {
         this.store.revision(course);
         this.prepare(course, course.currentNodeId);
         this.prefetch(course);
-      } else this.store.enqueue(`graph:${course.id}`, course.id, "graph");
+      } else if (!intake)
+        this.store.enqueue(`graph:${course.id}`, course.id, "graph");
       this.store.putCourse(course);
       return this.snapshot(course);
     });
   }
+  saveIntake(
+    session: string,
+    id: string,
+    answers: Partial<LearnerProfile>,
+    base: number,
+    finalize: boolean,
+  ) {
+    const patch = learnerProfileSchema.partial().parse(answers);
+    return this.mutate(session, id, (c) => {
+      if (!c.intake) throw new Error("Intake not found");
+      const merged = { ...c.intake.answers, ...patch };
+      if (c.status !== "intake") {
+        if (
+          finalize &&
+          JSON.stringify(learnerProfileSchema.parse(merged)) ===
+            JSON.stringify(c.learnerProfile)
+        )
+          return this.snapshot(c);
+        throw new Error("Intake conflict: 課程已開始，請保留目前設定");
+      }
+      if (c.intake.revision !== base)
+        throw new Error("Intake conflict: 回答已更新，請重新載入");
+      if (finalize) {
+        c.learnerProfile = learnerProfileSchema.parse(merged);
+        c.status = "planning";
+        this.store.enqueue(`graph:${c.id}`, c.id, "graph");
+      }
+      c.intake = { answers: merged, revision: base + 1 };
+      return this.snapshot(c);
+    });
+  }
+  refreshNote(c: Course, nodeId: string) {
+    const pkg = this.store.getPackage(c.chapterIds[nodeId]);
+    if (!pkg?.chapter) return;
+    c.notes ??= {};
+    c.notes[nodeId] = learningNote(c, nodeId, pkg);
+  }
+  saveNote(
+    session: string,
+    id: string,
+    nodeId: string,
+    text: string,
+    base: number,
+  ) {
+    if (text.length > 10000) throw new Error("筆記最多 10,000 字");
+    return this.mutate(session, id, (c) => {
+      if (!c.graph?.nodes.some((n) => n.id === nodeId))
+        throw new Error("Node not found");
+      this.refreshNote(c, nodeId);
+      c.notes ??= {};
+      const note = c.notes[nodeId] || {
+        summary: [],
+        checkpoints: [],
+        questions: [],
+        personal: "",
+        revision: 0,
+      };
+      if (note.revision !== base)
+        throw new Error(
+          "Note conflict: 筆記已更新，草稿仍保留，請重新載入後合併",
+        );
+      c.notes[nodeId] = { ...note, personal: text, revision: base + 1 };
+      return this.snapshot(c);
+    });
+  }
   prepare(c: Course, nodeId: string): PackageState {
+    if (c.learningVersion === 1 && nodeId !== c.currentNodeId)
+      throw new Error("一次只準備正在學習的章節");
     if (c.scopeAccepted === false)
       throw new Error("請先確認課程範圍，再準備章節。");
     const node = c.graph!.nodes.find((n) => n.id === nodeId);
@@ -204,7 +293,7 @@ export class LearningService {
       speech: chapter ? "failed" : "not_requested",
       chapter,
       cues: [],
-      pageAudio: {},
+      narrationMode: "chapter",
       ...(chapter
         ? { error: "體驗課程尚未合成語音，可使用完整文字模式。" }
         : {}),
@@ -218,7 +307,10 @@ export class LearningService {
       subtitleOnly: false,
       follow: true,
     };
-    if (chapter && nodeId === c.currentNodeId) this.initialize(c, chapter);
+    if (chapter && nodeId === c.currentNodeId) {
+      this.initialize(c, chapter);
+      this.refreshNote(c, nodeId);
+    }
     if (!chapter)
       this.store.enqueue(`chapter:${pkg.id}`, c.id, "chapter", pkg.id);
     return pkg;
@@ -257,10 +349,11 @@ export class LearningService {
       return;
     if (automatic && (c.mode !== "live" || pkg.speech === "failed")) return;
     try {
-      if (hasLegacySpeech(pkg))
-        throw new Error("舊語音仍保留，請使用重建章節語音切換供應商。");
-      pkg.speechProfile = speechConfig(pkg.speechProfile).profile;
-      pkg.pageAudio = pageAudioForChapter(pkg.chapter, pkg.pageAudio);
+      useChapterNarration(pkg);
+      pkg.speechProfile = speechConfig(
+        pkg.speechProfile,
+        c.language || "zh-TW",
+      ).profile;
       pkg.speech = "pending";
       pkg.error = undefined;
       this.store.putPackage(c.id, pkg);
@@ -285,6 +378,7 @@ export class LearningService {
     });
   }
   prefetch(c: Course) {
+    if (c.learningVersion === 1) return;
     const next = c.graph?.edges.find((e) => e.from === c.currentNodeId)?.to;
     if (next) this.prepare(c, next);
   }
@@ -324,8 +418,16 @@ export class LearningService {
       return result;
     });
   }
-  check(session: string, id: string, sectionId: string, answer?: number) {
+  check(
+    session: string,
+    id: string,
+    sectionId: string,
+    answer?: number,
+    nodeId?: string,
+  ) {
     return this.mutate(session, id, (c) => {
+      if (nodeId && nodeId !== c.currentNodeId)
+        throw new Error("Chapter conflict: 學習位置已改變，請重新載入");
       const pkg = this.store.getPackage(c.chapterIds[c.currentNodeId]);
       const section = pkg?.chapter?.sections.find((s) => s.id === sectionId);
       if (!section?.completion) throw new Error("Checkpoint not found");
@@ -345,6 +447,26 @@ export class LearningService {
         passed = c.workspace.directories.includes(condition.path);
       if (condition.type === "cwd.equals")
         passed = c.workspace.cwd === condition.path;
+      if (!c.progress[c.currentNodeId].done.includes(sectionId)) {
+        c.attempts ??= [];
+        if (c.attempts.length >= 5000)
+          throw new Error("本課程已達作答紀錄上限");
+        const feedback = checkFeedback(section, c.workspace, passed, answer);
+        c.attempts.push({
+          nodeId: c.currentNodeId,
+          sectionId,
+          passed,
+          answer,
+          at: Date.now(),
+          usedHelp:
+            !!c.notes?.[c.currentNodeId]?.questions.length ||
+            c.messages.some(
+              (m) => m.nodeId === c.currentNodeId && m.role === "user",
+            ),
+          actual: feedback.actual?.slice(0, 4000),
+          expected: feedback.expected?.slice(0, 4000),
+        });
+      }
       if (passed) {
         const progress = c.progress[c.currentNodeId];
         progress.done = Array.from(new Set([...progress.done, sectionId]));
@@ -355,11 +477,21 @@ export class LearningService {
             JSON.stringify({ node: c.currentNodeId, sectionId, passed: true }),
           );
       }
-      return { passed, progress: c.progress[c.currentNodeId] };
+      this.refreshNote(c, c.currentNodeId);
+      this.recommendNext(c);
+      return {
+        passed,
+        progress: c.progress[c.currentNodeId],
+        notes: c.notes,
+        adjustments: c.adjustments,
+        feedback: checkFeedback(section, c.workspace, passed, answer),
+      };
     });
   }
-  advance(session: string, id: string) {
+  advance(session: string, id: string, nodeId?: string) {
     return this.mutate(session, id, (c) => {
+      if (nodeId && nodeId !== c.currentNodeId)
+        throw new Error("Chapter conflict: 學習位置已改變，請重新載入");
       const chapter = this.store.getPackage(
         c.chapterIds[c.currentNodeId],
       )?.chapter;
@@ -372,14 +504,215 @@ export class LearningService {
       )
         throw new Error("Complete the required practice first");
       c.completed = Array.from(new Set([...c.completed, c.currentNodeId]));
-      const next = c.graph!.edges.find((e) => e.from === c.currentNodeId)?.to;
+      this.refreshNote(c, c.currentNodeId);
+      const next = nextLearningNode(
+        c.graph!,
+        c.currentNodeId,
+        c.extensionSession?.extensionId,
+      );
       if (next) {
-        c.currentNodeId = next;
-        const pkg = this.prepare(c, next);
+        const adjustment = c.adjustments?.find(
+          (a) => a.fromNodeId === c.currentNodeId && a.nodeId === next.id,
+        );
+        if (
+          adjustment &&
+          !adjustment.reverted &&
+          !c.completed.includes(next.id) &&
+          !c.chapterIds[next.id]
+        ) {
+          next.depth = adjustment.depth;
+          c.revision++;
+          this.store.revision(c);
+        }
+        c.currentNodeId = next.id;
+        const pkg = this.prepare(c, next.id);
         if (pkg.chapter) this.initialize(c, pkg.chapter);
         this.scheduleSpeech(c, pkg);
         this.prefetch(c);
-      }
+      } else if (c.extensionSession) this.returnFromExtension(c);
+      return this.snapshot(c);
+    });
+  }
+  recommendNext(c: Course) {
+    if (c.learningVersion !== 1 || !c.graph) return;
+    const chapter = this.store.getPackage(
+      c.chapterIds[c.currentNodeId],
+    )?.chapter;
+    if (
+      !chapter ||
+      chapter.sections.some(
+        (s) => s.completion && !c.progress[c.currentNodeId].done.includes(s.id),
+      )
+    )
+      return;
+    const next = nextLearningNode(
+      c.graph,
+      c.currentNodeId,
+      c.extensionSession?.extensionId,
+    );
+    if (!next || c.chapterIds[next.id] || c.completed.includes(next.id)) return;
+    c.adjustments ??= [];
+    if (
+      c.adjustments.some(
+        (a) => a.fromNodeId === c.currentNodeId && a.nodeId === next.id,
+      )
+    )
+      return;
+    const depth = next.depth || c.learnerProfile?.depth || "foundation";
+    const suggestion = recommendDepth(
+      c.attempts || [],
+      c.currentNodeId,
+      depth,
+      c.language || "zh-TW",
+    );
+    if (suggestion)
+      c.adjustments.push({
+        id: randomUUID(),
+        fromNodeId: c.currentNodeId,
+        nodeId: next.id,
+        previousDepth: depth,
+        ...suggestion,
+      });
+  }
+  keepDifficulty(
+    session: string,
+    id: string,
+    adjustmentId: string,
+    keep: boolean,
+  ) {
+    return this.mutate(session, id, (c) => {
+      const a = c.adjustments?.find((a) => a.id === adjustmentId);
+      if (!a || a.fromNodeId !== c.currentNodeId || c.chapterIds[a.nodeId])
+        throw new Error("Adjustment conflict: 下一章已開始或建議已過期");
+      a.reverted = keep;
+      return this.snapshot(c);
+    });
+  }
+  previewExtension(
+    session: string,
+    id: string,
+    nodes: LearningNode[],
+    plan: {
+      title: string;
+      depth: LearningDepth;
+      reason: string;
+      afterId: string;
+      baseRevision: number;
+      returnNodeId: string;
+    },
+  ) {
+    return this.mutate(session, id, (c) => {
+      if (!c.graph || c.status !== "ready" || c.scopeAccepted === false)
+        throw new Error("課程範圍尚未準備完成");
+      if (
+        c.revision !== plan.baseRevision ||
+        c.currentNodeId !== plan.returnNodeId
+      )
+        throw new Error("Graph conflict: 學習位置已更新，請重新預覽");
+      const extension = {
+        id: randomUUID(),
+        title: plan.title,
+        depth: plan.depth,
+      };
+      const accepted = nodes.map((n) => nodeSchema.parse(n));
+      addExtension(c.graph, plan.afterId, accepted, extension);
+      c.preview = {
+        id: randomUUID(),
+        baseRevision: c.revision,
+        afterId: plan.afterId,
+        rejoinId: c.currentNodeId,
+        nodes: accepted,
+        extension,
+        reason: plan.reason,
+      };
+      return c.preview;
+    });
+  }
+  confirmExtension(
+    session: string,
+    id: string,
+    previewId: string,
+    base: number,
+    enterNow = false,
+  ) {
+    return this.mutate(session, id, (c) => {
+      if (c.confirmed[previewId]) return this.snapshot(c);
+      const p = c.preview;
+      if (
+        !p?.extension ||
+        p.id !== previewId ||
+        base !== c.revision ||
+        p.rejoinId !== c.currentNodeId
+      )
+        throw new Error("Graph conflict: 延伸預覽已過期，請重新預覽");
+      c.graph = addExtension(c.graph!, p.afterId, p.nodes, p.extension);
+      c.revision++;
+      c.confirmed[previewId] = c.revision;
+      c.preview = null;
+      this.store.revision(c);
+      if (enterNow) this.startExtension(c, p.extension.id);
+      return this.snapshot(c);
+    });
+  }
+  startExtension(c: Course, extensionId: string) {
+    if (c.extensionSession) {
+      if (c.extensionSession.extensionId === extensionId) return;
+      throw new Error("請先返回主線，再進入另一個延伸單元");
+    }
+    if (c.scopeAccepted === false || c.status !== "ready")
+      throw new Error("請先確認課程範圍");
+    const ext = c.graph?.extensions?.find((e) => e.id === extensionId);
+    if (!ext) throw new Error("Extension not found");
+    if (!c.completed.includes(ext.anchorId) && ext.anchorId !== c.currentNodeId)
+      throw new Error("請先學習來源節點，再進入這個延伸單元");
+    if (
+      this.store.getPackage(c.chapterIds[c.currentNodeId])?.status !== "ready"
+    )
+      throw new Error("請等待目前章節準備完成，再切換單元");
+    c.extensionSession = {
+      extensionId,
+      returnNodeId: c.currentNodeId,
+      mainWorkspace: structuredClone(c.workspace),
+    };
+    const oldRevision = c.workspace.revision;
+    c.workspace = structuredClone(
+      c.extensionWorkspaces?.[extensionId] || emptyWorkspace(),
+    );
+    c.workspace.revision = Math.max(oldRevision, c.workspace.revision) + 1;
+    c.currentNodeId =
+      ext.nodeIds.find((id) => !c.completed.includes(id)) || ext.nodeIds[0];
+    const pkg = this.prepare(c, c.currentNodeId);
+    if (pkg.chapter) this.initialize(c, pkg.chapter);
+    this.scheduleSpeech(c, pkg);
+  }
+  enterExtension(session: string, id: string, extensionId: string) {
+    return this.mutate(session, id, (c) => {
+      this.startExtension(c, extensionId);
+      return this.snapshot(c);
+    });
+  }
+  returnFromExtension(c: Course) {
+    const active = c.extensionSession;
+    if (!active) return;
+    c.extensionWorkspaces ??= {};
+    c.extensionWorkspaces[active.extensionId] = structuredClone(c.workspace);
+    const revision = c.workspace.revision;
+    c.workspace = structuredClone(active.mainWorkspace);
+    c.workspace.revision = Math.max(c.workspace.revision, revision) + 1;
+    c.currentNodeId = active.returnNodeId;
+    c.extensionSession = undefined;
+    c.preview = null;
+  }
+  leaveExtension(session: string, id: string) {
+    return this.mutate(session, id, (c) => {
+      if (
+        c.extensionSession &&
+        ["queued", "generating"].includes(
+          this.store.getPackage(c.chapterIds[c.currentNodeId])?.status || "",
+        )
+      )
+        throw new Error("請等待延伸章節準備完成，再返回主線");
+      this.returnFromExtension(c);
       return this.snapshot(c);
     });
   }
@@ -400,7 +733,7 @@ export class LearningService {
       ) {
         const pkg = this.store.getPackage(c.chapterIds[nodeId]);
         if (
-          pkg?.pageAudio &&
+          (pkg?.pageAudio || pkg?.narrationMode === "chapter") &&
           !pkg.chapter?.sections.some(
             (section) => section.id === update.sectionId,
           )
@@ -497,6 +830,10 @@ export class LearningService {
   appendMessages(session: string, id: string, messages: Message[]) {
     return this.mutate(session, id, (c) => {
       c.messages = [...c.messages, ...messages].slice(-100);
+      for (const nodeId of new Set(
+        messages.map((m) => m.nodeId || c.currentNodeId),
+      ))
+        this.refreshNote(c, nodeId);
       return c.messages;
     });
   }
@@ -516,7 +853,7 @@ export class LearningService {
           throw new Error("請等待章節內容準備完成。");
         if (["pending", "generating"].includes(pkg.speech))
           throw new Error("語音仍在準備中，請稍後再試。");
-        const profile = speechConfig().profile;
+        const profile = speechConfig(undefined, c.language || "zh-TW").profile;
         const next: PackageState = {
           ...pkg,
           id: randomUUID(),
@@ -524,9 +861,10 @@ export class LearningService {
           error: undefined,
           cues: [],
           captions: [],
-          pageAudio: pageAudioForChapter(pkg.chapter),
+          narrationMode: "chapter",
           speechProfile: profile,
         };
+        delete next.pageAudio;
         // Keep the prior package/audio intact. A new ID prevents old tabs or
         // late worker responses from replacing the newly requested narrator.
         this.store.putPackage(id, next);
@@ -553,18 +891,11 @@ export class LearningService {
         pkg.status === "ready" &&
         ["failed", "not_requested"].includes(pkg.speech)
       ) {
-        if (hasLegacySpeech(pkg))
-          throw new Error(
-            "此章仍有舊語音，請使用「重建章節語音」改用 ElevenLabs，避免混用聲音。",
-          );
-        pkg.speechProfile = speechConfig(pkg.speechProfile).profile;
-        if (pkg.pageAudio) {
-          for (const page of Object.values(pkg.pageAudio))
-            if (page.status === "failed") {
-              page.status = "pending";
-              page.error = undefined;
-            }
-        }
+        useChapterNarration(pkg);
+        pkg.speechProfile = speechConfig(
+          pkg.speechProfile,
+          c.language || "zh-TW",
+        ).profile;
         pkg.speech = "pending";
         pkg.error = undefined;
         this.store.putPackage(id, pkg);

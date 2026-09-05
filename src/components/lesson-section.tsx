@@ -96,139 +96,196 @@ export function LessonSection({
       )}
       {!hideHeading && <h2>{section.title}</h2>}
       <p className="section-body">{section.body}</p>
-      {c.type === "concept.canvas" && (
-        <div className={webTrio ? "concept-board" : "teaching-concept"}>
-          <div
-            className={webTrio ? "concept-cards" : "teaching-concept-cards"}
-            role="group"
-            aria-label="選擇概念"
-          >
-            {c.cards.map((card, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-pressed={selected === i}
-                aria-controls={`concept-detail-${section.id}`}
-                onClick={() => {
-                  setSelected(i);
-                  setExampleClicked(false);
-                }}
-                className={
-                  (webTrio ? "concept-card " : "teaching-concept-card ") +
-                  card.accent +
-                  (selected === i ? " selected" : "")
-                }
-              >
-                <span className={webTrio ? "concept-icon" : "teaching-number"}>
-                  {webTrio ? (
-                    i === 0 ? (
-                      <Code2 />
-                    ) : i === 1 ? (
-                      <Palette />
-                    ) : (
-                      <Braces />
-                    )
-                  ) : (
-                    String(i + 1).padStart(2, "0")
-                  )}
-                </span>
-                <strong>{card.title}</strong>
-                {webTrio ? (
-                  <span>
-                    {i === 0
-                      ? "放什麼內容"
-                      : i === 1
-                        ? "長什麼樣子"
-                        : "點了會怎樣"}
-                  </span>
-                ) : (
-                  <ArrowUpRight size={16} aria-hidden="true" />
-                )}
-              </button>
+      {c.type === "lesson.article" && (
+        <article className="lesson-article">
+          <div className="lesson-prose">
+            {c.paragraphs.map((paragraph, i) => (
+              <p key={i}>{paragraph}</p>
             ))}
           </div>
-          {webTrio && (
-            <div className={"concept-stage stage-" + c.cards[selected].accent}>
-              <div className="mini-browser">
-                <div className="mini-browser-bar">
-                  <i />
-                  <i />
-                  <i />
-                  <span>your-idea.web</span>
-                </div>
-                <div className={"mini-site state-" + selected}>
-                  <span className="mini-eyebrow">網頁範例</span>
-                  <h3>我的網站</h3>
-                  <div className="mini-lines">
-                    <span />
-                    <span />
-                  </div>
-                  <button
-                    style={
-                      selected === 0 ? undefined : { background: exampleColor }
-                    }
-                    onClick={() => {
-                      if (selected === 2) setExampleClicked(true);
-                    }}
-                  >
-                    {exampleClicked ? "你好！" : "點擊按鈕"}{" "}
-                    <ArrowUpRight size={12} />
-                  </button>
-                </div>
-              </div>
-              <div className="concept-example-tools">
-                {selected === 1 && (
-                  <div
-                    className="color-choices"
-                    role="group"
-                    aria-label="試試按鈕顏色"
-                  >
-                    <span>試試換色</span>
-                    {[
-                      { label: "紫色按鈕", color: "#7355c9" },
-                      { label: "綠色按鈕", color: "#23856b" },
-                    ].map((option) => (
-                      <button
-                        key={option.color}
-                        aria-label={option.label}
-                        aria-pressed={exampleColor === option.color}
-                        style={{ background: option.color }}
-                        onClick={() => setExampleColor(option.color)}
-                      >
-                        {exampleColor === option.color && <Check size={14} />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <div className="code-sticker">
-                  {selected === 0
-                    ? "<h1>我的網站</h1>"
-                    : selected === 1
-                      ? `button { background: ${exampleColor}; }`
-                      : 'button.textContent = "你好！";'}
-                </div>
-              </div>
-            </div>
+          {c.figure && (
+            <figure className="lesson-figure">
+              <ol>
+                {c.figure.items.map((item, i) => (
+                  <li key={i} style={{ animationDelay: `${i * 180}ms` }}>
+                    <span className="figure-marker">{i + 1}</span>
+                    <strong>{item.label}</strong>
+                    <p>{item.description}</p>
+                    {i < c.figure!.items.length - 1 && (
+                      <ArrowRight aria-hidden="true" className="figure-arrow" />
+                    )}
+                  </li>
+                ))}
+              </ol>
+              <figcaption>{c.figure.caption}</figcaption>
+            </figure>
           )}
-          <div
-            id={`concept-detail-${section.id}`}
-            className={webTrio ? "concept-caption" : "teaching-concept-detail"}
-            aria-live="polite"
-          >
-            <Lightbulb size={18} />
+          <aside className="lesson-takeaway">
+            <Lightbulb size={20} />
             <div>
-              <strong>
-                {c.cards[selected].title}
-                {webTrio ? " 的工作" : ""}
-              </strong>
-              <p>{c.cards[selected].body}</p>
+              <strong>本頁重點</strong>
+              <p>{c.takeaway}</p>
             </div>
-            <span>
-              {selected + 1} / {c.cards.length}
-            </span>
-          </div>
-        </div>
+          </aside>
+        </article>
       )}
+      {c.type === "concept.canvas" &&
+        !webTrio &&
+        section.intent === "explain" && (
+          <div className="lesson-reading-cards">
+            {c.cards.map((card, i) => (
+              <article key={i}>
+                <span className="teaching-number">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <h3>{card.title}</h3>
+                <p>{card.body}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      {c.type === "concept.canvas" &&
+        (webTrio || section.intent !== "explain") && (
+          <div className={webTrio ? "concept-board" : "teaching-concept"}>
+            <div
+              className={webTrio ? "concept-cards" : "teaching-concept-cards"}
+              role="group"
+              aria-label="選擇概念"
+            >
+              {c.cards.map((card, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-pressed={selected === i}
+                  aria-controls={`concept-detail-${section.id}`}
+                  onClick={() => {
+                    setSelected(i);
+                    setExampleClicked(false);
+                  }}
+                  className={
+                    (webTrio ? "concept-card " : "teaching-concept-card ") +
+                    card.accent +
+                    (selected === i ? " selected" : "")
+                  }
+                >
+                  <span
+                    className={webTrio ? "concept-icon" : "teaching-number"}
+                  >
+                    {webTrio ? (
+                      i === 0 ? (
+                        <Code2 />
+                      ) : i === 1 ? (
+                        <Palette />
+                      ) : (
+                        <Braces />
+                      )
+                    ) : (
+                      String(i + 1).padStart(2, "0")
+                    )}
+                  </span>
+                  <strong>{card.title}</strong>
+                  {webTrio ? (
+                    <span>
+                      {i === 0
+                        ? "放什麼內容"
+                        : i === 1
+                          ? "長什麼樣子"
+                          : "點了會怎樣"}
+                    </span>
+                  ) : (
+                    <ArrowUpRight size={16} aria-hidden="true" />
+                  )}
+                </button>
+              ))}
+            </div>
+            {webTrio && (
+              <div
+                className={"concept-stage stage-" + c.cards[selected].accent}
+              >
+                <div className="mini-browser">
+                  <div className="mini-browser-bar">
+                    <i />
+                    <i />
+                    <i />
+                    <span>your-idea.web</span>
+                  </div>
+                  <div className={"mini-site state-" + selected}>
+                    <span className="mini-eyebrow">網頁範例</span>
+                    <h3>我的網站</h3>
+                    <div className="mini-lines">
+                      <span />
+                      <span />
+                    </div>
+                    <button
+                      style={
+                        selected === 0
+                          ? undefined
+                          : { background: exampleColor }
+                      }
+                      onClick={() => {
+                        if (selected === 2) setExampleClicked(true);
+                      }}
+                    >
+                      {exampleClicked ? "你好！" : "點擊按鈕"}{" "}
+                      <ArrowUpRight size={12} />
+                    </button>
+                  </div>
+                </div>
+                <div className="concept-example-tools">
+                  {selected === 1 && (
+                    <div
+                      className="color-choices"
+                      role="group"
+                      aria-label="試試按鈕顏色"
+                    >
+                      <span>試試換色</span>
+                      {[
+                        { label: "紫色按鈕", color: "#7355c9" },
+                        { label: "綠色按鈕", color: "#23856b" },
+                      ].map((option) => (
+                        <button
+                          key={option.color}
+                          aria-label={option.label}
+                          aria-pressed={exampleColor === option.color}
+                          style={{ background: option.color }}
+                          onClick={() => setExampleColor(option.color)}
+                        >
+                          {exampleColor === option.color && <Check size={14} />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="code-sticker">
+                    {selected === 0
+                      ? "<h1>我的網站</h1>"
+                      : selected === 1
+                        ? `button { background: ${exampleColor}; }`
+                        : 'button.textContent = "你好！";'}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div
+              id={`concept-detail-${section.id}`}
+              className={
+                webTrio ? "concept-caption" : "teaching-concept-detail"
+              }
+              aria-live="polite"
+            >
+              <Lightbulb size={18} />
+              <div>
+                <strong>
+                  {c.cards[selected].title}
+                  {webTrio ? " 的工作" : ""}
+                </strong>
+                <p>{c.cards[selected].body}</p>
+              </div>
+              <span>
+                {selected + 1} / {c.cards.length}
+              </span>
+            </div>
+          </div>
+        )}
       {sequence && (
         <div
           className={

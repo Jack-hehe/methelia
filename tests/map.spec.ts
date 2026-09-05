@@ -23,6 +23,7 @@ test("adding a topic stays in the map and changes the graph only after confirmat
   const topic = map.getByRole("textbox", { name: "主題", exact: true });
   await expect(topic).toBeFocused();
   await topic.fill("HTML 標籤與元素");
+  await map.getByLabel("想理解到什麼程度？").selectOption("foundation");
   await map.getByRole("button", { name: "預覽", exact: true }).click();
   await expect(map.locator(".map-node.proposed")).toContainText(
     "HTML 標籤與元素",
@@ -32,7 +33,7 @@ test("adding a topic stays in the map and changes the graph only after confirmat
   ).json()) as Snapshot;
   expect(staged.graph).toEqual(before.graph);
   expect(staged.messages).toEqual(before.messages);
-  await map.getByRole("button", { name: "確認新增", exact: true }).click();
+  await map.getByRole("button", { name: "保留稍後學習", exact: true }).click();
   await expect(
     map.getByRole("button", { name: "新增節點", exact: true }),
   ).toBeVisible();
@@ -41,8 +42,16 @@ test("adding a topic stays in the map and changes the graph only after confirmat
   ).json()) as Snapshot;
   expect(saved.graph!.nodes).toHaveLength(6);
   const added = saved.graph!.nodes.find((n) => n.title === "HTML 標籤與元素")!;
-  expect(saved.graph!.edges).toContainEqual({ from: "web", to: added.id });
-  expect(saved.graph!.edges).toContainEqual({ from: added.id, to: "html" });
+  expect(saved.graph!.edges).toEqual(before.graph!.edges);
+  expect(saved.graph!.extensions).toEqual([
+    expect.objectContaining({
+      anchorId: "web",
+      nodeIds: [added.id],
+      depth: "foundation",
+    }),
+  ]);
+  expect(added.prerequisites).toEqual(["web"]);
+  expect(saved.extensionSession).toBeUndefined();
   expect(saved.chapters.web).toEqual(before.chapters.web);
   expect(saved.workspace).toEqual(before.workspace);
   expect(saved.progress.web).toEqual(before.progress.web);
@@ -100,7 +109,7 @@ test("a failed node preview keeps the topic and an inline retryable error", asyn
   page,
 }) => {
   await start(page);
-  await page.route("**/api/branches/preview", (route) =>
+  await page.route("**/api/extensions/preview", (route) =>
     route.fulfill({
       status: 503,
       json: { error: "預覽暫時無法使用" },
@@ -113,7 +122,7 @@ test("a failed node preview keeps the topic and an inline retryable error", asyn
   await map.getByRole("button", { name: "預覽", exact: true }).click();
   await expect(map.getByRole("alert")).toHaveText("預覽暫時無法使用");
   await expect(topic).toHaveValue("HTML 表單");
-  await page.unroute("**/api/branches/preview");
+  await page.unroute("**/api/extensions/preview");
   await map.getByRole("button", { name: "預覽", exact: true }).click();
   await expect(map.locator(".map-node.proposed")).toContainText("HTML 表單");
 });
@@ -129,20 +138,22 @@ for (const action of ["confirm", "cancel"] as const) {
       .getByRole("textbox", { name: "主題", exact: true })
       .fill("HTML 標籤");
     await map.getByRole("button", { name: "預覽", exact: true }).click();
-    await page.route(`**/api/branches/${action}`, (route) =>
+    const endpoint =
+      action === "confirm" ? "extensions/confirm" : "branches/cancel";
+    await page.route(`**/api/${endpoint}`, (route) =>
       route.fulfill({
         status: 409,
         json: { error: "節點預覽已更新" },
       }),
     );
     const button = map.getByRole("button", {
-      name: action === "confirm" ? "確認新增" : "取消新增",
+      name: action === "confirm" ? "保留稍後學習" : "取消新增",
       exact: true,
     });
     await button.click();
     await expect(map.getByRole("alert")).toHaveText("節點預覽已更新");
     await expect(map.locator(".map-node.proposed")).toHaveCount(1);
-    await page.unroute(`**/api/branches/${action}`);
+    await page.unroute(`**/api/${endpoint}`);
     await button.click();
     await expect(map.locator(".map-node.proposed")).toHaveCount(0);
   });
@@ -158,17 +169,18 @@ test("topic previews reject empty input, stale cursors, and other sessions", asy
     topic: "HTML 表單",
     baseRevision: course.revision,
     afterId: "web",
+    depth: "foundation",
   };
   expect(
     (
-      await page.request.post("/api/branches/preview", {
+      await page.request.post("/api/extensions/preview", {
         data: { ...data, topic: "   " },
       })
     ).status(),
   ).toBe(400);
   expect(
     (
-      await page.request.post("/api/branches/preview", {
+      await page.request.post("/api/extensions/preview", {
         data: { ...data, baseRevision: 0 },
       })
     ).status(),
@@ -177,14 +189,14 @@ test("topic previews reject empty input, stale cursors, and other sessions", asy
     baseURL: new URL(page.url()).origin,
   });
   try {
-    expect((await other.post("/api/branches/preview", { data })).status()).toBe(
-      404,
-    );
+    expect(
+      (await other.post("/api/extensions/preview", { data })).status(),
+    ).toBe(404);
   } finally {
     await other.dispose();
   }
   const proposed = await (
-    await page.request.post("/api/branches/preview", { data })
+    await page.request.post("/api/extensions/preview", { data })
   ).json();
   expect(proposed.nodes[0].title).toBe("HTML 表單");
   expect(

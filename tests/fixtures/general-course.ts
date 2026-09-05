@@ -4,10 +4,14 @@ import type {
   LearningNode,
   LearningEnvironment,
 } from "../../src/core/protocol";
+import type { LearnerProfile } from "../../src/core/state";
 
 // Local model double: deliberately different content from the bundled website demo.
-export function generalGraph(environment: LearningEnvironment = "web"): Graph {
-  return {
+export function generalGraph(
+  environment: LearningEnvironment = "web",
+  profile?: LearnerProfile,
+): Graph {
+  const graph: Graph = {
     schemaVersion: 2,
     title: "Practice a new skill",
     outcome: "Explain and apply the first steps",
@@ -35,13 +39,33 @@ export function generalGraph(environment: LearningEnvironment = "web"): Graph {
     ],
     edges: [{ from: "web", to: "html" }],
   };
+  if (profile)
+    graph.nodes = graph.nodes.map((node, index) => ({
+      ...node,
+      depth: profile.depth,
+      summary: index
+        ? "Explain the observed result and apply it to a new example."
+        : "Compare a starting state with a small controlled change.",
+      keyConcepts: index
+        ? ["Evidence", "Transfer"]
+        : ["Observation", "Controlled change"],
+      misconceptions: [
+        "A different result always proves the proposed explanation.",
+      ],
+      assessment:
+        "Make a small change, inspect the result, and choose the supported explanation.",
+    }));
+  return graph;
 }
 
-export function generalChapter(node: LearningNode): Chapter {
+export function generalChapter(
+  node: LearningNode,
+  profile?: LearnerProfile,
+): Chapter {
   const environment = node.environment || "web";
   const path = environment === "python" ? "/main.py" : "/index.html";
   const code = environment === "python" ? "print(1 + 2)" : "<h1>Hello</h1>";
-  return {
+  const chapter: Chapter = {
     schemaVersion: 2,
     environment,
     nodeId: node.id,
@@ -103,6 +127,7 @@ export function generalChapter(node: LearningNode): Chapter {
                 path,
                 language: environment === "python" ? "python" : "html",
                 example: code,
+                ...(environment === "python" ? { expectedOutput: "5\n" } : {}),
               },
               completion: {
                 type: "file.includes",
@@ -132,4 +157,30 @@ export function generalChapter(node: LearningNode): Chapter {
       { sectionId: "check", text: "Choose the useful strategy." },
     ],
   };
+  if (profile && environment === "none") {
+    chapter.sections.push({
+      id: "transfer",
+      title: "Apply it to a new example",
+      body: "Two dough samples rise differently. To test whether warmth changes rising, keep the recipe and waiting time equal and change only temperature. Which comparison is useful?",
+      intent: "check",
+      template: "focus",
+      component: {
+        type: "quiz.choice",
+        question: "Which comparison isolates the effect of warmth?",
+        options: [
+          "Change the recipe and waiting time together",
+          "Keep the recipe and time equal; change only temperature",
+        ],
+        answer: 1,
+        explanation:
+          "Changing only temperature makes the comparison informative.",
+      },
+      completion: { type: "quiz" },
+    });
+    chapter.script.push({
+      sectionId: "transfer",
+      text: "Keep the recipe and time equal, then compare temperatures.",
+    });
+  }
+  return chapter;
 }

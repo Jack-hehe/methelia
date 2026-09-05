@@ -16,10 +16,6 @@ test("bottom controls span the canvas and keep page navigation visible in practi
     footer.getByRole("button", { name: "下一頁", exact: true }),
   ).toHaveText(/下一頁/);
   await footer.getByRole("button", { name: "下一頁", exact: true }).click();
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" })
-    .click();
   expect((await slider.boundingBox())!.width).toBeGreaterThan(1300);
   await page.getByRole("button", { name: "進入全螢幕", exact: true }).click();
   await expect
@@ -57,7 +53,7 @@ test("the last page identifies the next chapter and explains the practice gate",
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 4");
 });
 
-test("practice waits for an in-flight page change before opening", async ({
+test("page navigation waits for its save before opening the destination practice", async ({
   page,
 }) => {
   await page.goto("/");
@@ -80,17 +76,17 @@ test("practice waits for an in-flight page change before opening", async ({
   });
   await page.getByLabel("下一頁", { exact: true }).click();
   await intercepted;
-  const practice = page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" });
+  const next = page.getByLabel("下一頁", { exact: true });
   try {
-    await expect(practice).toBeDisabled();
+    await expect(next).toBeDisabled();
+    await expect(
+      page.getByRole("region", { name: "Terminal", exact: true }),
+    ).toHaveCount(0);
   } finally {
     release();
   }
   await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
-  await expect(practice).toBeEnabled();
-  await practice.click();
+  await expect(next).toBeEnabled();
   await expect(
     page.getByRole("region", { name: "Terminal", exact: true }),
   ).toBeVisible();

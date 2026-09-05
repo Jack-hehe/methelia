@@ -18,7 +18,7 @@ function silentWave(seconds: number) {
   return wav;
 }
 
-test("page audio uses independent tracks, stays on the page at the end and never autoplays on navigation", async ({
+test("legacy page audio retains independent tracks, pauses at the end and autoplays on navigation", async ({
   page,
 }) => {
   await page.request.post("/api/sessions", { data: {} });
@@ -133,13 +133,6 @@ test("page audio uses independent tracks, stays on the page at the end and never
   await expect
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.readyState))
     .toBeGreaterThanOrEqual(2);
-  expect(
-    await audio.evaluate((a: HTMLAudioElement) => ({
-      time: a.currentTime,
-      paused: a.paused,
-    })),
-  ).toEqual({ time: 0, paused: true });
-  await page.getByLabel("播放解說", { exact: true }).click();
   await expect
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.paused))
     .toBe(false);
@@ -154,6 +147,10 @@ test("page audio uses independent tracks, stays on the page at the end and never
     `/api/audio/${pkg.id}?sectionId=check`,
   );
   await expect(page.locator(".subtitle-line")).toHaveText("第 3 頁解說");
+  await page.getByLabel("暫停解說", { exact: true }).click();
+  await audio.evaluate((a: HTMLAudioElement) => {
+    a.currentTime = 0;
+  });
   // All controls stay usable with real media enabled, including narrow tablets
   // with media controls fixed on the right and navigation in its own slot.
   for (const width of [
@@ -199,11 +196,10 @@ test("page audio uses independent tracks, stays on the page at the end and never
     ).toBeGreaterThan(width - 70);
     const subtitle = (await page.locator(".subtitle-line").boundingBox())!;
     expect(subtitle.y).toBeLessThan((await footer.boundingBox())!.y);
-    const prerequisite = (await page
-      .locator("#chapter-prerequisite")
-      .boundingBox())!;
-    expect(prerequisite.y + prerequisite.height).toBeLessThanOrEqual(
-      subtitle.y,
+    // Captions are an independent overlay and must not reserve content space.
+    await expect(page.locator(".subtitle-line")).toHaveCSS(
+      "pointer-events",
+      "none",
     );
     await page.screenshot({ path: `test-results/audio-footer-${width}.png` });
   }
@@ -349,7 +345,7 @@ test("a failed next-page audio load cannot restore the outgoing page in saved pr
     .toBeGreaterThan(0.1);
   await page.getByLabel("下一頁", { exact: true }).click();
   await expect(
-    page.getByText("本頁語音無法播放，請重整後重試。", { exact: true }),
+    page.getByText("語音無法播放，請重整後重試。", { exact: true }),
   ).toBeVisible();
   // The page has no metadata events to accidentally overwrite an outgoing pause save.
   await page.waitForTimeout(400);
@@ -361,7 +357,7 @@ test("a failed next-page audio load cannot restore the outgoing page in saved pr
   await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
 });
 
-test("review can enable prepared narration and saves a draft before returning to the current chapter", async ({
+test("review can enable prepared narration and keeps its draft isolated from the current chapter", async ({
   page,
 }) => {
   await page.request.post("/api/sessions", { data: {} });
@@ -409,13 +405,11 @@ test("review can enable prepared narration and saves a draft before returning to
   await page.getByRole("button", { name: "複習這一章" }).click();
   await page.getByRole("button", { name: "啟用語音解說" }).click();
   await expect(page.getByLabel("播放解說", { exact: true })).toBeEnabled();
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" })
-    .click();
+  await page.getByLabel("上一頁", { exact: true }).click();
   await page.getByLabel("終端機指令").fill("edit index.html");
   await page.getByLabel("終端機指令").press("Enter");
   await page.getByLabel("程式碼編輯器").fill("<h1>Review draft</h1>");
+  await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByRole("button", { name: "回到目前章節" }).click();
   await expect(
     page.getByRole("heading", { name: "用 HTML 建立骨架", exact: true }),
@@ -423,7 +417,9 @@ test("review can enable prepared narration and saves a draft before returning to
   const workspace = await (
     await page.request.get(`/api/workspace?courseId=${course.id}`)
   ).json();
-  expect(workspace.files["/index.html"]).toBe("<h1>Review draft</h1>");
+  expect(workspace.files["/index.html"]).toBe(
+    course.workspace.files["/index.html"],
+  );
 });
 
 test("language comparison resets its interactive result when changing language", async ({
@@ -477,7 +473,6 @@ test("shows one page, navigates explicitly and enters/exits fullscreen", async (
   await page.getByRole("button", { name: "小問題", exact: true }).click();
   await expect(page.getByPlaceholder("哪個地方還不太懂？")).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "開啟實作區", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "Terminal", exact: true }),
   ).toBeVisible();
@@ -503,10 +498,6 @@ test("terminal page has one preview and one terminal, saves edits on page naviga
   await page.getByRole("button", { name: /先體驗一堂課/ }).click();
   await expect(page.locator("[data-section]").first()).toBeVisible();
   await page.getByLabel("下一頁", { exact: true }).click();
-  await page
-    .getByRole("button", { name: "開啟實作區", exact: true })
-    .first()
-    .click();
   await expect(
     page.getByRole("region", { name: "Terminal", exact: true }),
   ).toHaveCount(1);

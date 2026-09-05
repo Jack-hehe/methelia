@@ -5,6 +5,7 @@ import {
   pageTrack,
   pageIndex,
   workspaceChapter,
+  chapterSectionAt,
 } from "../src/core/lesson-pages";
 const chapter = demoChapter(demoGraph().nodes[0]);
 const legacy: PackageState = {
@@ -19,6 +20,13 @@ const legacy: PackageState = {
   ],
   captions: [{ sectionId: "structure", text: "標題", start: 11, end: 13 }],
 };
+it("maps the chapter clock backwards and forwards at real section boundaries", () => {
+  expect(chapterSectionAt(legacy, 0)).toBe("languages");
+  expect(chapterSectionAt(legacy, 9.99)).toBe("languages");
+  expect(chapterSectionAt(legacy, 10)).toBe("structure");
+  expect(chapterSectionAt(legacy, 12)).toBe("structure");
+  expect(chapterSectionAt(legacy, 4)).toBe("languages");
+});
 it("restores the selected page and falls back to the first page for a stale ID", () => {
   expect(pageIndex(chapter, "structure")).toBe(1);
   expect(pageIndex(chapter, "removed")).toBe(0);

@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import { generalChapter, generalGraph } from "./general-course";
 
 const dataDir = mkdtempSync(join(tmpdir(), "methelia-browser-"));
@@ -20,9 +21,49 @@ const model = createServer(async (req, res) => {
         : /bread/i.test(input.goal)
           ? "none"
           : "web";
-    const content = input.node
-      ? generalChapter(input.node)
-      : generalGraph(environment);
+    const content =
+      input.topic && input.anchor
+        ? {
+            title: input.topic,
+            reason: `Extend ${input.anchor.title} by comparing a focused new example. The exercise remains within the supported environment.`,
+            nodes: [
+              {
+                ...generalGraph(input.anchor.environment, {
+                  experience: "Beginner",
+                  purpose: input.topic,
+                  priorKnowledge: "Learned the anchor",
+                  depth: input.depth,
+                  studyPlan: "A short focused example",
+                }).nodes[0],
+                id: `support-${randomUUID()}`,
+                kind: "support",
+                prerequisites: [input.anchor.id],
+                title: input.topic,
+                objective: `Explain and apply ${input.topic} in one focused comparison.`,
+              },
+            ],
+          }
+        : input.node
+          ? generalChapter(input.node, input.learnerProfile)
+          : generalGraph(environment, input.learnerProfile);
+    if (input.node && /illustrated/.test(input.goal) && "sections" in content) {
+      content.sections[0].component = {
+        type: "lesson.article",
+        paragraphs: [
+          "酵母利用麵團中的糖，產生二氧化碳。氣體被麵筋網絡留住，麵團因此膨脹。",
+          "觀察體積變化，比只計時更能判斷發酵進度。",
+        ],
+        takeaway: "氣體生成與麵團保氣能力共同決定膨脹。",
+        figure: {
+          items: [
+            { label: "酵母", description: "利用糖進行發酵" },
+            { label: "二氧化碳", description: "形成小氣泡" },
+            { label: "麵筋網絡", description: "留住氣體，體積增加" },
+          ],
+          caption: "麵團膨脹的因果過程",
+        },
+      };
+    }
     if (!input.node && environment === "terminal") {
       Object.assign(content, {
         requiresConfirmation: true,

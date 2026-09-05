@@ -2665,8 +2665,11 @@ dialog::backdrop {
   backdrop-filter: blur(3px);
 }
 .learning-map {
-  --map-top: 147px;
-  --map-sidebar-width: 320px;
+  /* Header now carries the course title too, so the canvas starts lower down. */
+  --map-top: 118px;
+  /* Set inline by the drag handle; the mobile rule below overrides the result. */
+  --map-detail-width: 440px;
+  --map-sidebar-width: var(--map-detail-width);
   position: fixed;
   inset: 0;
   width: 100vw;
@@ -2680,14 +2683,39 @@ dialog::backdrop {
   overflow: hidden;
 }
 .map-header {
-  height: 100px;
+  height: var(--map-top);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 25px 40px;
+  padding: 22px 40px;
+  border-bottom: 1px solid var(--line);
   background: var(--bg);
   position: relative;
   z-index: 4;
+}
+.map-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.map-title-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+/* The header is a fixed height, so a long course title truncates. */
+.map-title-meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The detail panel is full height, so the close button steps aside for it. */
+.learning-map.details-open .close-map {
+  margin-right: var(--map-sidebar-width);
 }
 .map-header h2 {
   font-size: 29px;
@@ -2712,26 +2740,6 @@ dialog::backdrop {
   background: var(--surface);
   border-radius: 10px;
   font-size: 12px;
-}
-.map-subheader {
-  height: 47px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 40px;
-  position: relative;
-  z-index: 4;
-  font-size: 11px;
-  color: var(--muted);
-  background: var(--bg);
-}
-.map-subheader > span:last-child {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 9px;
 }
 .legend {
   height: 6px;
@@ -2789,8 +2797,32 @@ dialog::backdrop {
   stroke: #b594d2;
   stroke-dasharray: 5 5;
 }
-.map-node {
+/* Positions the card and hangs the extend button off its real height. */
+.map-node-slot {
   position: absolute;
+  width: 215px;
+}
+.map-node-add {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--violet);
+  box-shadow: 0 4px 12px #33243c14;
+}
+.map-node-add:hover:not(:disabled) {
+  border-color: var(--violet);
+}
+.map-node {
+  position: relative;
   pointer-events: auto;
   width: 215px;
   min-height: 135px;
@@ -2893,15 +2925,17 @@ dialog::backdrop {
   height: 16px;
   border-left: 1px solid var(--line);
 }
+/* Full height against the right edge, matching the help drawer. */
 .node-detail {
   position: absolute;
-  top: var(--map-top);
+  top: 0;
   right: 0;
   bottom: 0;
   width: var(--map-sidebar-width);
   border-left: 1px solid var(--line);
   background: var(--surface);
   padding: 72px 24px 28px;
+  box-shadow: -18px 0 44px #22183118;
   z-index: 10;
   overflow: auto;
   overflow-wrap: anywhere;
@@ -2910,6 +2944,31 @@ dialog::backdrop {
   touch-action: pan-y;
   user-select: text;
   -webkit-user-select: text;
+}
+.node-detail-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: var(--map-sidebar-width);
+  width: 9px;
+  margin-right: -4px;
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 13;
+}
+.node-detail-resize:hover,
+.node-detail-resize:active {
+  background: linear-gradient(
+    to right,
+    transparent 3px,
+    var(--violet) 3px,
+    var(--violet) 5px,
+    transparent 5px
+  );
+}
+/* Sits inside the panel once it spans the full height. */
+.learning-map.details-open .map-detail-toggle {
+  top: 16px;
 }
 .map-detail-toggle {
   position: absolute;
@@ -2926,6 +2985,7 @@ dialog::backdrop {
 }
 @media (max-width: 800px) {
   .learning-map {
+    /* Narrow screens ignore the dragged width and use the whole panel. */
     --map-sidebar-width: min(340px, calc(100% - 24px));
   }
   .learning-map.details-open .map-canvas {
@@ -2934,8 +2994,19 @@ dialog::backdrop {
   .learning-map.details-open .map-add {
     visibility: hidden;
   }
+  .learning-map.details-open .close-map {
+    margin-right: 0;
+  }
+  /* Below the header on narrow screens, so it never covers the close button. */
   .node-detail {
+    top: var(--map-top);
     box-shadow: -12px 0 28px #30223e08;
+  }
+  .learning-map.details-open .map-detail-toggle {
+    top: calc(var(--map-top) + 16px);
+  }
+  .node-detail-resize {
+    display: none;
   }
 }
 .node-detail .eyebrow {
@@ -2945,14 +3016,79 @@ dialog::backdrop {
 .node-detail > h3 {
   font-size: 17px;
   line-height: 1.5;
-  margin: 0 0 10px;
+  margin: 0 0 14px;
 }
 .node-detail > p {
   font-size: 12px;
+  line-height: 1.8;
   color: var(--muted);
+  margin: 0 0 10px;
 }
-.node-detail > .quiet {
+/* One rhythm for every label in the panel. */
+.node-detail > p.section-label {
+  margin: 22px 0 6px;
   font-size: 9px;
+  letter-spacing: 1.1px;
+  font-weight: 600;
+  color: var(--violet);
+  text-transform: uppercase;
+}
+.node-detail > h3 + p.section-label {
+  margin-top: 0;
+}
+.node-detail-meta {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.node-detail-meta > p {
+  margin: 0;
+}
+/* Pinned to the panel edges so the main action is always reachable. */
+.node-detail-actions {
+  position: sticky;
+  bottom: 0;
+  margin: 26px -24px -28px;
+  padding: 16px 24px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.node-detail-actions > .quiet {
+  display: block;
+  font-size: 11px;
+  text-align: center;
+}
+.pill-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 19px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 12px;
+}
+.pill-button:disabled {
+  opacity: 0.42;
+}
+.pill-button.quiet-pill {
+  margin-top: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.pill-button.quiet-pill:hover:not(:disabled) {
+  border-color: var(--violet);
+  color: var(--violet);
 }
 .map-add {
   position: absolute;
@@ -3846,16 +3982,14 @@ dialog::backdrop {
     gap: 8px;
     padding: 9px;
   }
-  .map-subheader {
-    padding: 0 20px;
-    height: 43px;
+  .map-header {
+    padding: 16px 20px;
+  }
+  .map-title-meta {
     font-size: 9px;
   }
-  .map-subheader > span:last-child {
-    display: none;
-  }
   .learning-map {
-    --map-top: 130px;
+    --map-top: 104px;
   }
   .node-detail {
     padding: 68px 20px 24px;
@@ -4881,10 +5015,6 @@ body:has(.practice-studio) {
   color: var(--muted);
   margin: 16px 0 0;
   max-width: 100%;
-}
-.paged-course:has(.subtitle-line) .chapter-prerequisite {
-  /* Reserve the subtitle overlay's maximum height without resizing the footer. */
-  margin-bottom: 100px;
 }
 .chapter-prerequisite button {
   display: inline-flex;
