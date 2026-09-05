@@ -39,4 +39,4 @@ services:
       - key: ELEVENLABS_VOICE_ID
         sync: false
       - key: ELEVENLABS_MODEL
-        value: eleven_multilingual_v2
+        value: eleven_v3
