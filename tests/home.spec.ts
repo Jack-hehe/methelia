@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/course-test";
 
 test("the Methelia logo on explore opens the learning home instead of resuming a saved course", async ({
   page,
@@ -16,9 +16,7 @@ test("the Methelia logo on explore opens the learning home instead of resuming a
   await expect(
     page.getByRole("textbox", { name: "你想學什麼？" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: /I want to learn/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /我想學習/ })).toBeVisible();
   await page.getByRole("link", { name: "Methelia", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "我的課程", exact: true }),

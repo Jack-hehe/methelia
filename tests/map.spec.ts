@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures/course-test";
 import type { Snapshot } from "../src/core/state";
 
 async function start(page: Page) {

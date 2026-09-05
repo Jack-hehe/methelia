@@ -29,8 +29,15 @@ export function useTypewriter({
   const [text, setText] = useState("");
   const [idle, setIdle] = useState(true);
   const at = useRef({ word: 0, char: 0, erasing: false });
+  const previousWords = useRef(words);
 
   useEffect(() => {
+    if (previousWords.current !== words) {
+      previousWords.current = words;
+      at.current = { word: 0, char: 0, erasing: false };
+      setText("");
+      setIdle(true);
+    }
     if (!enabled) {
       at.current.char = 0;
       at.current.erasing = false;

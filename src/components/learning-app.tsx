@@ -5,6 +5,8 @@ import type { Snapshot } from "../core/state";
 import { api } from "./api";
 import { CoursePlayer } from "./course-player";
 import { Landing } from "./landing";
+import { useHomeLanguage } from "./use-home-language";
+import { homeCopy, homeError } from "./home-language";
 import { ThemeToggle } from "./theme-toggle";
 import { useTheme } from "./use-theme";
 
@@ -16,6 +18,8 @@ export function LearningApp() {
     [goal, setGoal] = useState(""),
     [error, setError] = useState(""),
     [home, setHome] = useState(false);
+  const { language, changeLanguage } = useHomeLanguage();
+  const copy = homeCopy[language];
   const { dark, toggle } = useTheme();
 
   useEffect(() => {
@@ -91,14 +95,30 @@ export function LearningApp() {
     }
   }
 
-  const themeControl = <ThemeToggle dark={dark} onToggle={toggle} />;
+  const showingLanding = !course || home;
+
+  useEffect(() => {
+    if (!showingLanding) return;
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = copy.lang;
+    return () => {
+      document.documentElement.lang = previous;
+    };
+  }, [showingLanding, copy.lang]);
 
   return (
     <>
       {error && (
-        <div className="toast" role="alert">
-          <span>{error}</span>
-          <button aria-label="關閉訊息" onClick={() => setError("")}>
+        <div
+          className="toast"
+          role="alert"
+          lang={showingLanding ? copy.lang : undefined}
+        >
+          <span>{showingLanding ? homeError(error, language) : error}</span>
+          <button
+            aria-label={showingLanding ? copy.dismiss : "關閉訊息"}
+            onClick={() => setError("")}
+          >
             <X size={16} />
           </button>
         </div>
@@ -109,10 +129,12 @@ export function LearningApp() {
           onChange={setCourse}
           onError={setError}
           onHome={() => showHome(true)}
-          themeControl={themeControl}
+          themeControl={<ThemeToggle dark={dark} onToggle={toggle} />}
         />
       ) : (
         <Landing
+          language={language}
+          onLanguageChange={changeLanguage}
           goal={goal}
           onGoalChange={setGoal}
           busy={busy}
@@ -120,7 +142,15 @@ export function LearningApp() {
           onStart={() => void start("live")}
           onDemo={() => void start("demo")}
           onMyCourses={course ? () => showHome(false) : undefined}
-          themeControl={themeControl}
+          themeControl={
+            <ThemeToggle
+              dark={dark}
+              onToggle={toggle}
+              label={
+                language === "en" ? "Toggle light and dark mode" : "切換深淺色"
+              }
+            />
+          }
         />
       )}
     </>

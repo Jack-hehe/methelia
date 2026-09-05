@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/course-test";
 import type { Snapshot } from "../src/core/state";
 
 test("finishing speech preparation preserves a manual demonstration until playback starts", async ({

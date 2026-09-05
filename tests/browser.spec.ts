@@ -1,23 +1,21 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/course-test";
 test("explore labels illustrative content and stays usable on narrow phones", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto("/explore");
   await expect(
-    page.getByText("作品與課程皆為介面示意，非真實學員作品或已開放課程。", {
+    page.getByText("課程構想 · 尚未開放", {
       exact: true,
     }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Discord 社群尚未開放" }),
-  ).toBeDisabled();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole("link", { name: "先體驗一堂課" }).click();
+  await page.getByRole("link", { name: "開始學習", exact: true }).click();
+  await page.getByRole("button", { name: "先體驗一堂課" }).click();
   await expect(page.locator("[data-section]")).toHaveAttribute(
     "data-section",
     "languages",

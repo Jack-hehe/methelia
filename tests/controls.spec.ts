@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/course-test";
 
 test("bottom controls span the canvas and keep page navigation visible in practice and fullscreen", async ({
   page,

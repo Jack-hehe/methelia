@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/course-test";
 
 function silentWave(seconds: number) {
   const samples = 8000 * seconds;

@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "./fixtures/course-test";
 
 async function openMap(page: Page) {
   await page.goto("/");
