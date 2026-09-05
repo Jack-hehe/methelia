@@ -30,8 +30,12 @@ test("playing chrome hides after idle, expands canvas, and returns on movement o
   const shell = page.locator(".course-shell");
   const canvas = page.getByRole("main", { name: "課程畫布" });
   const original = (await canvas.boundingBox())!.height;
+  await expect(canvas).toHaveCSS("border-radius", "0px");
+  await expect(canvas).toHaveCSS("border-top-width", "0px");
+  expect(
+    (await page.locator(".canvas-heading").boundingBox())!.height,
+  ).toBeLessThan(80);
   const caption = page.locator(".subtitle-line");
-  const captionBounds = await caption.boundingBox();
   await page.getByRole("button", { name: "播放解說", exact: true }).click();
   await page.mouse.move(500, 240);
   await expect(shell).toHaveAttribute("data-controls-hidden", "true", {
@@ -40,7 +44,6 @@ test("playing chrome hides after idle, expands canvas, and returns on movement o
   await expect(page.locator(".canvas-controls")).toHaveAttribute("inert", "");
   await expect(page.locator(".subtitle-line")).toBeVisible();
   await expect(caption).toBeInViewport();
-  expect(await caption.boundingBox()).toEqual(captionBounds);
   await expect(page.locator(".canvas-controls .subtitle-line")).toHaveCount(0);
   await expect
     .poll(async () => (await canvas.boundingBox())!.height)
@@ -54,6 +57,44 @@ test("playing chrome hides after idle, expands canvas, and returns on movement o
   await expect(shell).toHaveAttribute("data-controls-hidden", "false");
   await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
 });
+
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+  { width: 844, height: 390 },
+]) {
+  test(`captions and controls slide down the same distance at ${viewport.width}x${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await mockChapterCourse(page);
+    const caption = page.locator(".subtitle-line");
+    const shell = page.locator(".course-shell");
+    await page.getByRole("button", { name: "播放解說", exact: true }).click();
+    await page.mouse.move(200, 180);
+    const footer = page.locator(".canvas-controls");
+    const before = (await caption.boundingBox())!;
+    const controlsBefore = (await footer.boundingBox())!;
+    await expect(shell).toHaveAttribute("data-controls-hidden", "true");
+    // Check after the footer's margin/transform animation, not just the state flip.
+    await expect(page.locator(".canvas-controls")).toHaveCSS("opacity", "0");
+    await page.waitForTimeout(300);
+    const after = (await caption.boundingBox())!;
+    expect(viewport.height - after.y - after.height).toBeGreaterThanOrEqual(23);
+    const controlsAfter = (await footer.boundingBox())!;
+    expect(after.y - before.y).toBeCloseTo(controlsBefore.height, 0);
+    expect(controlsAfter.y - controlsBefore.y).toBeCloseTo(
+      after.y - before.y,
+      0,
+    );
+    await expect(caption).toBeInViewport();
+    await page.mouse.move(210, 180);
+    await expect(shell).toHaveAttribute("data-controls-hidden", "false");
+    await page.waitForTimeout(300);
+    expect((await caption.boundingBox())!.y).toBeCloseTo(before.y, 0);
+    expect((await footer.boundingBox())!.y).toBeCloseTo(controlsBefore.y, 0);
+  });
+}
 
 for (const width of [1440, 390]) {
   test(`captions overlay content without changing layout at ${width}px`, async ({

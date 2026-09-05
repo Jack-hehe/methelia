@@ -1,4 +1,6 @@
 "use client";
+import { useCourseLanguage } from "./course-language";
+import { localizedError } from "../core/language";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   X,
@@ -11,7 +13,6 @@ import {
   GitBranch,
   Clock3,
   LoaderCircle,
-  PanelRightOpen,
   PanelRightClose,
   Info,
 } from "lucide-react";
@@ -20,11 +21,6 @@ import { addExtension, insertBranch, routeNodes } from "../core/graph";
 import { mapPositions } from "./learning-map-layout";
 import styles from "./learning-map.module.css";
 
-const depthLabels = {
-  foundation: "淺入門：能解釋基本概念",
-  applied: "能應用：能獨立完成任務",
-  advanced: "深入原理：能分析與比較方法",
-};
 // Same bounds as the help drawer, so both side panels behave alike.
 const MIN_DETAIL = 320,
   MAX_DETAIL = 720,
@@ -52,6 +48,7 @@ export function LearningMap({
   onCancelPreview,
   onReview,
   onResume,
+  onJump,
   onLeaveExtension,
   onEnterExtension,
   onSaveNote,
@@ -68,6 +65,7 @@ export function LearningMap({
   onCancelPreview: () => Promise<void>;
   onReview: (id: string) => void;
   onResume?: () => void;
+  onJump?: (nodeId: string) => Promise<void>;
   onLeaveExtension?: () => Promise<void>;
   onEnterExtension?: (extensionId: string) => Promise<void>;
   onSaveNote?: (
@@ -76,6 +74,21 @@ export function LearningMap({
     revision: number,
   ) => Promise<void>;
 }) {
+  const { t, language, english } = useCourseLanguage();
+  const depthLabels = {
+    foundation: t(
+      "淺入門：能解釋基本概念",
+      "Foundations: explain the basic concepts",
+    ),
+    applied: t(
+      "能應用：能獨立完成任務",
+      "Applied: complete tasks independently",
+    ),
+    advanced: t(
+      "深入原理：能分析與比較方法",
+      "Advanced: analyze and compare approaches",
+    ),
+  };
   const dialog = useRef<HTMLDialogElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const selectedElement = useRef<HTMLButtonElement>(null);
@@ -226,14 +239,22 @@ export function LearningMap({
   }, [showDetails, selected]);
   const anchorNode = graph.nodes.find((n) => n.id === anchorId);
   const canAdd = Boolean(node) && graph.nodes.length < 50;
-  // The checkpoint decides the wording: finished chapters are reviewed, the
-  // rest are resumed. Untouched chapters offer nothing to go back to.
+  // The checkpoint decides the wording: finished chapters are reviewed,
+  // the one you are on is resumed, anything further ahead is a preview.
+  // course.progress is seeded whenever a chapter is prepared, including
+  // background prefetch, so it cannot stand in for "the learner was here".
   const nodeDone = Boolean(node && course.completed.includes(node.id));
+  const isExtensionNode = Boolean(
+    node &&
+    graph.extensions?.some((extension) => extension.nodeIds.includes(node.id)),
+  );
   const isCurrentNode = Boolean(node && node.id === course.currentNodeId);
   const isReturnNode = Boolean(
     node && course.extensionSession?.returnNodeId === node.id,
   );
-  const visited = Boolean(node && course.progress[node.id]);
+  const chapterReady = Boolean(
+    node && course.chapters[node.id]?.status === "ready",
+  );
   function openAdd(id?: string) {
     // The canvas plus button names its own node; the toolbar falls back to the selection.
     setAnchorId(id ?? node?.id ?? course.currentNodeId);
@@ -253,7 +274,11 @@ export function LearningMap({
     try {
       await work();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "操作失敗，請重試");
+      setError(
+        e instanceof Error
+          ? localizedError(e, language)
+          : t("操作失敗，請重試", "Action failed. Please try again."),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -291,7 +316,7 @@ export function LearningMap({
       style={
         { "--map-detail-width": `${detailWidth}px` } as React.CSSProperties
       }
-      aria-label="Learning Map"
+      aria-label={t("Learning Map", "Learning map")}
       onCancel={(e) => {
         e.preventDefault();
         if (submitting || busy) return;
@@ -301,22 +326,31 @@ export function LearningMap({
     >
       <header className="map-header">
         <div className="map-title">
-          <h2>Learning Map</h2>
+          <h2>{t("Learning Map", "Learning map")}</h2>
           <div className="map-title-meta">
             <span>{graph.title}</span>
             <details className={styles.legend}>
-              <summary aria-label="地圖狀態說明" title="地圖狀態說明">
+              <summary
+                aria-label={t("地圖狀態說明", "Map status legend")}
+                title={t("地圖狀態說明", "Map status legend")}
+              >
                 <Info size={18} />
               </summary>
               <div>
                 <p>
-                  <BookOpen size={14} /> 正在學習
+                  <BookOpen size={14} />
+                  {t("正在學習", "Learning now")}
                 </p>
                 <p>
-                  <Check size={14} /> 已完成
+                  <Check size={14} />
+                  {t("已完成", "Completed")}
                 </p>
                 <p>
-                  <GitBranch size={14} /> 補強／延伸支線（虛線）
+                  <GitBranch size={14} />
+                  {t(
+                    "補強／延伸支線（虛線）",
+                    "Reinforcement / extension branches (dashed)",
+                  )}
                 </p>
               </div>
             </details>
@@ -327,7 +361,8 @@ export function LearningMap({
           onClick={onClose}
           disabled={submitting || busy}
         >
-          回到課程 <X size={19} />
+          {t("回到課程", "Return to course")}
+          <X size={19} />
         </button>
       </header>
       <div
@@ -430,34 +465,45 @@ export function LearningMap({
                     </span>
                     <small>
                       {preview
-                        ? "建議新增"
+                        ? t("建議新增", "Suggested addition")
                         : current
-                          ? "正在學習"
+                          ? t("正在學習", "Learning now")
                           : done
-                            ? "已完成"
+                            ? t("已完成", "Completed")
                             : extension
-                              ? "延伸單元"
-                              : `第 ${mainNodes.findIndex((x) => x.id === n.id) + 1} 章`}
+                              ? t("延伸單元", "Extension unit")
+                              : t(
+                                  `第 ${mainNodes.findIndex((x) => x.id === n.id) + 1} 章`,
+                                  `Chapter ${mainNodes.findIndex((x) => x.id === n.id) + 1}`,
+                                )}
                     </small>
                   </span>
                   <strong>{n.title}</strong>
                   <span className="node-meta">
                     <Clock3 size={12} />
-                    {n.minutes} 分鐘
+                    {n.minutes}
+                    {t("分鐘", "min")}
                     <span>
                       {extension
-                        ? "延伸"
+                        ? t("延伸", "Extension")
                         : n.kind === "support"
-                          ? "補強"
-                          : "主線課程"}
+                          ? t("補強", "Reinforcement")
+                          : t("主線課程", "Main course")}
                     </span>
                   </span>
                 </button>
                 {selected === n.id && !adding && !course.preview && (
                   <button
                     className="map-node-add"
-                    aria-label={`從「${n.title}」延伸新增單元`}
-                    title={canAdd ? "從這裡延伸" : "已達節點上限"}
+                    aria-label={t(
+                      `從「${n.title}」延伸新增單元`,
+                      `Add an extension from ${n.title}`,
+                    )}
+                    title={
+                      canAdd
+                        ? t("從這裡延伸", "Extend from here")
+                        : t("已達節點上限", "Node limit reached")
+                    }
                     disabled={!canAdd || busy || submitting}
                     onClick={() => openAdd(n.id)}
                   >
@@ -474,7 +520,7 @@ export function LearningMap({
           className="node-detail-resize"
           role="separator"
           aria-orientation="vertical"
-          aria-label="調整側欄寬度"
+          aria-label={t("調整側欄寬度", "Resize sidebar")}
           onPointerDown={(event) => {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
@@ -509,13 +555,15 @@ export function LearningMap({
           aria-labelledby="node-detail-title"
         >
           <h3 id="node-detail-title">{node.title}</h3>
-          <p className="section-label">預計學習內容</p>
+          <p className="section-label">
+            {t("預計學習內容", "Planned learning content")}
+          </p>
           <p>{node.objective}</p>
           {node.summary && <p>{node.summary}</p>}
           {node.depth && <p>{depthLabels[node.depth]}</p>}
           {!!node.keyConcepts?.length && (
             <section className={styles.detailSection}>
-              <h4>核心概念</h4>
+              <h4>{t("核心概念", "Core concepts")}</h4>
               <ul>
                 {node.keyConcepts.map((c) => (
                   <li key={c}>{c}</li>
@@ -525,7 +573,7 @@ export function LearningMap({
           )}
           {!!node.misconceptions?.length && (
             <section className={styles.detailSection}>
-              <h4>容易混淆</h4>
+              <h4>{t("容易混淆", "Common misconceptions")}</h4>
               <ul>
                 {node.misconceptions.map((c) => (
                   <li key={c}>{c}</li>
@@ -535,17 +583,20 @@ export function LearningMap({
           )}
           {node.assessment && (
             <section className={styles.detailSection}>
-              <h4>驗證方式</h4>
+              <h4>{t("驗證方式", "How to check your understanding")}</h4>
               <p>{node.assessment}</p>
             </section>
           )}
           <div className="node-detail-meta">
             <p>
-              約 {node.minutes} 分鐘 · {node.prerequisites.length} 個先修節點
+              {t(
+                `約 ${node.minutes} 分鐘 · ${node.prerequisites.length} 個先修節點`,
+                `About ${node.minutes} min · ${node.prerequisites.length} prerequisites`,
+              )}
             </p>
             {!!node.prerequisites.length && (
               <p>
-                先備：
+                {t("先備：", "Prerequisites:")}
                 {node.prerequisites
                   .map(
                     (id) => graph.nodes.find((n) => n.id === id)?.title ?? id,
@@ -559,7 +610,8 @@ export function LearningMap({
             disabled={busy || submitting || !canAdd}
             onClick={() => openAdd(node.id)}
           >
-            <Plus size={15} /> 從這裡延伸
+            <Plus size={15} />
+            {t("從這裡延伸", "Extend from here")}
           </button>
           {(graph.extensions ?? [])
             .filter(
@@ -572,8 +624,8 @@ export function LearningMap({
                   {extension.nodeIds.every((id) =>
                     course.completed.includes(id),
                   )
-                    ? "已完成延伸"
-                    : "可隨時進入或繼續"}
+                    ? t("已完成延伸", "Extension completed")
+                    : t("可隨時進入或繼續", "Start or resume at any time")}
                 </p>
                 {onEnterExtension && (
                   <button
@@ -591,8 +643,8 @@ export function LearningMap({
                     }
                   >
                     {course.extensionSession?.extensionId === extension.id
-                      ? "正在這條支線"
-                      : "進入延伸"}
+                      ? t("正在這條支線", "Currently on this branch")
+                      : t("進入延伸", "Enter extension")}
                     <ArrowRight size={14} />
                   </button>
                 )}
@@ -606,7 +658,8 @@ export function LearningMap({
                 disabled={busy || submitting}
                 onClick={() => onReview(node.id)}
               >
-                複習這一章 <ArrowRight size={15} />
+                {t("複習這一章", "Review this chapter")}
+                <ArrowRight size={15} />
               </button>
             ) : isCurrentNode ? (
               <button
@@ -614,7 +667,8 @@ export function LearningMap({
                 disabled={busy || submitting || !onResume}
                 onClick={() => onResume?.()}
               >
-                回到這一課 <ArrowRight size={15} />
+                {t("回到這一課", "Return to this lesson")}
+                <ArrowRight size={15} />
               </button>
             ) : isReturnNode ? (
               <button
@@ -622,65 +676,90 @@ export function LearningMap({
                 disabled={busy || submitting || !onLeaveExtension}
                 onClick={() => void perform(() => onLeaveExtension!())}
               >
-                回到這一課 <ArrowRight size={15} />
+                {t("回到這一課", "Return to this lesson")}
+                <ArrowRight size={15} />
               </button>
-            ) : visited ? (
-              <button
-                className="pill-button"
-                disabled={busy || submitting}
-                onClick={() => onReview(node.id)}
-              >
-                複習這一章 <ArrowRight size={15} />
-              </button>
-            ) : (
-              <p className="quiet">學到這裡之後就能進入這一章。</p>
-            )}
+            ) : !isExtensionNode ? (
+              <>
+                <button
+                  className="pill-button"
+                  disabled={
+                    busy ||
+                    submitting ||
+                    !onJump ||
+                    Boolean(course.extensionSession)
+                  }
+                  onClick={() => void perform(() => onJump!(node.id))}
+                >
+                  {t("跳到這一章", "Jump to this chapter")}
+                  <ArrowRight size={15} />
+                </button>
+                {chapterReady && (
+                  <button
+                    className="pill-button quiet-pill"
+                    disabled={busy || submitting}
+                    onClick={() => onReview(node.id)}
+                  >
+                    {t("先預習不跳過", "Preview without jumping")}
+                  </button>
+                )}
+                <p className="quiet">
+                  {t(
+                    "跳過的章節不會標記完成，隨時可以回來補。",
+                    "Skipped chapters stay unfinished; you can come back to them.",
+                  )}
+                </p>
+              </>
+            ) : null}
           </div>
         </aside>
       )}
-      <button
-        className="map-detail-toggle"
-        aria-label={showDetails ? "收起節點資訊" : "展開節點資訊"}
-        title={showDetails ? "收起節點資訊" : "展開節點資訊"}
-        aria-expanded={showDetails}
-        aria-controls={showDetails ? "learning-node-detail" : undefined}
-        disabled={
-          adding || Boolean(course.preview) || busy || submitting || !node
-        }
-        onClick={() => setDetailsOpen((open) => !open)}
-      >
-        {showDetails ? (
+      {/* Only lives inside the open panel; selecting a node brings it back. */}
+      {showDetails && (
+        <button
+          className="map-detail-toggle"
+          aria-label={t("收起節點資訊", "Collapse node details")}
+          title={t("收起節點資訊", "Collapse node details")}
+          aria-expanded
+          aria-controls="learning-node-detail"
+          disabled={busy || submitting}
+          onClick={() => setDetailsOpen(false)}
+        >
           <PanelRightClose size={20} />
-        ) : (
-          <PanelRightOpen size={20} />
-        )}
-      </button>
+        </button>
+      )}
       <div className="map-toolbar">
         <button
-          aria-label="縮小"
+          aria-label={t("縮小", "Zoom out")}
           onClick={() => setScale((s) => Math.max(0.25, s - 0.1))}
         >
           <Minus size={18} />
         </button>
         <span>{Math.round(scale * 100)}%</span>
         <button
-          aria-label="放大"
+          aria-label={t("放大", "Zoom in")}
           onClick={() => setScale((s) => Math.min(1.5, s + 0.1))}
         >
           <Plus size={18} />
         </button>
         <i />
-        <button aria-label="顯示完整路徑" onClick={fit}>
+        <button aria-label={t("顯示完整路徑", "Fit entire path")} onClick={fit}>
           <Maximize size={17} />
         </button>
       </div>
       {course.preview ? (
         <div className="branch-confirm">
           <div>
-            <strong>{course.preview.extension?.title ?? "節點預覽"}</strong>
+            <strong>
+              {course.preview.extension?.title ?? t("節點預覽", "Node preview")}
+            </strong>
             {course.preview.reason && <p>{course.preview.reason}</p>}
             <p>
-              新增 {course.preview.nodes.length} 個節點，學完後回到「
+              {t(
+                `新增 ${course.preview.nodes.length} 個節點，學完後回到`,
+                `Add ${course.preview.nodes.length} nodes, then return to`,
+              )}{" "}
+              “
               {
                 graph.nodes.find(
                   (n) =>
@@ -696,22 +775,24 @@ export function LearningMap({
             {course.preview.extension && (
               <div className={styles.previewDetails}>
                 <p>
-                  從「
+                  {t("從", "From")} “
                   {
                     graph.nodes.find((n) => n.id === course.preview!.afterId)
                       ?.title
                   }
-                  」延伸 · {depthLabels[course.preview.extension.depth]}
+                  ” {t("延伸", "extension")} ·{" "}
+                  {depthLabels[course.preview.extension.depth]}
                 </p>
                 {course.preview.nodes.map((n) => (
                   <p key={n.id}>
-                    <strong>{n.title}</strong> · {n.minutes} 分鐘
+                    <strong>{n.title}</strong> · {n.minutes}
+                    {t("分鐘", "min")}
                     <br />
                     {n.objective}
                     {n.prerequisites.length > 0 && (
                       <>
                         <br />
-                        先備：
+                        {t("先備：", "Prerequisites:")}
                         {n.prerequisites
                           .map(
                             (id) =>
@@ -736,14 +817,16 @@ export function LearningMap({
               disabled={busy || submitting}
               onClick={() => void perform(onCancelPreview)}
             >
-              取消新增
+              {t("取消新增", "Cancel addition")}
             </button>
             <button
               className="primary-button"
               disabled={busy || submitting}
               onClick={() => void perform(() => onConfirm(false))}
             >
-              {course.preview.extension ? "保留稍後學習" : "確認新增"}{" "}
+              {course.preview.extension
+                ? t("保留稍後學習", "Save for later")
+                : t("確認新增", "Confirm addition")}{" "}
               <Plus size={16} />
             </button>
             {course.preview.extension && (
@@ -754,7 +837,8 @@ export function LearningMap({
                 }
                 onClick={() => void perform(() => onConfirm(true))}
               >
-                現在進入 <ArrowRight size={16} />
+                {t("現在進入", "Enter now")}
+                <ArrowRight size={16} />
               </button>
             )}
           </div>
@@ -768,9 +852,13 @@ export function LearningMap({
             void submitTopic();
           }}
         >
-          <h3 id="add-node-title">新增延伸單元</h3>
-          <p>從「{anchorNode?.title}」延伸</p>
-          <label htmlFor="node-topic">主題</label>
+          <h3 id="add-node-title">
+            {t("新增延伸單元", "Add an extension unit")}
+          </h3>
+          <p>
+            {t("從", "From")} “{anchorNode?.title}” {t("延伸", "extension")}
+          </p>
+          <label htmlFor="node-topic">{t("主題", "Topic")}</label>
           <div className="node-topic-field">
             <input
               id="node-topic"
@@ -779,11 +867,13 @@ export function LearningMap({
               maxLength={120}
               required
               disabled={submitting || busy}
-              placeholder="例如：HTML 表單"
+              placeholder={t("例如：HTML 表單", "For example: HTML forms")}
               onChange={(e) => setTopic(e.target.value)}
             />
           </div>
-          <label htmlFor="node-depth">想理解到什麼程度？</label>
+          <label htmlFor="node-depth">
+            {t("想理解到什麼程度？", "How deeply do you want to learn?")}
+          </label>
           <select
             className={styles.depthSelect}
             id="node-depth"
@@ -798,7 +888,12 @@ export function LearningMap({
             ))}
           </select>
           {course.mode === "demo" && (
-            <small>體驗模式的新增章節使用固定 HTML 範例。</small>
+            <small>
+              {t(
+                "體驗模式的新增章節使用固定 HTML 範例。",
+                "Additional demo chapters use a fixed HTML example.",
+              )}
+            </small>
           )}
           {error && (
             <p className="map-form-error" role="alert">
@@ -812,14 +907,15 @@ export function LearningMap({
               disabled={submitting || busy}
               onClick={closeAdd}
             >
-              取消
+              {t("取消", "Cancel")}
             </button>
             <button
               className="primary-button"
               type="submit"
               disabled={!topic.trim() || submitting || busy}
             >
-              {submitting && <LoaderCircle className="spin" size={15} />} 預覽
+              {submitting && <LoaderCircle className="spin" size={15} />}
+              {t("預覽", "Preview")}
             </button>
           </div>
         </form>
@@ -828,10 +924,18 @@ export function LearningMap({
           ref={addButton}
           className="map-add"
           disabled={busy || !canAdd}
-          title={!canAdd ? "已達節點上限" : "從選取的節點建立延伸"}
+          title={
+            !canAdd
+              ? t("已達節點上限", "Node limit reached")
+              : t(
+                  "從選取的節點建立延伸",
+                  "Create an extension from the selected node",
+                )
+          }
           onClick={() => openAdd()}
         >
-          <Plus size={17} /> 新增節點
+          <Plus size={17} />
+          {t("新增節點", "Add node")}
         </button>
       )}
     </dialog>

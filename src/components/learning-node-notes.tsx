@@ -1,4 +1,6 @@
 "use client";
+import { useCourseLanguage } from "./course-language";
+import { localizedError } from "../core/language";
 import { useState } from "react";
 import type { NodeNote } from "../core/state";
 import styles from "./learning-map.module.css";
@@ -14,6 +16,7 @@ export function LearningNodeNotes({
   note?: NodeNote;
   onSave?: (nodeId: string, text: string, revision: number) => Promise<void>;
 }) {
+  const { t, language, english } = useCourseLanguage();
   // Drafts are keyed by node, so polling and selecting another node cannot replace unsaved text.
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [saving, setSaving] = useState(false);
@@ -41,26 +44,40 @@ export function LearningNodeNotes({
         delete next[id];
         return next;
       });
-      setMessages((previous) => ({ ...previous, [id]: "個人筆記已保存" }));
+      setMessages((previous) => ({
+        ...previous,
+        [id]: t("個人筆記已保存", "Personal notes saved"),
+      }));
     } catch (error) {
       setMessages((previous) => ({
         ...previous,
         [id]:
           error instanceof Error
-            ? error.message
-            : "保存失敗，內容仍保留，請重試",
+            ? localizedError(error, language)
+            : t(
+                "保存失敗，內容仍保留，請重試",
+                "Save failed. Your draft is preserved. Please try again.",
+              ),
       }));
     } finally {
       setSaving(false);
     }
   }
   return (
-    <section className={styles.notes} aria-label="節點學習筆記">
-      <h4>實際學習紀錄</h4>
+    <section
+      className={styles.notes}
+      aria-label={t("節點學習筆記", "Node learning notes")}
+    >
+      <h4>{t("實際學習紀錄", "Learning record")}</h4>
       {note ? (
         <>
           {note.packageId && (
-            <p className={styles.source}>依據這一章的內容與實際作答整理</p>
+            <p className={styles.source}>
+              {t(
+                "依據這一章的內容與實際作答整理",
+                "Based on this chapter’s content and your actual answers",
+              )}
+            </p>
           )}
           {note.summary.map((section, index) => (
             <div key={`${index}-${section.title}`}>
@@ -70,29 +87,48 @@ export function LearningNodeNotes({
           ))}
           {!!note.checkpoints.length && (
             <>
-              <h5>練習證據</h5>
+              <h5>{t("練習證據", "Practice evidence")}</h5>
               <ul>
                 {note.checkpoints.map((check) => (
                   <li key={check.sectionId}>
-                    {check.title}：{check.attempts} 次作答；
+                    {check.title}:{" "}
+                    {t(
+                      `${check.attempts} 次作答；`,
+                      `${check.attempts} attempts; `,
+                    )}
                     {check.firstPassed
-                      ? "首次作答通過"
+                      ? t("首次作答通過", "Passed on first attempt")
                       : check.lastPassed
-                        ? "重試後通過"
-                        : "待複習"}
+                        ? t("重試後通過", "Passed after retrying")
+                        : t("待複習", "Needs review")}
                     {!!check.records?.length && (
                       <details>
-                        <summary>查看作答與訂正</summary>
+                        <summary>
+                          {t("查看作答與訂正", "View answers and corrections")}
+                        </summary>
                         {check.records.map((record, index) => (
                           <div key={index}>
                             <p>
-                              第 {index + 1} 次：
-                              {record.passed ? "通過" : "尚未通過"}
-                              {record.usedHelp ? " · 本章曾提問" : ""}
+                              {t(
+                                `第 ${index + 1} 次：`,
+                                `Attempt ${index + 1}: `,
+                              )}
+                              {record.passed
+                                ? t("通過", "Passed")
+                                : t("尚未通過", "Not yet passed")}
+                              {record.usedHelp
+                                ? t(
+                                    " · 本章曾提問",
+                                    " · Asked for help in this chapter",
+                                  )
+                                : ""}
                             </p>
                             {record.actual && (
                               <p>
-                                當時的答案／內容：
+                                {t(
+                                  "當時的答案／內容：",
+                                  "Submitted answer / content:",
+                                )}
                                 <code
                                   style={{
                                     whiteSpace: "pre-wrap",
@@ -105,7 +141,7 @@ export function LearningNodeNotes({
                             )}
                             {record.expected && (
                               <p>
-                                驗證條件：
+                                {t("驗證條件：", "Check criteria:")}
                                 <code
                                   style={{
                                     whiteSpace: "pre-wrap",
@@ -124,13 +160,16 @@ export function LearningNodeNotes({
                 ))}
               </ul>
               <p className={styles.source}>
-                作答紀錄不等同已獨立掌握；提示與訂正需一併考量。
+                {t(
+                  "作答紀錄不等同已獨立掌握；提示與訂正需一併考量。",
+                  "Answer records alone do not establish independent mastery; consider hints and corrections too.",
+                )}
               </p>
             </>
           )}
           {!!note.questions.length && (
             <>
-              <h5>你提出的問題</h5>
+              <h5>{t("你提出的問題", "Your questions")}</h5>
               <ul>
                 {note.questions.map((question, index) => (
                   <li key={index}>{question}</li>
@@ -140,16 +179,26 @@ export function LearningNodeNotes({
           )}
         </>
       ) : (
-        <p>尚無實際學習紀錄；上方為預計學習內容。</p>
+        <p>
+          {t(
+            "尚無實際學習紀錄；上方為預計學習內容。",
+            "No learning record yet. The planned content is shown above.",
+          )}
+        </p>
       )}
-      <label htmlFor="node-personal-note">個人心得</label>
+      <label htmlFor="node-personal-note">
+        {t("個人心得", "Personal reflections")}
+      </label>
       <textarea
         id="node-personal-note"
         value={text}
         rows={5}
         maxLength={10000}
         readOnly={!onSave}
-        placeholder="記下自己的理解、例子或待釐清的問題"
+        placeholder={t(
+          "記下自己的理解、例子或待釐清的問題",
+          "Write down your understanding, examples, or questions to clarify",
+        )}
         onChange={(event) => {
           const value = event.target.value;
           setDrafts((previous) => ({
@@ -164,7 +213,10 @@ export function LearningNodeNotes({
       />
       {draft && draft.revision !== (note?.revision ?? 0) && changed && (
         <p role="status">
-          紀錄已有更新，你的草稿仍保留。
+          {t(
+            "紀錄已有更新，你的草稿仍保留。",
+            "The record has been updated. Your draft is preserved.",
+          )}
           <button
             type="button"
             className="text-button"
@@ -178,7 +230,7 @@ export function LearningNodeNotes({
               }))
             }
           >
-            以目前版本保存草稿
+            {t("以目前版本保存草稿", "Save draft against the current version")}
           </button>
         </p>
       )}
@@ -189,7 +241,9 @@ export function LearningNodeNotes({
           disabled={!changed || saving}
           onClick={() => void save()}
         >
-          {saving ? "保存中…" : "保存個人筆記"}
+          {saving
+            ? t("保存中…", "Saving…")
+            : t("保存個人筆記", "Save personal notes")}
         </button>
       )}
       {messages[nodeId] && <p role="status">{messages[nodeId]}</p>}

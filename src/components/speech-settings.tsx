@@ -1,4 +1,6 @@
 "use client";
+import { useCourseLanguage } from "./course-language";
+import { localizedError } from "../core/language";
 import { useId, useRef, useState } from "react";
 import { AudioLines, LoaderCircle } from "lucide-react";
 import type { PackageState } from "../core/state";
@@ -14,6 +16,7 @@ export function SpeechSettings({
   onOpen: () => void;
   onRebuild: () => Promise<void>;
 }) {
+  const { t, language, english } = useCourseLanguage();
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId(),
     descriptionId = useId();
@@ -29,7 +32,12 @@ export function SpeechSettings({
       dialog.current?.close();
     } catch (error) {
       setError(
-        error instanceof Error ? error.message : "無法重建語音，請稍後再試。",
+        error instanceof Error
+          ? localizedError(error, language)
+          : t(
+              "無法重建語音，請稍後再試。",
+              "Unable to rebuild narration. Please try again later.",
+            ),
       );
     } finally {
       setBusy(false);
@@ -39,8 +47,8 @@ export function SpeechSettings({
     <>
       <button
         className="icon-button"
-        aria-label="章節語音"
-        title="章節語音"
+        aria-label={t("章節語音", "Chapter narration")}
+        title={t("章節語音", "Chapter narration")}
         disabled={disabled}
         onClick={() => {
           setError("");
@@ -60,23 +68,35 @@ export function SpeechSettings({
           if (busy) event.preventDefault();
         }}
       >
-        <h2 id={titleId}>章節語音</h2>
+        <h2 id={titleId}>{t("章節語音", "Chapter narration")}</h2>
         <p id={descriptionId}>
-          使用目前設定的老師，重新產生本章所有分頁語音。會使用 ElevenLabs
-          額度，課程內容與實作檔案不變。
+          {t(
+            "使用目前設定的老師，重新產生本章所有分頁語音。會使用 ElevenLabs 額度，課程內容與實作檔案不變。",
+            "Regenerate narration for every page in this chapter using the current teacher settings. This uses ElevenLabs credits. Course content and project files stay the same.",
+          )}
         </p>
-        {preparing && <p role="status">本章語音準備中，完成後才能重建。</p>}
+        {preparing && (
+          <p role="status">
+            {t(
+              "本章語音準備中，完成後才能重建。",
+              "Chapter narration is being prepared. Wait for it to finish before rebuilding.",
+            )}
+          </p>
+        )}
         {pkg?.speechProfile && (
           <p>
-            本章語言：
+            {t("本章語言：", "Chapter language:")}
             {pkg.speechProfile.languageCode === "zh"
-              ? "中文"
+              ? t("中文", "Chinese")
               : pkg.speechProfile.languageCode === "en"
-                ? "英文"
-                : "自動辨識（舊版語音）"}
+                ? t("英文", "English")
+                : t("自動辨識（舊版語音）", "Auto-detected (legacy narration)")}
             。
             {pkg.speechProfile.model === "eleven_multilingual_v2" &&
-              "目前這份語音使用的模型不支援指定語言；重建後才會套用新的語音設定。"}
+              t(
+                "目前這份語音使用的模型不支援指定語言；重建後才會套用新的語音設定。",
+                "The model used for this narration does not support a specified language. Rebuild it to apply the new voice settings.",
+              )}
           </p>
         )}
         {error && (
@@ -91,7 +111,7 @@ export function SpeechSettings({
             onClick={() => dialog.current?.close()}
             autoFocus
           >
-            取消
+            {t("取消", "Cancel")}
           </button>
           <button
             className="primary-button"
@@ -99,7 +119,9 @@ export function SpeechSettings({
             onClick={() => void rebuild()}
           >
             {busy && <LoaderCircle size={16} className="spin" />}
-            {busy ? "提交中…" : "重建章節語音"}
+            {busy
+              ? t("提交中…", "Submitting…")
+              : t("重建章節語音", "Rebuild chapter narration")}
           </button>
         </div>
       </dialog>

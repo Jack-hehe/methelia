@@ -983,7 +983,35 @@ button:hover:not(:disabled) {
     opacity: 0;
   }
 }
+/* Animatable angle for the focus sweep; without it the gradient cannot turn. */
+@property --goal-sweep {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+/* Two highlights sit 180deg apart, so half a turn carries each one all the
+   way round to where the other began: one unhurried lap, then it settles. */
+@keyframes goal-sweep-lap {
+  from {
+    --goal-sweep: 0deg;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 1;
+  }
+  to {
+    --goal-sweep: 180deg;
+    opacity: 0;
+  }
+}
 .goal-box {
+  /* The travelling head reads as light: deeper than the rim on a pale
+     ground, closer to white on a dark one. */
+  --sweep-peak: #4c31a6;
+  position: relative;
   width: 100%;
   max-width: 670px;
   margin: 0 auto;
@@ -999,11 +1027,56 @@ button:hover:not(:disabled) {
     border-color 0.25s var(--ease),
     box-shadow 0.25s var(--ease);
 }
+/* A genuinely white halo. Pure white is invisible on a near-white page, so a
+   hairline contour draws its outer edge and a deep ambient shadow lifts the
+   box off the ground -- the edge and the depth are what make the light read. */
+/* No added ring: the box's own border is what lights up, in both themes.
+   It settles at a dimmed violet so the travelling highlight above still
+   reads as brighter than the rim it runs along. */
 .goal-box.is-focused {
-  border-color: var(--violet-line);
-  box-shadow:
-    0 0 0 4px var(--violet-soft),
-    0 15px 50px #35234310;
+  border-color: color-mix(in srgb, var(--violet) 30%, var(--line));
+}
+/* One lap of light around the border, then it fades and the steady ring
+   above is what stays lit. The mask leaves only the 2px rim visible. */
+.goal-box.is-focused::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 2px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--goal-sweep),
+    var(--sweep-peak) 0deg,
+    color-mix(in srgb, var(--sweep-peak) 30%, transparent) 30deg,
+    transparent 58deg,
+    transparent 122deg,
+    color-mix(in srgb, var(--sweep-peak) 30%, transparent) 150deg,
+    var(--sweep-peak) 180deg,
+    color-mix(in srgb, var(--sweep-peak) 30%, transparent) 210deg,
+    transparent 238deg,
+    transparent 302deg,
+    color-mix(in srgb, var(--sweep-peak) 30%, transparent) 330deg,
+    var(--sweep-peak) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: goal-sweep-lap 1700ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+:root[data-theme="dark"] .goal-box {
+  --sweep-peak: #e6dbff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-box.is-focused::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 .goal-box textarea {
   resize: none;
@@ -1173,12 +1246,6 @@ button:hover:not(:disabled) {
 .header-link.is-active {
   color: var(--violet);
   font-weight: 600;
-}
-.demo-line small {
-  display: block;
-  font-size: 10px;
-  color: var(--catalog-muted);
-  margin-top: 10px;
 }
 .catalog-notice {
   color: var(--catalog-muted);
@@ -2934,7 +3001,11 @@ dialog::backdrop {
   width: var(--map-sidebar-width);
   border-left: 1px solid var(--line);
   background: var(--surface);
-  padding: 72px 24px 28px;
+  /* Flex column so the action bar can sit at the bottom edge even when the
+     content is too short to scroll -- sticky alone does nothing there. */
+  display: flex;
+  flex-direction: column;
+  padding: 72px 24px 0;
   box-shadow: -18px 0 44px #22183118;
   z-index: 10;
   overflow: auto;
@@ -2966,13 +3037,10 @@ dialog::backdrop {
     transparent 5px
   );
 }
-/* Sits inside the panel once it spans the full height. */
-.learning-map.details-open .map-detail-toggle {
-  top: 16px;
-}
+/* Rendered only while the panel is open, so it always sits inside it. */
 .map-detail-toggle {
   position: absolute;
-  top: calc(var(--map-top) + 16px);
+  top: 16px;
   right: 16px;
   width: 36px;
   height: 36px;
@@ -3002,7 +3070,7 @@ dialog::backdrop {
     top: var(--map-top);
     box-shadow: -12px 0 28px #30223e08;
   }
-  .learning-map.details-open .map-detail-toggle {
+  .map-detail-toggle {
     top: calc(var(--map-top) + 16px);
   }
   .node-detail-resize {
@@ -3050,12 +3118,16 @@ dialog::backdrop {
 .node-detail-meta > p {
   margin: 0;
 }
-/* Pinned to the panel edges so the main action is always reachable. */
+.node-detail > * {
+  flex-shrink: 0;
+}
+/* auto top margin drops it to the bottom when there is spare room; sticky
+   takes over once the content scrolls. Opaque either way. */
 .node-detail-actions {
   position: sticky;
   bottom: 0;
-  margin: 26px -24px -28px;
-  padding: 16px 24px 20px;
+  margin: auto -24px 0;
+  padding: 18px 24px 24px;
   background: var(--surface);
   border-top: 1px solid var(--line);
 }

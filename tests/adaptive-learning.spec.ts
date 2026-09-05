@@ -21,18 +21,18 @@ test("live intake, last-node extension, learning evidence and main-route restora
     .getByLabel("你想學什麼？")
     .fill("Build a website with controlled examples");
   await page.getByRole("button", { name: "開始學習", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "正在安排你的學習路徑" }),
-  ).toBeVisible();
-  await page.getByLabel("經驗補充").fill("I have edited one page before");
+  await expect(page.getByRole("radiogroup")).toBeVisible();
+  await page.getByLabel("補充你的回答").fill("I have edited one page before");
   await page.getByRole("button", { name: "儲存回答", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("已儲存");
+  await expect(
+    page.getByRole("button", { name: "儲存回答", exact: true }),
+  ).toBeDisabled();
   const draft = await snapshot(page);
   expect(draft.status).toBe("intake");
   expect(draft.graph).toBeNull();
   expect(draft.chapterIds).toEqual({});
   await page.reload();
-  await expect(page.getByLabel("經驗補充")).toHaveValue(
+  await expect(page.getByLabel("補充你的回答")).toHaveValue(
     "I have edited one page before",
   );
   await answerIntake(page);

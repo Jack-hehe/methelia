@@ -1,4 +1,6 @@
 "use client";
+import { useCourseLanguage, CourseLanguageProvider } from "./course-language";
+import { localizedError } from "../core/language";
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
@@ -36,9 +38,11 @@ export function CoursePlayer(props: Parameters<typeof CoursePlayerContent>[0]) {
     ),
   );
   return (
-    <PythonRuntimeProvider key={props.course.id} enabled={python}>
-      <CoursePlayerContent {...props} />
-    </PythonRuntimeProvider>
+    <CourseLanguageProvider language={props.course.language || "zh-TW"}>
+      <PythonRuntimeProvider key={props.course.id} enabled={python}>
+        <CoursePlayerContent {...props} />
+      </PythonRuntimeProvider>
+    </CourseLanguageProvider>
   );
 }
 
@@ -55,6 +59,7 @@ function CoursePlayerContent({
   onHome: () => void;
   themeControl: React.ReactNode;
 }) {
+  const { t, language, english } = useCourseLanguage();
   const [map, setMap] = useState(false),
     [help, setHelp] = useState(false),
     [practice, setPractice] = useState(false),
@@ -241,9 +246,20 @@ function CoursePlayerContent({
       if (document.fullscreenElement) await document.exitFullscreen();
       else if (shell.current?.requestFullscreen)
         await shell.current.requestFullscreen();
-      else onError("此瀏覽器不支援全螢幕，仍可在網頁內使用。 ");
+      else
+        onError(
+          t(
+            "此瀏覽器不支援全螢幕，仍可在網頁內使用。 ",
+            "This browser does not support full screen. You can continue in the page.",
+          ),
+        );
     } catch {
-      onError("無法進入全螢幕，請保留網頁模式或再試一次。");
+      onError(
+        t(
+          "無法進入全螢幕，請保留網頁模式或再試一次。",
+          "Unable to enter full screen. Continue in the page or try again.",
+        ),
+      );
     }
   }
   function pauseAudio() {
@@ -255,7 +271,7 @@ function CoursePlayerContent({
     try {
       await work();
     } catch (e) {
-      onError((e as Error).message);
+      onError(localizedError(e, language));
     } finally {
       setBusy(false);
     }
@@ -298,7 +314,7 @@ function CoursePlayerContent({
       time,
       {},
       chapterAudio ? chapterSectionAt(pkg, time) : sectionId,
-    ).catch((e) => onError((e as Error).message));
+    ).catch((e) => onError(localizedError(e, language)));
   }
   async function turnPage(target: number) {
     if (
@@ -381,7 +397,12 @@ function CoursePlayerContent({
   }
   async function navigateAudio(time: number, _play = false, natural = false) {
     if (!pkg || !chapter || leavingPage.current)
-      throw new Error("正在切換頁面，請稍後再試。");
+      throw new Error(
+        t(
+          "正在切換頁面，請稍後再試。",
+          "Switching pages. Please try again shortly.",
+        ),
+      );
     const target = chapterSectionAt(pkg, time);
     leavingPage.current = true;
     try {
@@ -428,7 +449,7 @@ function CoursePlayerContent({
       });
       return result.passed;
     } catch (e) {
-      onError((e as Error).message);
+      onError(localizedError(e, language));
       return false;
     }
   }
@@ -518,19 +539,27 @@ function CoursePlayerContent({
     <>
       <button
         className="mini-map"
-        aria-label="開啟 Learning Map"
+        aria-label={t("開啟 Learning Map", "Open learning map")}
         onClick={() => {
           pauseAudio();
           setMap(true);
         }}
       >
         <Network size={17} />
-        <span>Learning Map</span>
+        <span>{t("Learning Map", "Learning map")}</span>
       </button>
       <button
         className="fullscreen-button"
-        aria-label={fullscreen ? "離開全螢幕" : "進入全螢幕"}
-        title={fullscreen ? "離開全螢幕" : "全螢幕"}
+        aria-label={
+          fullscreen
+            ? t("離開全螢幕", "Exit full screen")
+            : t("進入全螢幕", "Enter full screen")
+        }
+        title={
+          fullscreen
+            ? t("離開全螢幕", "Exit full screen")
+            : t("全螢幕", "Full screen")
+        }
         onClick={() => void toggleFullscreen()}
       >
         {fullscreen ? <Minimize size={19} /> : <Maximize size={19} />}
@@ -553,19 +582,19 @@ function CoursePlayerContent({
           Methelia
         </button>
         <div className="breadcrumb">
-          <span>{course.graph?.title || "建立課程"}</span>
+          <span>{course.graph?.title || t("建立課程", "Create course")}</span>
           <ChevronRight size={13} />
           <strong>{node?.title}</strong>
         </div>
         <div className="header-right">
           {course.mode === "demo" && (
-            <span className="demo-badge">體驗課程</span>
+            <span className="demo-badge">{t("體驗課程", "Demo course")}</span>
           )}
           {themeControl}
           <button
             className="icon-button"
-            aria-label="小問題"
-            title="小問題"
+            aria-label={t("小問題", "Ask a question")}
+            title={t("小問題", "Ask a question")}
             disabled={!canEnter}
             onClick={() => {
               pauseAudio();
@@ -582,9 +611,17 @@ function CoursePlayerContent({
             <LoaderCircle className="spin" size={32} />
           )}
           <h1>
-            {course.status === "failed" ? "課程生成失敗" : "正在規劃課程"}
+            {course.status === "failed"
+              ? t("課程生成失敗", "Course generation failed")
+              : t("正在規劃課程", "Planning your course")}
           </h1>
-          <p>{course.error || "先建立學習路徑，再準備章節內容。"}</p>
+          <p>
+            {(course.error ? localizedError(course.error, language) : "") ||
+              t(
+                "先建立學習路徑，再準備章節內容。",
+                "Creating the learning path before preparing chapters.",
+              )}
+          </p>
           {course.status === "failed" && (
             <button
               className="primary-button"
@@ -597,11 +634,17 @@ function CoursePlayerContent({
                 )
               }
             >
-              重新生成
+              {t("重新生成", "Generate again")}
             </button>
           )}
-          <button className="text-button" onClick={() => void home()}>
-            <ArrowLeft size={14} /> 回首頁
+          <button
+            className="pill-button"
+            style={{ width: "auto" }}
+            disabled={busy}
+            onClick={() => void home()}
+          >
+            <ArrowLeft size={14} />
+            {t("回首頁", "Home")}
           </button>
         </main>
       ) : course.scopeAccepted === false ? (
@@ -609,10 +652,12 @@ function CoursePlayerContent({
           className="preparation scope-confirmation"
           aria-labelledby="scope-heading"
         >
-          <h1 id="scope-heading">確認這堂課的學習範圍</h1>
+          <h1 id="scope-heading">
+            {t("確認這堂課的學習範圍", "Confirm your course scope")}
+          </h1>
           <p>{course.graph?.scopeNote}</p>
           <p>
-            <strong>完成後你能：</strong>
+            <strong>{t("完成後你能：", "After this course, you can:")}</strong>
             {course.graph?.outcome}
           </p>
           <ol>
@@ -633,27 +678,37 @@ function CoursePlayerContent({
               )
             }
           >
-            確認範圍並開始
+            {t("確認範圍並開始", "Confirm scope and start")}
           </button>
           <button
             className="text-button"
             disabled={busy}
             onClick={() => void home()}
           >
-            <ArrowLeft size={14} /> 回首頁調整目標
+            <ArrowLeft size={14} />
+            {t("回首頁調整目標", "Return home to adjust your goal")}
           </button>
         </main>
       ) : (
         <>
-          <main className="lesson-canvas" aria-label="課程畫布">
+          <main
+            className="lesson-canvas"
+            aria-label={t("課程畫布", "Lesson canvas")}
+          >
             <div className="canvas-heading">
               <div>
                 <span className="canvas-chapter">
                   {review
-                    ? "複習"
+                    ? t("複習", "Review")
                     : extension
-                      ? `延伸 ${extension.nodeIds.indexOf(nodeId) + 1} / ${extension.nodeIds.length}`
-                      : `第 ${route.findIndex((n) => n.id === nodeId) + 1} 章`}{" "}
+                      ? t(
+                          `延伸 ${extension.nodeIds.indexOf(nodeId) + 1} / ${extension.nodeIds.length}`,
+                          `Extension ${extension.nodeIds.indexOf(nodeId) + 1} / ${extension.nodeIds.length}`,
+                        )
+                      : t(
+                          `第 ${route.findIndex((n) => n.id === nodeId) + 1} 章`,
+                          `Chapter ${route.findIndex((n) => n.id === nodeId) + 1}`,
+                        )}{" "}
                   · {node?.title}
                 </span>
                 <h1>{canEnter ? section?.title : node?.title}</h1>
@@ -666,7 +721,8 @@ function CoursePlayerContent({
                     }
                     onClick={() => void leaveExtension()}
                   >
-                    <ArrowLeft size={14} /> 暫停延伸，返回「
+                    <ArrowLeft size={14} />{" "}
+                    {t("暫停延伸，返回", "Pause extension and return to")} “
                     {
                       course.graph?.nodes.find(
                         (n) => n.id === course.extensionSession?.returnNodeId,
@@ -680,7 +736,7 @@ function CoursePlayerContent({
                 <div className="canvas-page-actions">
                   <button
                     className="icon-button"
-                    aria-label="小問題"
+                    aria-label={t("小問題", "Ask a question")}
                     onClick={() => {
                       pauseAudio();
                       setHelp(true);
@@ -697,9 +753,14 @@ function CoursePlayerContent({
                   <LoaderCircle className="spin" size={28} />
                 )}
                 <h2>
-                  {pkg?.status === "failed" ? "章節生成失敗" : "正在準備章節"}
+                  {pkg?.status === "failed"
+                    ? t("章節生成失敗", "Chapter generation failed")
+                    : t("正在準備章節", "Preparing chapter")}
                 </h2>
-                <p>{pkg?.error || "正在準備章節內容。"}</p>
+                <p>
+                  {(pkg?.error ? localizedError(pkg.error, language) : "") ||
+                    t("正在準備章節內容。", "Preparing chapter content.")}
+                </p>
                 <div>
                   {pkg?.status === "failed" && (
                     <button
@@ -716,7 +777,7 @@ function CoursePlayerContent({
                         )
                       }
                     >
-                      重試章節
+                      {t("重試章節", "Retry chapter")}
                     </button>
                   )}
                 </div>
@@ -770,8 +831,8 @@ function CoursePlayerContent({
                           }
                         >
                           {progress.done.includes(sectionId)
-                            ? "練習完成"
-                            : "驗證我的練習"}
+                            ? t("練習完成", "Practice complete")
+                            : t("驗證我的練習", "Check my practice")}
                         </button>
                       </div>
                     )}
@@ -807,13 +868,20 @@ function CoursePlayerContent({
                       <div className="check-evidence-columns">
                         {checkResult.feedback.expected !== undefined && (
                           <div>
-                            <span>預期包含 / 目標狀態</span>
+                            <span>
+                              {t(
+                                "預期包含 / 目標狀態",
+                                "Expected content / target state",
+                              )}
+                            </span>
                             <pre>{checkResult.feedback.expected}</pre>
                           </div>
                         )}
                         {checkResult.feedback.actual !== undefined && (
                           <div>
-                            <span>本次檢查的內容</span>
+                            <span>
+                              {t("本次檢查的內容", "Content checked")}
+                            </span>
                             <pre>{checkResult.feedback.actual}</pre>
                           </div>
                         )}
@@ -824,10 +892,10 @@ function CoursePlayerContent({
                   <div className="chapter-prerequisite" role="status">
                     <p>{adjustment.reason}</p>
                     <p>
-                      下一章「{nextNode?.title}」：
+                      {t("下一章", "Next chapter")} “{nextNode?.title}”:
                       {adjustment.reverted
-                        ? "維持原安排"
-                        : `建議${{ foundation: "先鞏固基礎", applied: "增加應用練習", advanced: "深入分析原理" }[adjustment.depth]}`}
+                        ? t("維持原安排", "Keep original plan")
+                        : `${t("建議", "Suggested: ")}${{ foundation: t("先鞏固基礎", "reinforce the foundations first"), applied: t("增加應用練習", "add applied practice"), advanced: t("深入分析原理", "explore the underlying principles") }[adjustment.depth]}`}
                     </p>
                     <button
                       disabled={busy}
@@ -846,7 +914,9 @@ function CoursePlayerContent({
                         )
                       }
                     >
-                      {adjustment.reverted ? "採用建議安排" : "維持原安排"}
+                      {adjustment.reverted
+                        ? t("採用建議安排", "Use suggested plan")
+                        : t("維持原安排", "Keep original plan")}
                     </button>
                   </div>
                 )}
@@ -860,7 +930,10 @@ function CoursePlayerContent({
                       role="status"
                     >
                       {pendingPractice.id === sectionId ? (
-                        "完成本頁練習後，就能進入下一章。"
+                        t(
+                          "完成本頁練習後，就能進入下一章。",
+                          "Complete this page’s practice to continue to the next chapter.",
+                        )
                       ) : (
                         <button
                           disabled={busy}
@@ -872,8 +945,8 @@ function CoursePlayerContent({
                             )
                           }
                         >
-                          先完成「{pendingPractice.title}」{" "}
-                          <ChevronLeft size={12} />
+                          {t("先完成", "Complete first:")} “
+                          {pendingPractice.title}” <ChevronLeft size={12} />
                         </button>
                       )}
                     </div>
@@ -901,7 +974,9 @@ function CoursePlayerContent({
                   statusControl={
                     !canEnter ? (
                       <span className="audio-preparation-status">
-                        {pkg.status === "failed" ? "章節未就緒" : "章節準備中"}
+                        {pkg.status === "failed"
+                          ? t("章節未就緒", "Chapter not ready")
+                          : t("章節準備中", "Preparing chapter")}
                       </span>
                     ) : !chapterAudio &&
                       !review &&
@@ -929,7 +1004,7 @@ function CoursePlayerContent({
                           })
                         }
                       >
-                        改用整章語音
+                        {t("改用整章語音", "Use full chapter narration")}
                       </button>
                     ) : (
                       (pkg.speech !== "ready" || progress.subtitleOnly) && (
@@ -960,26 +1035,33 @@ function CoursePlayerContent({
                         >
                           <Volume2 size={16} />
                           {pkg.speech === "ready"
-                            ? "啟用語音解說"
+                            ? t("啟用語音解說", "Enable narration")
                             : ["failed", "not_requested"].includes(pkg.speech)
-                              ? "準備章節語音"
-                              : "語音準備中…"}
+                              ? t("準備章節語音", "Prepare chapter narration")
+                              : t("語音準備中…", "Preparing narration…")}
                         </button>
                       )
                     )
                   }
                 />
-                <nav className="lesson-navigation" aria-label="課程翻頁">
+                <nav
+                  className="lesson-navigation"
+                  aria-label={t("課程翻頁", "Lesson navigation")}
+                >
                   <div className="page-navigation-buttons">
                     <button
                       className="page-nav-button"
-                      aria-label="上一頁"
+                      aria-label={t("上一頁", "Previous page")}
                       disabled={!canEnter || busy || index === 0}
                       onClick={() => void turnPage(index - 1)}
                     >
-                      <ChevronLeft size={17} /> <span>上一頁</span>
+                      <ChevronLeft size={17} />{" "}
+                      <span>{t("上一頁", "Previous page")}</span>
                     </button>
-                    <span className="page-count" aria-label="頁碼">
+                    <span
+                      className="page-count"
+                      aria-label={t("頁碼", "Page number")}
+                    >
                       {canEnter
                         ? `${index + 1} / ${chapter!.sections.length}`
                         : "— / —"}
@@ -988,7 +1070,10 @@ function CoursePlayerContent({
                       review ? (
                         <button
                           className="page-nav-button page-nav-next"
-                          aria-label="回到目前章節"
+                          aria-label={t(
+                            "回到目前章節",
+                            "Return to current chapter",
+                          )}
                           disabled={busy}
                           onClick={() =>
                             void action(async () => {
@@ -1001,7 +1086,7 @@ function CoursePlayerContent({
                             })
                           }
                         >
-                          回到課程
+                          {t("回到課程", "Return to course")}
                         </button>
                       ) : allDone && !course.extensionSession ? (
                         Object.keys(course.workspace.files).length ? (
@@ -1011,11 +1096,13 @@ function CoursePlayerContent({
                           >
                             <Download size={16} />
                             {chapterEnvironment(chapter!) === "web"
-                              ? "匯出網站"
-                              : "匯出作品"}
+                              ? t("匯出網站", "Export website")
+                              : t("匯出作品", "Export project")}
                           </a>
                         ) : (
-                          <span className="page-nav-button">課程已完成</span>
+                          <span className="page-nav-button">
+                            {t("課程已完成", "Course complete")}
+                          </span>
                         )
                       ) : (
                         <button
@@ -1026,17 +1113,29 @@ function CoursePlayerContent({
                           }
                           aria-label={
                             nextNode
-                              ? `下一章：${nextNode.title}`
+                              ? t(
+                                  `下一章：${nextNode.title}`,
+                                  `Next chapter: ${nextNode.title}`,
+                                )
                               : course.extensionSession
-                                ? "完成延伸並返回主線"
-                                : "完成課程"
+                                ? t(
+                                    "完成延伸並返回主線",
+                                    "Finish extension and return to main course",
+                                  )
+                                : t("完成課程", "Finish course")
                           }
                           title={
                             nextNode
-                              ? `下一章：${nextNode.title}`
+                              ? t(
+                                  `下一章：${nextNode.title}`,
+                                  `Next chapter: ${nextNode.title}`,
+                                )
                               : course.extensionSession
-                                ? "完成延伸並返回主線"
-                                : "完成課程"
+                                ? t(
+                                    "完成延伸並返回主線",
+                                    "Finish extension and return to main course",
+                                  )
+                                : t("完成課程", "Finish course")
                           }
                           onClick={() =>
                             void action(() =>
@@ -1056,10 +1155,13 @@ function CoursePlayerContent({
                         >
                           <span>
                             {nextNode
-                              ? "下一章"
+                              ? t("下一章", "Next chapter")
                               : course.extensionSession
-                                ? "完成延伸並返回"
-                                : "完成課程"}
+                                ? t(
+                                    "完成延伸並返回",
+                                    "Finish extension and return",
+                                  )
+                                : t("完成課程", "Finish course")}
                           </span>{" "}
                           <ChevronRight size={15} />
                         </button>
@@ -1067,18 +1169,21 @@ function CoursePlayerContent({
                     ) : (
                       <button
                         className="page-nav-button page-nav-next"
-                        aria-label="下一頁"
+                        aria-label={t("下一頁", "Next page")}
                         disabled={!canEnter || busy}
                         onClick={() => void turnPage(index + 1)}
                       >
-                        <span>下一頁</span> <ChevronRight size={17} />
+                        <span>{t("下一頁", "Next page")}</span>{" "}
+                        <ChevronRight size={17} />
                       </button>
                     )}
                   </div>
                 </nav>
               </>
             ) : (
-              <span className="canvas-status">章節準備中</span>
+              <span className="canvas-status">
+                {t("章節準備中", "Preparing chapter")}
+              </span>
             )}
             {!pkg && <div className="canvas-tools">{canvasTools}</div>}
           </footer>
@@ -1154,6 +1259,20 @@ function CoursePlayerContent({
             setReview(null);
             setMap(false);
           }}
+          onJump={async (id) => {
+            // Same teardown as advancing: leave review, save drafts, then move.
+            setAutoPlayTarget(undefined);
+            setPlaybackRequest(undefined);
+            pauseAudio();
+            await leaveWorkspace.current?.();
+            await progressQueue.current;
+            onChange(
+              await api<Snapshot>(`courses/${course.id}/jump`, { nodeId: id }),
+            );
+            setReview(null);
+            setPractice(false);
+            setMap(false);
+          }}
           onResume={() =>
             void action(async () => {
               // Leaving review mode, not entering it: progress saves again.
@@ -1197,7 +1316,9 @@ function CoursePlayerContent({
               )
               .catch((error) =>
                 onError(
-                  error instanceof Error ? error.message : "無法更新學習筆記",
+                  error instanceof Error
+                    ? localizedError(error, language)
+                    : t("無法更新學習筆記", "Unable to update learning notes"),
                 ),
               );
           }}

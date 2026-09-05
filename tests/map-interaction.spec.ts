@@ -108,7 +108,7 @@ test("sidebar toggles independently and stays fixed across node selection, dragg
   expect(await map.locator(".map-canvas").boundingBox()).toEqual(
     originalCanvas,
   );
-  await map.getByLabel("展開節點資訊", { exact: true }).click();
+  await map.locator(".map-node").nth(2).click();
   await expect(detail.getByRole("heading", { level: 3 })).toHaveText(
     "CSS：顏色與間距",
   );
@@ -158,7 +158,7 @@ test("an open sidebar keeps the selected node visible when crossing from overlay
   await expect(node).toBeInViewport({ ratio: 1 });
 });
 
-test("canceling a selected preview node leaves the sidebar toggle usable", async ({
+test("canceling a selected preview node leaves current-node details reachable", async ({
   page,
 }) => {
   const map = await openMap(page);
@@ -170,7 +170,7 @@ test("canceling a selected preview node leaves the sidebar toggle usable", async
   await map.getByLabel("顯示完整路徑", { exact: true }).click();
   await map.locator(".map-node.proposed").click();
   await map.getByRole("button", { name: "取消新增", exact: true }).click();
-  await map.getByLabel("展開節點資訊", { exact: true }).click();
+  await map.locator(".map-node.current").click();
   await expect(
     map.locator(".node-detail").getByRole("heading", { level: 3 }),
   ).toHaveText("認識網站的三種語言");

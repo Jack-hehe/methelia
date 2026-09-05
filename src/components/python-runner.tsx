@@ -1,4 +1,6 @@
 "use client";
+import { localizedError } from "../core/language";
+import { useCourseLanguage } from "./course-language";
 
 import { useEffect, useRef, useState } from "react";
 import { Play, Square } from "lucide-react";
@@ -27,6 +29,7 @@ export function PythonRunner({
   expectedOutput?: string;
   sessionKey?: string;
 }) {
+  const { language, t } = useCourseLanguage();
   const {
     status: runtimeStatus,
     busy: runtimeBusy,
@@ -88,7 +91,12 @@ export function PythonRunner({
         activeRun.current = null;
         setStatus(message.kind as Status);
         if (message.kind === "error")
-          setError(String(message.text || "執行失敗。").slice(0, 4000));
+          setError(
+            String(message.text || t("執行失敗。", "Execution failed.")).slice(
+              0,
+              4000,
+            ),
+          );
       }
     });
   }, [subscribe, sessionKey, snapshot, results]);
@@ -121,7 +129,12 @@ export function PythonRunner({
       release(runId);
       activeRun.current = null;
       setStatus("error");
-      setError("儲存或執行逾時，已停止。請重試。");
+      setError(
+        t(
+          "儲存或執行逾時，已停止。請重試。",
+          "Saving or execution timed out and was stopped. Please try again.",
+        ),
+      );
     }, 60000);
     try {
       await beforeRun?.();
@@ -131,7 +144,14 @@ export function PythonRunner({
       release(runId);
       activeRun.current = null;
       setStatus("error");
-      setError(error instanceof Error ? error.message : "儲存失敗，尚未執行。");
+      setError(
+        error instanceof Error
+          ? localizedError(error, language)
+          : t(
+              "儲存失敗，尚未執行。",
+              "Saving failed. The program has not run.",
+            ),
+      );
       return;
     }
     if (activeRun.current !== runId) return;
@@ -141,9 +161,12 @@ export function PythonRunner({
   }
 
   return (
-    <section className="python-runner" aria-label="Python 執行結果">
+    <section
+      className="python-runner"
+      aria-label={t("Python 執行結果", "Python execution results")}
+    >
       <div className="practice-pane-header">
-        <strong>Python 輸出</strong>
+        <strong>{t("Python 輸出", "Python output")}</strong>
         {busy ? (
           <button
             onClick={() => {
@@ -157,11 +180,11 @@ export function PythonRunner({
             }}
           >
             <Square size={13} />
-            停止
+            {t("停止", "Stop")}
           </button>
         ) : runtimeStatus === "error" ? (
           <button onClick={() => post({ kind: "hello" })}>
-            重試載入 Python
+            {t("重試載入 Python", "Retry loading Python")}
           </button>
         ) : (
           <button
@@ -173,33 +196,42 @@ export function PythonRunner({
             onClick={run}
           >
             <Play size={13} />
-            執行 Python
+            {t("執行 Python", "Run Python")}
           </button>
         )}
       </div>
       <div className="python-run-status" role="status">
         {runtimeBusy && !busy
-          ? "Python 仍在執行，完成後即可查看結果。"
+          ? t(
+              "Python 仍在執行，完成後即可查看結果。",
+              "Python is still running. Results will appear when it finishes.",
+            )
           : runtimeStatus === "warming" && !busy
-            ? "準備 Python 環境…"
+            ? t("準備 Python 環境…", "Preparing the Python environment…")
             : status === "loading"
-              ? "準備執行 Python…"
+              ? t("準備執行 Python…", "Preparing to run Python…")
               : status === "running"
-                ? "執行中…"
+                ? t("執行中…", "Running…")
                 : status === "done"
-                  ? "執行完成"
+                  ? t("執行完成", "Execution complete")
                   : status === "stopped"
-                    ? "已停止"
+                    ? t("已停止", "Stopped")
                     : status === "error"
-                      ? "執行未完成"
-                      : entryPath || "請選擇 .py 檔案"}
+                      ? t("執行未完成", "Execution incomplete")
+                      : entryPath || t("請選擇 .py 檔案", "Select a .py file")}
       </div>
-      <pre className="python-output" aria-label="Python 標準輸出">
+      <pre
+        className="python-output"
+        aria-label={t("Python 標準輸出", "Python standard output")}
+      >
         {output ||
           (!busy && status === "done"
-            ? "（程式沒有輸出）"
+            ? t("（程式沒有輸出）", "(The program produced no output)")
             : !busy
-              ? "執行後，print() 的結果會顯示在這裡。"
+              ? t(
+                  "執行後，print() 的結果會顯示在這裡。",
+                  "After running, print() output will appear here.",
+                )
               : "")}
       </pre>
       {(error || runtimeError) && (
@@ -209,16 +241,21 @@ export function PythonRunner({
       )}
       {expectedOutput !== undefined && (
         <div className="python-expected">
-          <strong>練習目標輸出</strong>
-          <pre>{expectedOutput || "（沒有輸出）"}</pre>
+          <strong>{t("練習目標輸出", "Expected practice output")}</strong>
+          <pre>{expectedOutput || t("（沒有輸出）", "(No output)")}</pre>
           {status === "done" && (
-            <p role="status">{outputFeedback(output, expectedOutput)}</p>
+            <p role="status">
+              {outputFeedback(output, expectedOutput, language)}
+            </p>
           )}
         </div>
       )}
       <small className="practice-footnote">
-        Pyodide {PYODIDE_VERSION} · Python 標準函式庫 · 每次執行上限 10
-        秒。執行產生的檔案不會寫回作品；不支援互動輸入。
+        Pyodide {PYODIDE_VERSION} ·{" "}
+        {t(
+          "Python 標準函式庫 · 每次執行上限 10 秒。執行產生的檔案不會寫回作品；不支援互動輸入。",
+          "Python standard library · 10 seconds per run. Generated files are not saved to your project; interactive input is not supported.",
+        )}
       </small>
     </section>
   );

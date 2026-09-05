@@ -1,4 +1,5 @@
 "use client";
+import { useCourseLanguage } from "./course-language";
 import { useState } from "react";
 import {
   ArrowUpRight,
@@ -32,6 +33,7 @@ export function LessonSection({
   onPractice: () => void;
   hideHeading?: boolean;
 }) {
+  const { t } = useCourseLanguage();
   const [selected, setSelected] = useState(0),
     [exampleClicked, setExampleClicked] = useState(false),
     [exampleColor, setExampleColor] = useState("#7355c9"),
@@ -61,10 +63,20 @@ export function LessonSection({
       setAnswer(value ?? null);
       const passed = await onCheck(section.id, value);
       setFeedback(
-        passed ? "練習完成" : "再試一次，觀察一下上面的說明或儲存你的修改。",
+        passed
+          ? t("練習完成", "Practice complete")
+          : t(
+              "再試一次，觀察一下上面的說明或儲存你的修改。",
+              "Try again. Review the explanation above or save your changes.",
+            ),
       );
     } catch {
-      setFeedback("暫時無法驗證，請再試一次。");
+      setFeedback(
+        t(
+          "暫時無法驗證，請再試一次。",
+          "Unable to check right now. Please try again.",
+        ),
+      );
     } finally {
       setChecking(false);
     }
@@ -85,10 +97,10 @@ export function LessonSection({
           <span>{String(index + 1).padStart(2, "0")}</span>
           {
             {
-              explain: "UNDERSTAND",
-              demonstrate: "EXPLORE",
-              practice: "YOUR TURN",
-              check: "CHECK YOUR UNDERSTANDING",
+              explain: t("理解", "UNDERSTAND"),
+              demonstrate: t("探索", "EXPLORE"),
+              practice: t("換你試試", "YOUR TURN"),
+              check: t("確認理解", "CHECK YOUR UNDERSTANDING"),
             }[section.intent]
           }
           {done && <Check size={15} />}
@@ -123,7 +135,7 @@ export function LessonSection({
           <aside className="lesson-takeaway">
             <Lightbulb size={20} />
             <div>
-              <strong>本頁重點</strong>
+              <strong>{t("本頁重點", "Key takeaway")}</strong>
               <p>{c.takeaway}</p>
             </div>
           </aside>
@@ -150,7 +162,7 @@ export function LessonSection({
             <div
               className={webTrio ? "concept-cards" : "teaching-concept-cards"}
               role="group"
-              aria-label="選擇概念"
+              aria-label={t("選擇概念", "Choose a concept")}
             >
               {c.cards.map((card, i) => (
                 <button
@@ -187,10 +199,10 @@ export function LessonSection({
                   {webTrio ? (
                     <span>
                       {i === 0
-                        ? "放什麼內容"
+                        ? t("放什麼內容", "What content to include")
                         : i === 1
-                          ? "長什麼樣子"
-                          : "點了會怎樣"}
+                          ? t("長什麼樣子", "How it looks")
+                          : t("點了會怎樣", "What happens on click")}
                     </span>
                   ) : (
                     <ArrowUpRight size={16} aria-hidden="true" />
@@ -210,8 +222,10 @@ export function LessonSection({
                     <span>your-idea.web</span>
                   </div>
                   <div className={"mini-site state-" + selected}>
-                    <span className="mini-eyebrow">網頁範例</span>
-                    <h3>我的網站</h3>
+                    <span className="mini-eyebrow">
+                      {t("網頁範例", "Example website")}
+                    </span>
+                    <h3>{t("我的網站", "My website")}</h3>
                     <div className="mini-lines">
                       <span />
                       <span />
@@ -226,7 +240,9 @@ export function LessonSection({
                         if (selected === 2) setExampleClicked(true);
                       }}
                     >
-                      {exampleClicked ? "你好！" : "點擊按鈕"}{" "}
+                      {exampleClicked
+                        ? t("你好！", "Hello!")
+                        : t("點擊按鈕", "Click the button")}{" "}
                       <ArrowUpRight size={12} />
                     </button>
                   </div>
@@ -236,12 +252,18 @@ export function LessonSection({
                     <div
                       className="color-choices"
                       role="group"
-                      aria-label="試試按鈕顏色"
+                      aria-label={t("試試按鈕顏色", "Try button colors")}
                     >
-                      <span>試試換色</span>
+                      <span>{t("試試換色", "Try another color")}</span>
                       {[
-                        { label: "紫色按鈕", color: "#7355c9" },
-                        { label: "綠色按鈕", color: "#23856b" },
+                        {
+                          label: t("紫色按鈕", "Purple button"),
+                          color: "#7355c9",
+                        },
+                        {
+                          label: t("綠色按鈕", "Green button"),
+                          color: "#23856b",
+                        },
                       ].map((option) => (
                         <button
                           key={option.color}
@@ -257,10 +279,13 @@ export function LessonSection({
                   )}
                   <div className="code-sticker">
                     {selected === 0
-                      ? "<h1>我的網站</h1>"
+                      ? t("<h1>我的網站</h1>", "<h1>My website</h1>")
                       : selected === 1
                         ? `button { background: ${exampleColor}; }`
-                        : 'button.textContent = "你好！";'}
+                        : t(
+                            'button.textContent = "你好！";',
+                            'button.textContent = "Hello!";',
+                          )}
                   </div>
                 </div>
               </div>
@@ -276,7 +301,7 @@ export function LessonSection({
               <div>
                 <strong>
                   {c.cards[selected].title}
-                  {webTrio ? " 的工作" : ""}
+                  {webTrio ? t(" 的工作", " at work") : ""}
                 </strong>
                 <p>{c.cards[selected].body}</p>
               </div>
@@ -334,20 +359,23 @@ export function LessonSection({
             </span>
             <h3>{sequence[selected].title}</h3>
             <p>{sequence[selected].body}</p>
-            <div className="teaching-sequence-controls" aria-label="切換步驟">
+            <div
+              className="teaching-sequence-controls"
+              aria-label={t("切換步驟", "Change step")}
+            >
               <button
                 type="button"
                 disabled={selected === 0}
                 onClick={() => setSelected(selected - 1)}
               >
-                上一步
+                {t("上一步", "Previous step")}
               </button>
               <button
                 type="button"
                 disabled={selected === sequence.length - 1}
                 onClick={() => setSelected(selected + 1)}
               >
-                下一步 <ArrowRight size={15} />
+                {t("下一步", "Next step")} <ArrowRight size={15} />
               </button>
             </div>
           </div>
@@ -375,7 +403,12 @@ export function LessonSection({
             <span className="pill">&lt;{c.elements[selected].tag}&gt;</span>
             <h3>{c.elements[selected].label}</h3>
             <p>{c.elements[selected].description}</p>
-            <span className="quiet">點選左側的標籤，看看它的意義。</span>
+            <span className="quiet">
+              {t(
+                "點選左側的標籤，看看它的意義。",
+                "Select a tag on the left to learn what it means.",
+              )}
+            </span>
           </div>
         </div>
       )}
@@ -416,7 +449,7 @@ export function LessonSection({
           <div>
             <span>{c.path}</span>
             <button onClick={onPractice}>
-              開啟實作區 <ArrowUpRight size={14} />
+              {t("開啟實作區", "Open practice")} <ArrowUpRight size={14} />
             </button>
           </div>
           <pre>
@@ -427,7 +460,7 @@ export function LessonSection({
       {c.type === "terminal" && (
         <div className="terminal-example">
           <span>
-            <TerminalIcon size={16} /> 教學 Terminal
+            <TerminalIcon size={16} /> {t("教學 Terminal", "Learning terminal")}
           </span>
           {c.commands.map((command) => (
             <button key={command} onClick={onPractice}>
@@ -453,10 +486,12 @@ export function LessonSection({
             <i />
             <i />
             <i />
-            <span>你的網站 · 即時預覽</span>
+            <span>
+              {t("你的網站 · 即時預覽", "Your website · Live preview")}
+            </span>
           </div>
           <iframe
-            title="課程網站預覽"
+            title={t("課程網站預覽", "Course website preview")}
             sandbox="allow-scripts"
             srcDoc={buildPreview(files)}
           />
@@ -471,13 +506,18 @@ export function LessonSection({
           >
             {done ? (
               <>
-                <Check size={16} /> 已完成練習
+                <Check size={16} /> {t("已完成練習", "Practice complete")}
               </>
             ) : (
-              "驗證我的練習"
+              t("驗證我的練習", "Check my practice")
             )}
           </button>
-          <span>先在實作區儲存修改，再回來驗證。</span>
+          <span>
+            {t(
+              "先在實作區儲存修改，再回來驗證。",
+              "Save your changes in the practice workspace, then return to check.",
+            )}
+          </span>
         </div>
       )}
       {feedback && (

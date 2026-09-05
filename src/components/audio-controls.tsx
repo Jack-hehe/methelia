@@ -1,4 +1,6 @@
 "use client";
+import { useCourseLanguage } from "./course-language";
+import { localizedError } from "../core/language";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -52,6 +54,7 @@ export function AudioControls({
   trailingControls?: React.ReactNode;
   captionTarget?: HTMLDivElement | null;
 }) {
+  const { t, language, english } = useCourseLanguage();
   const chapterMode = pkg.narrationMode === "chapter" && !pkg.pageAudio;
   const page = pageTrack(pkg, sectionId);
   const track = chapterMode
@@ -179,7 +182,11 @@ export function AudioControls({
     setNavigating(false);
     seek(playbackRequest.time);
     if (playbackRequest.play && !paused)
-      void ref.current.play().catch(() => onError("請按播放開始解說。"));
+      void ref.current
+        .play()
+        .catch(() =>
+          onError(t("請按播放開始解說。", "Press play to start narration.")),
+        );
     else ref.current.pause();
   }, [playbackRequest?.id, metadataReady, enabled, sectionId, paused]);
   function seek(value: number, notify = true) {
@@ -214,7 +221,12 @@ export function AudioControls({
       if (alive.current && sourceRef.current === originalSource) {
         setTime(audio.currentTime);
         onError(
-          error instanceof Error ? error.message : "無法切換解說進度，請重試。",
+          error instanceof Error
+            ? localizedError(error, language)
+            : t(
+                "無法切換解說進度，請重試。",
+                "Unable to seek narration. Please try again.",
+              ),
         );
       }
     } finally {
@@ -299,7 +311,14 @@ export function AudioControls({
             onPlayingChange?.(false);
             onTime(playbackEnd);
           }}
-          onError={() => onError("語音無法播放，請重整後重試。")}
+          onError={() =>
+            onError(
+              t(
+                "語音無法播放，請重整後重試。",
+                "Unable to play narration. Refresh and try again.",
+              ),
+            )
+          }
         />
       )}
       {enabled &&
@@ -320,7 +339,7 @@ export function AudioControls({
       <div className={`timeline ${chapterMode ? styles.chapterTimeline : ""}`}>
         <input
           type="range"
-          aria-label="解說進度"
+          aria-label={t("解說進度", "Narration progress")}
           aria-valuetext={`${clock(Math.max(0, time - track.start))} / ${clock(Math.max(0, end - track.start))}`}
           min="0"
           max={Math.max(0.1, end - track.start)}
@@ -353,9 +372,15 @@ export function AudioControls({
             type="button"
             className={styles.pageMarker}
             data-page-marker={marker.section.id}
-            aria-label={`第 ${marker.index + 1} 頁：${marker.section.title}，${clock(marker.time)}`}
+            aria-label={t(
+              `第 ${marker.index + 1} 頁：${marker.section.title}，${clock(marker.time)}`,
+              `Page ${marker.index + 1}: ${marker.section.title}, ${clock(marker.time)}`,
+            )}
             aria-current={sectionId === marker.section.id ? "step" : undefined}
-            title={`第 ${marker.index + 1} 頁 · ${marker.section.title} · ${clock(marker.time)}`}
+            title={t(
+              `第 ${marker.index + 1} 頁 · ${marker.section.title} · ${clock(marker.time)}`,
+              `Page ${marker.index + 1} · ${marker.section.title} · ${clock(marker.time)}`,
+            )}
             style={{
               left: `${Math.max(0, Math.min(100, (marker.time / (end || 1)) * 100))}%`,
             }}
@@ -368,13 +393,21 @@ export function AudioControls({
         <button
           className="play-button"
           disabled={!enabled || !metadataReady || paused || navigating}
-          aria-label={playing ? "暫停解說" : "播放解說"}
+          aria-label={
+            playing
+              ? t("暫停解說", "Pause narration")
+              : t("播放解說", "Play narration")
+          }
           onClick={() => {
             if (playing) ref.current?.pause();
             else {
               if ((ref.current?.currentTime ?? time) >= playbackEnd - 0.05)
                 seek(page.start);
-              void ref.current?.play().catch(() => onError("請再按一次播放。"));
+              void ref.current
+                ?.play()
+                .catch(() =>
+                  onError(t("請再按一次播放。", "Please press play again.")),
+                );
             }
           }}
         >
@@ -384,7 +417,11 @@ export function AudioControls({
           {statusControl || (
             <span
               className="audio-clock"
-              aria-label={chapterMode ? "本章解說時間" : "本頁解說時間"}
+              aria-label={
+                chapterMode
+                  ? t("本章解說時間", "Chapter narration time")
+                  : t("本頁解說時間", "Page narration time")
+              }
             >
               {clock(Math.max(0, time - track.start))}{" "}
               <span>/ {clock(Math.max(0, end - track.start))}</span>
@@ -393,8 +430,8 @@ export function AudioControls({
         </div>
         <button
           className="icon-button audio-rewind"
-          aria-label="倒退十秒"
-          title="倒退十秒"
+          aria-label={t("倒退十秒", "Rewind ten seconds")}
+          title={t("倒退十秒", "Rewind ten seconds")}
           disabled={!enabled || !metadataReady || navigating}
           onClick={() => void navigate(time - 10)}
         >
@@ -402,11 +439,15 @@ export function AudioControls({
         </button>
       </div>
       <div className="canvas-tools">
-        <div className="audio-options" role="group" aria-label="解說設定">
+        <div
+          className="audio-options"
+          role="group"
+          aria-label={t("解說設定", "Narration settings")}
+        >
           <button
             className={"icon-button " + (captions ? "selected" : "")}
-            aria-label="切換字幕"
-            title="字幕"
+            aria-label={t("切換字幕", "Toggle captions")}
+            title={t("字幕", "Captions")}
             aria-pressed={captions}
             disabled={!enabled}
             onClick={() => setCaptions((v) => !v)}
@@ -415,8 +456,8 @@ export function AudioControls({
           </button>
           <button
             className="icon-button"
-            aria-label="切換靜音"
-            title={muted ? "開啟聲音" : "關閉聲音"}
+            aria-label={t("切換靜音", "Toggle mute")}
+            title={muted ? t("開啟聲音", "Unmute") : t("關閉聲音", "Mute")}
             aria-pressed={muted}
             disabled={!enabled}
             onClick={() => {
@@ -428,9 +469,12 @@ export function AudioControls({
           </button>
           <button
             className="rate-button"
-            aria-label="播放速度"
-            aria-description={`目前速度 ${rate} 倍`}
-            title="播放速度"
+            aria-label={t("播放速度", "Playback speed")}
+            aria-description={t(
+              `目前速度 ${rate} 倍`,
+              `Current speed ${rate}x`,
+            )}
+            title={t("播放速度", "Playback speed")}
             disabled={!enabled}
             onClick={() => {
               const r = rate === 1 ? 1.25 : rate === 1.25 ? 1.5 : 1;

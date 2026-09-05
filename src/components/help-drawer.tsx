@@ -1,4 +1,6 @@
 "use client";
+import { useCourseLanguage } from "./course-language";
+import { localizedError } from "../core/language";
 import { useEffect, useRef, useState } from "react";
 import {
   PanelRightClose,
@@ -32,6 +34,7 @@ export function HelpDrawer({
   onPreview: (nodes: LearningNode[]) => void;
   onError: (error: string) => void;
 }) {
+  const { t, language, english } = useCourseLanguage();
   const ref = useRef<HTMLDialogElement>(null),
     bottom = useRef<HTMLDivElement>(null),
     field = useRef<HTMLTextAreaElement>(null),
@@ -86,7 +89,7 @@ export function HelpDrawer({
       // Hand the question back rather than losing what was typed.
       setPending("");
       setQuestion(text);
-      onError((e as Error).message);
+      onError(localizedError(e, language));
     } finally {
       setBusy(false);
     }
@@ -97,7 +100,12 @@ export function HelpDrawer({
       setCopied(message.id);
       setTimeout(() => setCopied(""), 1600);
     } catch {
-      onError("這個瀏覽器不允許複製，請手動選取文字。");
+      onError(
+        t(
+          "這個瀏覽器不允許複製，請手動選取文字。",
+          "This browser does not allow copying. Please select the text manually.",
+        ),
+      );
     }
   }
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
@@ -126,14 +134,14 @@ export function HelpDrawer({
     <dialog
       ref={ref}
       className="help-drawer"
-      aria-label="小問題"
+      aria-label={t("小問題", "Ask a question")}
       style={{ width }}
     >
       <div
         className="help-resize"
         role="separator"
         aria-orientation="vertical"
-        aria-label="調整側欄寬度"
+        aria-label={t("調整側欄寬度", "Resize sidebar")}
         onPointerDown={startResize}
         onPointerMove={moveResize}
         onPointerUp={endResize}
@@ -142,12 +150,12 @@ export function HelpDrawer({
       <div className="panel-heading">
         <div>
           <MessageCircle size={19} />
-          <strong>小問題</strong>
+          <strong>{t("小問題", "Ask a question")}</strong>
         </div>
         <button
           className="icon-button"
-          aria-label="收合小問題"
-          title="收合側欄"
+          aria-label={t("收合小問題", "Close questions")}
+          title={t("收合側欄", "Collapse sidebar")}
           onClick={onClose}
         >
           <PanelRightClose size={18} />
@@ -162,7 +170,8 @@ export function HelpDrawer({
           <div key={message.id} className={"chat-message " + message.role}>
             {message.role === "assistant" && (
               <span className="message-label">
-                METHELIA {course.mode === "demo" ? "· 示範回覆" : ""}
+                METHELIA{" "}
+                {course.mode === "demo" ? t("· 示範回覆", "· Demo reply") : ""}
               </span>
             )}
             {message.role === "assistant" ? (
@@ -176,8 +185,12 @@ export function HelpDrawer({
               <div className="message-actions">
                 <button
                   className="icon-button"
-                  aria-label="複製回覆"
-                  title={copied === message.id ? "已複製" : "複製回覆"}
+                  aria-label={t("複製回覆", "Copy reply")}
+                  title={
+                    copied === message.id
+                      ? t("已複製", "Copied")
+                      : t("複製回覆", "Copy reply")
+                  }
                   onClick={() => void copy(message)}
                 >
                   {copied === message.id ? (
@@ -191,7 +204,8 @@ export function HelpDrawer({
             {!!message.nodes?.length && (
               <div className="recommendations">
                 <span>
-                  <GitBranch size={14} /> 建議節點
+                  <GitBranch size={14} />
+                  {t("建議節點", "Suggested nodes")}
                 </span>
                 {message.nodes.map((node) => (
                   <button
@@ -216,7 +230,12 @@ export function HelpDrawer({
                     <span>
                       <strong>{node.title}</strong>
                       <small>{node.objective}</small>
-                      <em>約 {node.minutes} 分鐘 · 完成本章後開始</em>
+                      <em>
+                        {t(
+                          `約 ${node.minutes} 分鐘 · 完成本章後開始`,
+                          `About ${node.minutes} min · Starts after this chapter`,
+                        )}
+                      </em>
                     </span>
                   </button>
                 ))}
@@ -229,7 +248,8 @@ export function HelpDrawer({
                     )
                   }
                 >
-                  預覽補強路徑 <GitBranch size={14} />
+                  {t("預覽補強路徑", "Preview reinforcement path")}
+                  <GitBranch size={14} />
                 </button>
               </div>
             )}
@@ -242,7 +262,8 @@ export function HelpDrawer({
         )}
         {busy && (
           <div className="thinking">
-            <LoaderCircle className="spin" size={16} /> 回覆中…
+            <LoaderCircle className="spin" size={16} />
+            {t("回覆中…", "Replying…")}
           </div>
         )}
         <div ref={bottom} />
@@ -256,7 +277,10 @@ export function HelpDrawer({
       >
         <textarea
           ref={field}
-          placeholder="哪個地方還不太懂？（Enter 送出，Shift+Enter 換行）"
+          placeholder={t(
+            "哪個地方還不太懂？（Enter 送出，Shift+Enter 換行）",
+            "What needs clarification? (Enter to send, Shift+Enter for a new line)",
+          )}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => {
@@ -272,7 +296,10 @@ export function HelpDrawer({
           }}
           maxLength={2000}
         />
-        <button aria-label="送出問題" disabled={busy || !question.trim()}>
+        <button
+          aria-label={t("送出問題", "Send question")}
+          disabled={busy || !question.trim()}
+        >
           <ArrowUp size={19} />
         </button>
       </form>

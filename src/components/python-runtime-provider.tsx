@@ -1,4 +1,5 @@
 "use client";
+import { useCourseLanguage } from "./course-language";
 
 import {
   createContext,
@@ -46,6 +47,7 @@ export function PythonRuntimeProvider({
   children: ReactNode;
   enabled?: boolean;
 }) {
+  const { language, t } = useCourseLanguage();
   const iframe = useRef<HTMLIFrameElement>(null);
   const listeners = useRef(new Set<(message: RuntimeMessage) => void>());
   const active = useRef<string | null>(null);
@@ -70,8 +72,8 @@ export function PythonRuntimeProvider({
     if (enabled) setChannel((value) => value || crypto.randomUUID());
   }, [enabled]);
   const document = useMemo(
-    () => (channel ? pythonRunnerDocument(channel) : ""),
-    [channel],
+    () => (channel ? pythonRunnerDocument(channel, language) : ""),
+    [channel, language],
   );
   const post = useCallback(
     (
@@ -134,7 +136,9 @@ export function PythonRuntimeProvider({
           current.result.status = message.kind;
           current.result.error =
             message.kind === "error"
-              ? String(message.text || "執行失敗。").slice(0, 4000)
+              ? String(
+                  message.text || t("執行失敗。", "Execution failed."),
+                ).slice(0, 4000)
               : "";
           results.current.set(current.key, current.result);
           if (results.current.size > 100)
@@ -148,7 +152,11 @@ export function PythonRuntimeProvider({
       } else if (message.kind === "warming") setStatus("warming");
       else if (message.kind === "error" && !message.runId) {
         setStatus("error");
-        setError(String(message.text || "Python 載入失敗。").slice(0, 4000));
+        setError(
+          String(
+            message.text || t("Python 載入失敗。", "Python failed to load."),
+          ).slice(0, 4000),
+        );
       }
       if (
         ["done", "stopped", "error"].includes(message.kind) &&
@@ -186,7 +194,7 @@ export function PythonRuntimeProvider({
       {channel && (
         <iframe
           ref={iframe}
-          title="隔離的 Python 執行環境"
+          title={t("隔離的 Python 執行環境", "Isolated Python runtime")}
           sandbox="allow-scripts"
           referrerPolicy="no-referrer"
           srcDoc={document}

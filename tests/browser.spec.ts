@@ -119,7 +119,7 @@ test("leaving practice for home saves the current editor draft", async ({
     .getByRole("button", { name: "Methelia" })
     .click();
   await expect(
-    page.getByRole("button", { name: "先體驗一堂課" }),
+    page.getByRole("textbox", { name: "你想學什麼？" }),
   ).toBeVisible();
   const workspace = await (
     await page.request.get("/api/workspace?courseId=" + snapshot.course.id)

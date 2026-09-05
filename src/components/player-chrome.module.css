@@ -2,25 +2,78 @@
   position: relative;
   --controls-space: 80px;
   --header-space: 64px;
+  --chrome-duration: 220ms;
 }
 .captionLayer {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 35;
+  transition: transform var(--chrome-duration) ease;
 }
 .shell .captionLayer > :global(.subtitle-line) {
-  bottom: calc(var(--controls-space) + 8px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--controls-space) + 24px + env(safe-area-inset-bottom, 0px));
+}
+.shell > :global(.lesson-canvas) {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.shell :global(.canvas-heading) {
+  padding: 12px 28px 8px;
+}
+.shell :global(.canvas-heading h1) {
+  font-size: clamp(20px, 2vw, 27px);
+  margin: 0;
+}
+.shell :global(.canvas-chapter) {
+  display: none;
+}
+.shell :global(.canvas-content) {
+  padding: 8px 28px 24px;
+}
+.shell :global(.section-body) {
+  margin-bottom: 12px;
+}
+.shell > :global(.preparation),
+.shell :global(.chapter-gate) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.shell :global(.lesson-canvas:has(> .chapter-gate) > .canvas-heading) {
+  display: none;
+}
+@media (max-width: 650px) {
+  .shell :global(.canvas-heading) {
+    padding: 10px 16px 6px;
+  }
+  .shell :global(.canvas-content) {
+    padding: 6px 16px 20px;
+  }
 }
 .shell > :global(.canvas-controls),
 .shell > :global(.course-header) {
   transition:
-    transform 220ms ease,
+    transform var(--chrome-duration) ease,
     opacity 180ms ease,
-    margin 220ms ease;
+    margin var(--chrome-duration) ease;
+}
+.hidden > .captionLayer {
+  transform: translateY(var(--controls-space));
 }
 .hidden > :global(.canvas-controls) {
-  transform: translateY(100%);
+  /* The negative margin moves this flex item down by its height already. */
   margin-bottom: calc(-1 * var(--controls-space));
   opacity: 0;
   pointer-events: none;
@@ -53,7 +106,104 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .shell > :global(.canvas-controls),
-  .shell > :global(.course-header) {
+  .shell > :global(.course-header),
+  .captionLayer {
     transition: none;
+  }
+}
+
+/* Shared reading scale and balanced use of the teaching surface. */
+.shell {
+  --lesson-text-size: clamp(18px, 1.2vw, 21px);
+  --lesson-detail-size: clamp(16px, 1vw, 18px);
+}
+.shell :global(.section-body),
+.shell :global(.lesson-reading-cards p),
+.shell :global(.lesson-prose),
+.shell :global(.lesson-takeaway p),
+.shell :global(.quiz-option),
+.shell :global(.quiz-explanation),
+.shell :global(.concept-caption p),
+.shell :global(.teaching-concept-detail p),
+.shell :global(.teaching-sequence-detail p) {
+  font-size: var(--lesson-text-size);
+  line-height: 1.7;
+}
+.shell :global(.lesson-figure p),
+.shell :global(.lesson-figure figcaption),
+.shell :global(.feedback),
+.shell :global(.concept-card > span:last-child),
+.shell :global(.teaching-number),
+.shell :global(.quiz-option > span) {
+  font-size: var(--lesson-detail-size);
+  line-height: 1.5;
+}
+.shell :global(.lesson-reading-cards) {
+  margin-block: auto;
+  padding-block: 24px;
+  align-items: stretch;
+  gap: clamp(18px, 2vw, 32px);
+}
+.shell :global(.lesson-reading-cards article) {
+  min-height: clamp(280px, 42dvh, 440px);
+  padding: clamp(24px, 2.2vw, 40px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.shell :global(.lesson-reading-cards h3) {
+  font-size: clamp(24px, 1.6vw, 29px);
+  margin-block: 22px 12px;
+}
+.shell :global(.lesson-reading-cards p) {
+  margin: 0;
+}
+.shell :global(.lesson-article),
+.shell :global(.teaching-concept),
+.shell :global(.teaching-steps),
+.shell :global(.teaching-flow) {
+  margin-block: auto;
+}
+.shell :global(.quiz) {
+  max-width: 1100px;
+  padding: clamp(18px, 2.4vw, 36px);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.shell :global(.quiz h3) {
+  font-size: clamp(24px, 1.8vw, 30px);
+  line-height: 1.45;
+  margin-bottom: 24px;
+}
+.shell :global(.quiz-option) {
+  padding: 18px 22px;
+  min-height: 76px;
+  gap: 18px;
+}
+.shell :global(.quiz-option > span) {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+@media (max-width: 700px) {
+  .shell :global(.lesson-reading-cards) {
+    grid-template-columns: 1fr;
+    padding-block: 12px;
+    gap: 14px;
+  }
+  .shell :global(.lesson-reading-cards article) {
+    min-height: 0;
+    padding: 20px;
+  }
+  .shell :global(.lesson-reading-cards h3) {
+    margin-top: 12px;
+  }
+  .shell :global(.quiz) {
+    padding: 16px 0;
+  }
+  .shell :global(.quiz-option) {
+    padding: 14px;
+    gap: 12px;
   }
 }

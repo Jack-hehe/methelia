@@ -1,4 +1,6 @@
 "use client";
+import { localizedError } from "../core/language";
+import { useCourseLanguage } from "./course-language";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
@@ -66,6 +68,7 @@ export function WorkspacePanel({
   onClose: () => void;
   onError: (e: string) => void;
 }) {
+  const { language, t } = useCourseLanguage();
   const chapter = useMemo(
     () => workspaceChapter(sourceChapter, activeSectionId),
     [sourceChapter, activeSectionId],
@@ -102,7 +105,10 @@ export function WorkspacePanel({
     [manualStep, setManualStep] = useState(0),
     [manualDemo, setManualDemo] = useState(false),
     [output, setOutput] = useState(
-      "輸入 ls 查看檔案，edit 檔名 開啟編輯器。\n",
+      t(
+        "輸入 ls 查看檔案，edit 檔名 開啟編輯器。\n",
+        "Enter ls to see files, or edit filename to open the editor.\n",
+      ),
     );
   const guides = chapter.sections.filter((s) => s.guide);
   const actionInFlight = useRef(false);
@@ -214,7 +220,13 @@ export function WorkspacePanel({
   }, [workspace.revision]);
   useEffect(() => {
     registerLeave(async () => {
-      if (actionInFlight.current) throw new Error("正在儲存，請稍候再切換。");
+      if (actionInFlight.current)
+        throw new Error(
+          t(
+            "正在儲存，請稍候再切換。",
+            "Saving. Please wait before switching.",
+          ),
+        );
       actionInFlight.current = true;
       setBusy(true);
       try {
@@ -245,7 +257,10 @@ export function WorkspacePanel({
     if (!dirty || !path) return workspace;
     if (workspace.files[path] !== baseDraft && workspace.files[path] !== draft)
       throw new Error(
-        "檔案已在其他地方更新。你的草稿仍保留在編輯器，請先複製保存後重新載入。",
+        t(
+          "檔案已在其他地方更新。你的草稿仍保留在編輯器，請先複製保存後重新載入。",
+          "This file was updated elsewhere. Your draft is still in the editor. Copy it before reloading.",
+        ),
       );
     const updated = localReview
       ? saveFiles(workspace, { [path]: draft }, workspace.revision)
@@ -269,7 +284,7 @@ export function WorkspacePanel({
     try {
       await work();
     } catch (e) {
-      onError((e as Error).message);
+      onError(localizedError(e, language));
     } finally {
       actionInFlight.current = false;
       setBusy(false);
@@ -282,23 +297,34 @@ export function WorkspacePanel({
       setOutput((v) =>
         (
           v +
-          "\n$ help\npwd · ls · cd · mkdir · touch · cat · clear\nedit <檔名> — Methelia 教學編輯器（非系統指令）\n" +
+          t(
+            "\n$ help\npwd · ls · cd · mkdir · touch · cat · clear\nedit <檔名> — Methelia 教學編輯器（非系統指令）\n",
+            "\n$ help\npwd · ls · cd · mkdir · touch · cat · clear\nedit <filename> — Methelia learning editor (not a system command)\n",
+          ) +
           (legacyTerminal
-            ? "python -m http.server 8000 — 教學預覽轉接器\n"
+            ? t(
+                "python -m http.server 8000 — 教學預覽轉接器\n",
+                "python -m http.server 8000 — learning preview adapter\n",
+              )
             : "")
         ).slice(-30000),
       );
     } else if (/^edit(?:\s|$)/.test(input)) {
       const file = normalizePath(workspace.cwd, input.slice(4).trim());
       if (!(file in workspace.files))
-        throw new Error("找不到檔案。先輸入 ls 查看檔名。");
+        throw new Error(
+          t(
+            "找不到檔案。先輸入 ls 查看檔名。",
+            "File not found. Enter ls to see file names.",
+          ),
+        );
       setPath(file);
       setDraft(workspace.files[file]);
       setBaseDraft(workspace.files[file]);
       setOutput((v) => (v + `\n${workspace.cwd} $ ${input}\n`).slice(-30000));
     } else {
       const result = localReview
-        ? runCommand(workspace, input)
+        ? runCommand(workspace, input, language)
         : await api<{ workspace: Workspace; output: string }>(
             "workspace/commands",
             { courseId, command: input },
@@ -317,7 +343,8 @@ export function WorkspacePanel({
   function openFile(file: string) {
     void action(async () => {
       const latest = await save();
-      if (!Object.hasOwn(latest.files, file)) throw new Error("找不到檔案。");
+      if (!Object.hasOwn(latest.files, file))
+        throw new Error(t("找不到檔案。", "File not found."));
       setPath(file);
       setDraft(latest.files[file]);
       setBaseDraft(latest.files[file]);
@@ -334,13 +361,15 @@ export function WorkspacePanel({
     void action(async () => {
       const latest = await save();
       const result = localReview
-        ? runCommand(latest, `cd ${next}`)
+        ? runCommand(latest, `cd ${next}`, language)
         : await api<{ workspace: Workspace; output: string }>(
             "workspace/commands",
             { courseId, command: `cd ${next}` },
           );
       if (result.workspace.cwd !== next)
-        throw new Error(result.output || "無法開啟目錄。");
+        throw new Error(
+          result.output || t("無法開啟目錄。", "Unable to open the directory."),
+        );
       onChange(result.workspace);
       setBrowserDirectory(next);
     });
@@ -375,19 +404,19 @@ export function WorkspacePanel({
   return (
     <section
       className={`practice-studio practice-environment practice-${environment}`}
-      aria-label="實作區"
+      aria-label={t("實作區", "Practice workspace")}
     >
       <div className="studio-toolbar">
         <div className="studio-title">
           <span className="small-dot" />
           <strong>
             {demonstrating
-              ? "操作示範"
+              ? t("操作示範", "Demonstration")
               : environment === "python"
-                ? "Python 練習"
+                ? t("Python 練習", "Python practice")
                 : shellAvailable
                   ? "Terminal"
-                  : "網頁實作"}
+                  : t("網頁實作", "Web practice")}
           </strong>
         </div>
         <div className="studio-actions">
@@ -401,7 +430,7 @@ export function WorkspacePanel({
                 setShowExample(true);
               }}
             >
-              查看範例
+              {t("查看範例", "View example")}
             </button>
           )}
           {guides.length > 0 && (
@@ -411,7 +440,7 @@ export function WorkspacePanel({
               onClick={watch}
             >
               <Play size={14} />
-              看老師示範
+              {t("看老師示範", "Watch the demonstration")}
             </button>
           )}
           <button
@@ -420,13 +449,13 @@ export function WorkspacePanel({
             onClick={tryIt}
           >
             <Code2 size={14} />
-            自己試試
+            {t("自己試試", "Try it yourself")}
           </button>
           {!embedded && (
             <button
               className="icon-button"
               disabled={busy}
-              aria-label="關閉實作區"
+              aria-label={t("關閉實作區", "Close practice workspace")}
               onClick={() =>
                 void action(async () => {
                   await save();
@@ -455,7 +484,12 @@ export function WorkspacePanel({
                 ? undefined
                 : async () => {
                     if (actionInFlight.current)
-                      throw new Error("正在儲存，請稍後再執行。");
+                      throw new Error(
+                        t(
+                          "正在儲存，請稍後再執行。",
+                          "Saving. Please wait before running.",
+                        ),
+                      );
                     actionInFlight.current = true;
                     setBusy(true);
                     try {
@@ -470,18 +504,22 @@ export function WorkspacePanel({
         ) : environment === "terminal" ? (
           <section
             className="practice-file-browser"
-            aria-label="虛擬檔案與目錄"
+            aria-label={t("虛擬檔案與目錄", "Virtual files and directories")}
           >
             <div className="practice-pane-header">
               <strong>
                 <Folder size={15} />
-                檔案與目錄
+                {t("檔案與目錄", "Files and directories")}
               </strong>
-              <small>{demonstrating ? "示範副本" : "虛擬工作區"}</small>
+              <small>
+                {demonstrating
+                  ? t("示範副本", "Demo copy")
+                  : t("虛擬工作區", "Virtual workspace")}
+              </small>
             </div>
             <div className="practice-directory">
               <button
-                aria-label="上一層目錄"
+                aria-label={t("上一層目錄", "Parent directory")}
                 disabled={busy || directory === "/"}
                 onClick={() =>
                   openDirectory(
@@ -511,11 +549,19 @@ export function WorkspacePanel({
                 </button>
               ))}
               {!children.length && (
-                <p className="practice-empty">這個目錄還沒有檔案。</p>
+                <p className="practice-empty">
+                  {t(
+                    "這個目錄還沒有檔案。",
+                    "This directory has no files yet.",
+                  )}
+                </p>
               )}
             </div>
             <small className="practice-footnote">
-              沙箱教學指令與虛擬檔案系統，並非真正的 Linux 作業系統。
+              {t(
+                "沙箱教學指令與虛擬檔案系統，並非真正的 Linux 作業系統。",
+                "Sandbox learning commands and a virtual file system, not a full Linux operating system.",
+              )}
             </small>
           </section>
         ) : (
@@ -526,38 +572,47 @@ export function WorkspacePanel({
                 <i />
                 <i />
               </span>
-              <span>網頁預覽</span>
+              <span>{t("網頁預覽", "Web preview")}</span>
               <span className="live-label">
                 <i />
                 {demonstrating || showExample
-                  ? "DEMO"
+                  ? t("示範", "DEMO")
                   : localReview
-                    ? "REVIEW"
-                    : "LIVE"}
+                    ? t("複習", "REVIEW")
+                    : t("即時", "LIVE")}
               </span>
             </div>
-            <iframe title="實作網站預覽" sandbox="allow-scripts" srcDoc={src} />
+            <iframe
+              title={t("實作網站預覽", "Practice website preview")}
+              sandbox="allow-scripts"
+              srcDoc={src}
+            />
           </div>
         )}
         <section
           className="studio-terminal"
-          aria-label={shellAvailable ? "Terminal" : "程式碼工作區"}
+          aria-label={
+            shellAvailable ? "Terminal" : t("程式碼工作區", "Code workspace")
+          }
         >
           <div className="studio-terminalbar">
             <span>
               {shellAvailable ? <Terminal size={16} /> : <Code2 size={16} />}{" "}
-              {shellAvailable ? "Terminal" : "檔案編輯器"}{" "}
+              {shellAvailable ? "Terminal" : t("檔案編輯器", "File editor")}{" "}
               <small>
                 {demonstrating
-                  ? "示範副本"
+                  ? t("示範副本", "Demo copy")
                   : localReview
-                    ? "複習副本 · 修改不會保存到作品"
-                    : "你的工作區"}
+                    ? t(
+                        "複習副本 · 修改不會保存到作品",
+                        "Review copy · Changes are not saved to your project",
+                      )
+                    : t("你的工作區", "Your workspace")}
               </small>
             </span>
             {!localReview && (
               <a
-                aria-label="匯出作品"
+                aria-label={t("匯出作品", "Export project")}
                 href={
                   "/api/workspace/export?courseId=" +
                   encodeURIComponent(courseId)
@@ -568,7 +623,10 @@ export function WorkspacePanel({
             )}
           </div>
           {!shellAvailable && !demonstrating && !showExample && (
-            <div className="practice-file-tabs" aria-label="工作區檔案">
+            <div
+              className="practice-file-tabs"
+              aria-label={t("工作區檔案", "Workspace files")}
+            >
               {Object.keys(workspace.files)
                 .sort()
                 .map((file) => (
@@ -587,7 +645,9 @@ export function WorkspacePanel({
             <div className="guided-terminal">
               <div className="terminal-demo-label">
                 <span className="small-dot" />
-                {syncedDemo ? "語音同步示範" : "文字示範"}
+                {syncedDemo
+                  ? t("語音同步示範", "Audio-synced demonstration")
+                  : t("文字示範", "Text demonstration")}
               </div>
               {shellAvailable && (
                 <p className="demo-command">
@@ -597,7 +657,12 @@ export function WorkspacePanel({
               )}
               <div className="terminal-file-label">
                 {guide.path}
-                <span>示範不會儲存到你的作品</span>
+                <span>
+                  {t(
+                    "示範不會儲存到你的作品",
+                    "Demonstrations are not saved to your project",
+                  )}
+                </span>
               </div>
               <pre className="demo-source">
                 {frame.files[guide.path]?.split("\n").map((line, i) => (
@@ -619,7 +684,10 @@ export function WorkspacePanel({
                     {frame.typingLine === i && (
                       <span
                         className="demo-typing-caret"
-                        aria-label="老師正在輸入"
+                        aria-label={t(
+                          "老師正在輸入",
+                          "The instructor is typing",
+                        )}
                       />
                     )}
                     {"\n"}
@@ -635,9 +703,15 @@ export function WorkspacePanel({
                   )}
                   {frame.target === "preview"
                     ? environment === "python"
-                      ? "修改完成 → 執行 Python 觀察結果"
-                      : "修改完成 → 觀察左側"
-                    : `找到「${guide.find}」`}
+                      ? t(
+                          "修改完成 → 執行 Python 觀察結果",
+                          "Changes ready → Run Python to see the result",
+                        )
+                      : t(
+                          "修改完成 → 觀察左側",
+                          "Changes ready → Look at the left pane",
+                        )
+                    : t(`找到「${guide.find}」`, `Find “${guide.find}”`)}
                 </span>
                 {!syncedDemo && (
                   <button
@@ -653,10 +727,10 @@ export function WorkspacePanel({
                     }}
                   >
                     {manualStep % 2 === 0
-                      ? "看修改結果"
+                      ? t("看修改結果", "See the changes")
                       : manualStep < guides.length * 2 - 1
-                        ? "下一個步驟"
-                        : "再看一次"}
+                        ? t("下一個步驟", "Next step")
+                        : t("再看一次", "Watch again")}
                     <ArrowRight size={14} />
                   </button>
                 )}
@@ -666,9 +740,17 @@ export function WorkspacePanel({
             <div className="terminal-editor">
               <div className="terminal-file-label">
                 {example.path}
-                <span>唯讀範例 · 不會覆蓋你的檔案</span>
+                <span>
+                  {t(
+                    "唯讀範例 · 不會覆蓋你的檔案",
+                    "Read-only example · Your files will not be overwritten",
+                  )}
+                </span>
               </div>
-              <pre className="prepared-example" aria-label="本頁程式碼範例">
+              <pre
+                className="prepared-example"
+                aria-label={t("本頁程式碼範例", "Code example for this page")}
+              >
                 {example.example}
               </pre>
             </div>
@@ -679,15 +761,15 @@ export function WorkspacePanel({
                 <span>
                   {localReview
                     ? dirty
-                      ? "尚未套用到副本"
-                      : "僅保留在複習副本"
+                      ? t("尚未套用到副本", "Not yet applied to the copy")
+                      : t("僅保留在複習副本", "Kept only in the review copy")
                     : dirty
-                      ? "尚未儲存"
-                      : "已儲存"}
+                      ? t("尚未儲存", "Unsaved")
+                      : t("已儲存", "Saved")}
                 </span>
               </div>
               <textarea
-                aria-label="程式碼編輯器"
+                aria-label={t("程式碼編輯器", "Code editor")}
                 value={draft}
                 spellCheck={false}
                 disabled={busy}
@@ -705,18 +787,21 @@ export function WorkspacePanel({
               <div className="terminal-editor-actions">
                 <small>
                   {environment === "python"
-                    ? "執行 Python 會先儲存，再顯示結果"
+                    ? t(
+                        "執行 Python 會先儲存，再顯示結果",
+                        "Running Python saves first, then shows results",
+                      )
                     : environment === "web"
-                      ? "左側即時預覽"
-                      : "虛擬工作區檔案"}{" "}
-                  · Ctrl + Enter 儲存
+                      ? t("左側即時預覽", "Live preview on the left")
+                      : t("虛擬工作區檔案", "Virtual workspace files")}{" "}
+                  · {t("Ctrl + Enter 儲存", "Ctrl + Enter to save")}
                 </small>
                 <button disabled={busy} onClick={saveEditor}>
                   {busy
-                    ? "儲存中…"
+                    ? t("儲存中…", "Saving…")
                     : shellAvailable
-                      ? "儲存並返回 Terminal"
-                      : "儲存檔案"}
+                      ? t("儲存並返回 Terminal", "Save and return to terminal")
+                      : t("儲存檔案", "Save file")}
                   <ArrowUpRight size={14} />
                 </button>
               </div>
@@ -732,15 +817,18 @@ export function WorkspacePanel({
               >
                 <span>❯</span>
                 <input
-                  aria-label="終端機指令"
-                  placeholder="輸入指令…"
+                  aria-label={t("終端機指令", "Terminal command")}
+                  placeholder={t("輸入指令…", "Enter a command…")}
                   value={command}
                   onChange={(e) => setCommand(e.target.value)}
                   autoComplete="off"
                   spellCheck={false}
                   disabled={busy}
                 />
-                <button disabled={busy} aria-label="執行指令">
+                <button
+                  disabled={busy}
+                  aria-label={t("執行指令", "Run command")}
+                >
                   <ArrowRight size={17} />
                 </button>
               </form>
@@ -752,11 +840,19 @@ export function WorkspacePanel({
                 ))}
               </div>
               <small className="terminal-disclaimer">
-                沙箱教學指令 · help 查看支援指令 · 並非真正的 Linux 作業系統
+                {t(
+                  "沙箱教學指令 · help 查看支援指令 · 並非真正的 Linux 作業系統",
+                  "Sandbox learning commands · Enter help for supported commands · Not a full Linux operating system",
+                )}
               </small>
             </div>
           ) : (
-            <p className="practice-empty">本節沒有可編輯的檔案。</p>
+            <p className="practice-empty">
+              {t(
+                "本節沒有可編輯的檔案。",
+                "This section has no editable files.",
+              )}
+            </p>
           )}
         </section>
         {demonstrating && guide && (
@@ -766,7 +862,9 @@ export function WorkspacePanel({
           >
             <MousePointer2 size={27} fill="currentColor" />
             <span>
-              {frame.target === "preview" ? "看這裡的變化" : "跟我做一次"}
+              {frame.target === "preview"
+                ? t("看這裡的變化", "Watch the changes here")
+                : t("跟我做一次", "Follow along")}
             </span>
           </div>
         )}

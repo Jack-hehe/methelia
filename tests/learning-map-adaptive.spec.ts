@@ -26,7 +26,7 @@ test("the map explains status on demand and can extend the final selected node",
   await expect(map.getByText("預計學習內容", { exact: true })).toBeVisible();
   await map.getByRole("button", { name: "從這裡延伸" }).click();
   await expect(
-    map.getByText(`從「${title}」延伸`, { exact: true }),
+    map.getByText(`從 “${title}” 延伸`, { exact: true }),
   ).toBeVisible();
   await expect(map.getByLabel("想理解到什麼程度？")).toHaveValue("applied");
   await map.getByLabel("想理解到什麼程度？").selectOption("advanced");
