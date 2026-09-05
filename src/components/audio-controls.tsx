@@ -6,7 +6,6 @@ import { createPortal } from "react-dom";
 import {
   Play,
   Pause,
-  SkipBack,
   Volume2,
   VolumeX,
   Captions,
@@ -321,9 +320,11 @@ export function AudioControls({
           }
         />
       )}
+      {/* Rendered for the whole of a narrated lesson, not only while a line is
+          on screen, so the space the player reserves for it cannot flicker in
+          and out between sentences. Empty lines are hidden in CSS. */}
       {enabled &&
         captions &&
-        text &&
         (captionTarget
           ? createPortal(
               <div className="subtitle-line" aria-live="off">
@@ -428,15 +429,6 @@ export function AudioControls({
             </span>
           )}
         </div>
-        <button
-          className="icon-button audio-rewind"
-          aria-label={t("倒退十秒", "Rewind ten seconds")}
-          title={t("倒退十秒", "Rewind ten seconds")}
-          disabled={!enabled || !metadataReady || navigating}
-          onClick={() => void navigate(time - 10)}
-        >
-          <SkipBack size={17} />
-        </button>
       </div>
       <div className="canvas-tools">
         <div

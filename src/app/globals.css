@@ -319,12 +319,22 @@ button:hover:not(:disabled) {
   padding-bottom: 0;
   margin-bottom: 0;
 }
+/* The home variant centres this head, so every child has to drop the
+   left/right split the two-column version above relies on. */
+.home-catalog .catalog-head .eyebrow {
+  justify-content: center;
+}
 .home-catalog .catalog-head h2 {
-  margin: 0;
+  margin: 0 auto;
   font-size: clamp(28px, 3.2vw, 42px);
   line-height: 1.2;
   font-weight: 600;
   letter-spacing: -0.04em;
+}
+.home-catalog .catalog-head > p {
+  max-width: 620px;
+  margin: 14px auto 0;
+  text-align: center;
 }
 .home-catalog .catalog-head::after {
   content: "";
@@ -2701,6 +2711,9 @@ button:hover:not(:disabled) {
   font-size: 12px;
   white-space: nowrap;
 }
+.subtitle-line:empty {
+  display: none;
+}
 .subtitle-line {
   max-width: 850px;
   margin: 0 auto;
@@ -2766,7 +2779,8 @@ dialog::backdrop {
 .map-title-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  /* Room for the legend toggle's focus ring, which sat on the title at 4px. */
+  gap: 10px;
   min-width: 0;
   font-size: 11px;
   color: var(--muted);
@@ -5200,6 +5214,12 @@ body:has(.practice-studio) {
   max-height: 100px;
   overflow: auto;
   z-index: 35;
+}
+/* The caption floats over the lesson, so the lesson has to end above it while
+   captions are on: it was covering the file editor's hint and save button.
+   24px clears the gap above the controls, 100px is the caption's own cap. */
+.paged-course:has(.subtitle-line) .canvas-content {
+  padding-bottom: calc(24px + 100px + 12px);
 }
 .speech-prepare {
   display: inline-flex;

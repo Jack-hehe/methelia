@@ -5,7 +5,6 @@ async function positions(page: Page) {
   const nav = footer.getByRole("navigation", { name: "課程翻頁" });
   return Promise.all([
     footer.boundingBox(),
-    footer.getByLabel("倒退十秒", { exact: true }).boundingBox(),
     nav.getByRole("button", { name: "上一頁", exact: true }).boundingBox(),
     nav.locator("button, a").last().boundingBox(),
     footer.getByLabel("切換字幕", { exact: true }).boundingBox(),
@@ -24,7 +23,8 @@ for (const width of [1440, 900, 390, 320]) {
     await page.getByRole("button", { name: "先體驗一堂課" }).click();
     await expect(page.getByLabel("頁碼")).toHaveText("1 / 3");
     const footer = page.getByRole("contentinfo");
-    for (const name of ["倒退十秒", "切換字幕", "切換靜音", "播放速度"]) {
+    await expect(footer.getByLabel("倒退十秒", { exact: true })).toHaveCount(0);
+    for (const name of ["切換字幕", "切換靜音", "播放速度"]) {
       await expect(footer.getByLabel(name, { exact: true })).toBeVisible();
       await expect(footer.getByLabel(name, { exact: true })).toBeDisabled();
     }

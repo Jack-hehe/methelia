@@ -150,13 +150,18 @@ export function LearningMap({
   const defaultPositions = useMemo(() => mapPositions(graph), [graph]);
   useEffect(() => {
     dialog.current?.showModal();
+    // showModal() otherwise focuses the first focusable child, which is the
+    // legend toggle beside the course title: its ring landed on the title.
+    dialog.current?.focus();
     const saved = localStorage.getItem("map-positions:" + course.id);
+    let restored: Record<string, { x: number; y: number }> | undefined;
     if (saved) {
       try {
-        setPositions(JSON.parse(saved));
+        restored = JSON.parse(saved);
+        setPositions(restored!);
       } catch {}
     }
-    fit();
+    fit(restored);
     return () => dialog.current?.close();
   }, []);
   const pos = (id: string) =>
@@ -309,26 +314,37 @@ export function LearningMap({
       setTopic("");
     });
   }
-  const fit = () => {
-    const points = nodes.map((n) => pos(n.id));
+  // Restored positions arrive as an argument because the caller on mount reads
+  // them from storage in the same tick that sets the state, which has not
+  // applied yet.
+  const fit = (restored?: Record<string, { x: number; y: number }>) => {
+    const at = (id: string) =>
+      restored?.[id] ||
+      positions[id] ||
+      defaultPositions[id] || { x: 50, y: 190 };
+    const points = nodes.map((n) => at(n.id));
     const left = Math.min(...points.map((p) => p.x)),
       top = Math.min(...points.map((p) => p.y));
     const width = Math.max(...points.map((p) => p.x)) - left + 215;
     const height = Math.max(...points.map((p) => p.y)) - top + 140;
+    const viewWidth = canvas.current?.clientWidth ?? window.innerWidth;
+    const viewHeight = canvas.current?.clientHeight ?? window.innerHeight;
     const nextScale = Math.max(
       0.1,
-      Math.min(
-        1,
-        ((canvas.current?.clientWidth ?? window.innerWidth) - 60) / width,
-        ((canvas.current?.clientHeight ?? window.innerHeight) - 120) / height,
-      ),
+      Math.min(1, (viewWidth - 60) / width, (viewHeight - 120) / height),
     );
     setScale(nextScale);
-    setOffset({ x: 30 - left * nextScale, y: 40 - top * nextScale });
+    // Centre the path: anchoring it to a corner stranded short courses in the
+    // top-left and left the rest of the canvas empty.
+    setOffset({
+      x: (viewWidth - width * nextScale) / 2 - left * nextScale,
+      y: (viewHeight - height * nextScale) / 2 - top * nextScale,
+    });
   };
   return (
     <dialog
       ref={dialog}
+      tabIndex={-1}
       className={
         "learning-map" +
         (showDetails ? " details-open" : "") +
@@ -772,7 +788,10 @@ export function LearningMap({
           <Plus size={18} />
         </button>
         <i />
-        <button aria-label={t("顯示完整路徑", "Fit entire path")} onClick={fit}>
+        <button
+          aria-label={t("顯示完整路徑", "Fit entire path")}
+          onClick={() => fit()}
+        >
           <Maximize size={17} />
         </button>
       </div>

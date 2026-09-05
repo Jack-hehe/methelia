@@ -164,13 +164,7 @@ test("legacy page audio retains independent tracks, pauses at the end and autopl
       .boundingBox())!;
     const tools = (await footer.locator(".canvas-tools").boundingBox())!;
     const transport = (await footer.locator(".audio-transport").boundingBox())!;
-    const rewind = footer.getByLabel("倒退十秒", { exact: true });
-    await expect(rewind).toBeVisible();
-    const rewindBounds = (await rewind.boundingBox())!;
-    expect(rewindBounds.x).toBeGreaterThanOrEqual(transport.x);
-    expect(rewindBounds.x + rewindBounds.width).toBeLessThanOrEqual(
-      transport.x + transport.width,
-    );
+    await expect(footer.getByLabel("倒退十秒", { exact: true })).toHaveCount(0);
     expect(transport.x + transport.width).toBeLessThanOrEqual(
       transport.y + transport.height > navigation.y ? navigation.x : tools.x,
     );
