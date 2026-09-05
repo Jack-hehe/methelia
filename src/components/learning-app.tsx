@@ -23,7 +23,10 @@ export function LearningApp() {
     initialized.current = true;
     // The explore route's demo card hands off through the URL, so that button
     // means exactly what the one on the landing means.
-    const wantsDemo = new URLSearchParams(window.location.search).has("demo");
+    const params = new URLSearchParams(window.location.search);
+    const wantsHome = params.has("home");
+    const wantsDemo = !wantsHome && params.has("demo");
+    setHome(wantsHome);
     if (wantsDemo)
       window.history.replaceState(null, "", window.location.pathname);
     api<{ course: Snapshot | null }>("sessions", {})
@@ -61,6 +64,15 @@ export function LearningApp() {
     };
   }, [course]);
 
+  function showHome(value: boolean) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("demo");
+    if (value) url.searchParams.set("home", "1");
+    else url.searchParams.delete("home");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    setHome(value);
+  }
+
   async function start(mode: "demo" | "live") {
     setBusy(true);
     setError("");
@@ -71,7 +83,7 @@ export function LearningApp() {
         requestId: crypto.randomUUID(),
       });
       setCourse(c);
-      setHome(false);
+      showHome(false);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -96,7 +108,7 @@ export function LearningApp() {
           course={course}
           onChange={setCourse}
           onError={setError}
-          onHome={() => setHome(true)}
+          onHome={() => showHome(true)}
           themeControl={themeControl}
         />
       ) : (
@@ -107,7 +119,7 @@ export function LearningApp() {
           ready={ready}
           onStart={() => void start("live")}
           onDemo={() => void start("demo")}
-          onMyCourses={course ? () => setHome(false) : undefined}
+          onMyCourses={course ? () => showHome(false) : undefined}
           themeControl={themeControl}
         />
       )}

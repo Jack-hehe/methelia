@@ -18,6 +18,7 @@ export function LessonSection({
   files,
   onCheck,
   onPractice,
+  hideHeading = false,
 }: {
   section: Section;
   index: number;
@@ -25,8 +26,11 @@ export function LessonSection({
   files: Record<string, string>;
   onCheck: (id: string, answer?: number) => Promise<boolean>;
   onPractice: () => void;
+  hideHeading?: boolean;
 }) {
   const [selected, setSelected] = useState(0),
+    [exampleClicked, setExampleClicked] = useState(false),
+    [exampleColor, setExampleColor] = useState("#7355c9"),
     [answer, setAnswer] = useState<number | null>(null),
     [feedback, setFeedback] = useState(""),
     [checking, setChecking] = useState(false);
@@ -59,19 +63,21 @@ export function LessonSection({
       }
       data-section={section.id}
     >
-      <div className="section-kicker">
-        <span>{String(index + 1).padStart(2, "0")}</span>
-        {
+      {!hideHeading && (
+        <div className="section-kicker">
+          <span>{String(index + 1).padStart(2, "0")}</span>
           {
-            explain: "UNDERSTAND",
-            demonstrate: "EXPLORE",
-            practice: "YOUR TURN",
-            check: "CHECK YOUR UNDERSTANDING",
-          }[section.intent]
-        }
-        {done && <Check size={15} />}
-      </div>
-      <h2>{section.title}</h2>
+            {
+              explain: "UNDERSTAND",
+              demonstrate: "EXPLORE",
+              practice: "YOUR TURN",
+              check: "CHECK YOUR UNDERSTANDING",
+            }[section.intent]
+          }
+          {done && <Check size={15} />}
+        </div>
+      )}
+      {!hideHeading && <h2>{section.title}</h2>}
       <p className="section-body">{section.body}</p>
       {c.type === "concept.canvas" && (
         <div className="concept-board">
@@ -79,7 +85,10 @@ export function LessonSection({
             {c.cards.map((card, i) => (
               <button
                 key={i}
-                onClick={() => setSelected(i)}
+                onClick={() => {
+                  setSelected(i);
+                  setExampleClicked(false);
+                }}
                 className={
                   "concept-card " +
                   card.accent +
@@ -92,12 +101,12 @@ export function LessonSection({
                 <strong>{card.title}</strong>
                 <span>
                   {!webTrio
-                    ? `EXPLORE / ${String(i + 1).padStart(2, "0")}`
+                    ? `${String(i + 1).padStart(2, "0")}`
                     : i === 0
-                      ? "01 / STRUCTURE"
+                      ? "放什麼內容"
                       : i === 1
-                        ? "02 / STYLE"
-                        : "03 / BEHAVIOR"}
+                        ? "長什麼樣子"
+                        : "點了會怎樣"}
                 </span>
               </button>
             ))}
@@ -112,32 +121,56 @@ export function LessonSection({
                   <span>your-idea.web</span>
                 </div>
                 <div className={"mini-site state-" + selected}>
-                  <span className="mini-eyebrow">A SPACE FOR YOUR IDEAS</span>
-                  <h3>
-                    Make something
-                    <br />
-                    <em>yours.</em>
-                  </h3>
+                  <span className="mini-eyebrow">網頁範例</span>
+                  <h3>我的網站</h3>
                   <div className="mini-lines">
                     <span />
                     <span />
                   </div>
                   <button
-                    onClick={(e) => {
-                      if (selected === 2)
-                        e.currentTarget.textContent = "Hello, creator! ✨";
+                    style={
+                      selected === 0 ? undefined : { background: exampleColor }
+                    }
+                    onClick={() => {
+                      if (selected === 2) setExampleClicked(true);
                     }}
                   >
-                    Say hello <ArrowUpRight size={12} />
+                    {exampleClicked ? "你好！" : "點擊按鈕"}{" "}
+                    <ArrowUpRight size={12} />
                   </button>
                 </div>
               </div>
-              <div className="code-sticker">
-                {selected === 0
-                  ? "<h1>你的好點子</h1>"
-                  : selected === 1
-                    ? "color: your-personality;"
-                    : 'idea.addEventListener("click")'}
+              <div className="concept-example-tools">
+                {selected === 1 && (
+                  <div
+                    className="color-choices"
+                    role="group"
+                    aria-label="試試按鈕顏色"
+                  >
+                    <span>試試換色</span>
+                    {[
+                      { label: "紫色按鈕", color: "#7355c9" },
+                      { label: "綠色按鈕", color: "#23856b" },
+                    ].map((option) => (
+                      <button
+                        key={option.color}
+                        aria-label={option.label}
+                        aria-pressed={exampleColor === option.color}
+                        style={{ background: option.color }}
+                        onClick={() => setExampleColor(option.color)}
+                      >
+                        {exampleColor === option.color && <Check size={14} />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="code-sticker">
+                  {selected === 0
+                    ? "<h1>我的網站</h1>"
+                    : selected === 1
+                      ? `button { background: ${exampleColor}; }`
+                      : 'button.textContent = "你好！";'}
+                </div>
               </div>
             </div>
           )}

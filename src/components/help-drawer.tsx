@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   X,
   ArrowUp,
-  Sparkles,
+  MessageCircle,
   GitBranch,
   LoaderCircle,
   Check,
@@ -69,8 +69,8 @@ export function HelpDrawer({
     >
       <div className="panel-heading">
         <div>
-          <Sparkles size={19} />
-          <strong>留一點空間給好奇心</strong>
+          <MessageCircle size={19} />
+          <strong>小問題</strong>
         </div>
         <button
           className="icon-button"
@@ -82,33 +82,9 @@ export function HelpDrawer({
       </div>
       <div className="help-context">
         <span className="small-dot" />
-        正在討論：
         {course.graph?.nodes.find((n) => n.id === course.currentNodeId)?.title}
       </div>
       <div className="help-messages">
-        {!course.messages.length && (
-          <div className="help-empty">
-            <div className="avatar">
-              m<span>✦</span>
-            </div>
-            <h3>卡住也沒關係。</h3>
-            <p>
-              說說哪一小塊還不太懂。
-              <br />
-              我們可以一起拆開來看。
-            </p>
-            <button onClick={() => setQuestion("我不太懂 HTML 和 CSS 的差別")}>
-              HTML 和 CSS 的差別是什麼？
-            </button>
-            <button
-              onClick={() =>
-                setQuestion("我不懂這個區塊，可以先補一些基礎嗎？")
-              }
-            >
-              可以先補一些基礎嗎？
-            </button>
-          </div>
-        )}
         {course.messages.map((message) => (
           <div key={message.id} className={"chat-message " + message.role}>
             {message.role === "assistant" && (
@@ -120,7 +96,7 @@ export function HelpDrawer({
             {!!message.nodes?.length && (
               <div className="recommendations">
                 <span>
-                  <GitBranch size={14} /> 讓理解更扎實一點
+                  <GitBranch size={14} /> 建議節點
                 </span>
                 {message.nodes.map((node) => (
                   <button
@@ -166,7 +142,7 @@ export function HelpDrawer({
         ))}
         {busy && (
           <div className="thinking">
-            <LoaderCircle className="spin" size={16} /> 正在整理你的問題…
+            <LoaderCircle className="spin" size={16} /> 回覆中…
           </div>
         )}
         <div ref={bottom} />
@@ -188,9 +164,6 @@ export function HelpDrawer({
           <ArrowUp size={19} />
         </button>
       </form>
-      <p className="help-footnote">
-        提問時解說會暫停，你的章節與練習都會保留。
-      </p>
     </dialog>
   );
 }

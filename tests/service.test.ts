@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { Store } from "../src/server/db";
 import { LearningService } from "../src/server/service";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -14,7 +14,23 @@ function setup() {
   return { store, service, session, course };
 }
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const store of stores.splice(0)) store.db.close();
+});
+it("rejects invalid Fish configuration before queuing synthesis", () => {
+  vi.stubEnv("FISH_AUDIO_API_KEY", "test");
+  vi.stubEnv("FISH_AUDIO_REFERENCE_ID", "test");
+  vi.stubEnv("FISH_AUDIO_MODEL", "s2-pro-free");
+  const { service, store, session, course } = setup();
+  expect(() => service.retry(session, course.id, "web")).toThrow(
+    /FISH_AUDIO_MODEL/,
+  );
+  expect(
+    store.db
+      .prepare("SELECT COUNT(*) AS n FROM generation_jobs WHERE kind='speech'")
+      .get()?.n,
+  ).toBe(0);
+  expect(service.getChapter(session, course.id, "web").speech).toBe("failed");
 });
 it("restores saved course and files after reopening the SQLite database", () => {
   const dir = mkdtempSync(join(tmpdir(), "methelia-test-"));
@@ -68,6 +84,21 @@ it("deduplicates course creation without generating a second course", () => {
   expect(
     service.createCourse(session, "我的網站", "demo", "request-1").id,
   ).toBe(course.id);
+});
+it("initializes new chapter packages for page audio and retains page-local progress evidence", () => {
+  const { service, session, course } = setup();
+  const pkg = service.getChapter(session, course.id, "web");
+  expect(pkg).toHaveProperty("pageAudio", {});
+  service.check(session, course.id, "check", 1);
+  const progress = service.saveProgress(session, course.id, "web", {
+    sectionId: "structure",
+    time: 3.5,
+  });
+  expect(progress).toMatchObject({
+    sectionId: "structure",
+    time: 3.5,
+    done: ["check"],
+  });
 });
 it("requires exercise evidence before advancing and persists the next chapter", () => {
   const { service, session, course } = setup();

@@ -14,16 +14,20 @@ import { normalizePath, type Workspace } from "../core/workspace";
 import type { Chapter } from "../core/protocol";
 import type { Cue } from "../core/narration";
 import { guidanceFrame } from "../core/guidance";
+import { workspaceChapter } from "../core/lesson-pages";
 import { buildPreview } from "../core/preview";
 import { api } from "./api";
 
 export function WorkspacePanel({
   courseId,
   workspace,
-  chapter,
+  chapter: sourceChapter,
+  activeSectionId,
+  embedded = false,
   cues,
   audioTime,
   audioReady,
+  audioPlaying,
   demonstrating,
   onDemonstrating,
   onPlayback,
@@ -35,9 +39,12 @@ export function WorkspacePanel({
   courseId: string;
   workspace: Workspace;
   chapter: Chapter;
+  activeSectionId: string;
+  embedded?: boolean;
   cues: Cue[];
   audioTime: number;
   audioReady: boolean;
+  audioPlaying: boolean;
   demonstrating: boolean;
   onDemonstrating: (value: boolean) => void;
   onPlayback: (time: number, play: boolean) => void;
@@ -46,24 +53,41 @@ export function WorkspacePanel({
   onClose: () => void;
   onError: (e: string) => void;
 }) {
+  const chapter = useMemo(
+    () => workspaceChapter(sourceChapter, activeSectionId),
+    [sourceChapter, activeSectionId],
+  );
   const [path, setPath] = useState<string | null>(null),
     [draft, setDraft] = useState(""),
     [command, setCommand] = useState(""),
     [busy, setBusy] = useState(false),
+    [showExample, setShowExample] = useState(false),
     [manualStep, setManualStep] = useState(0),
+    [manualDemo, setManualDemo] = useState(false),
     [output, setOutput] = useState(
-      "Methelia website workspace\n\n先用 ls 查看檔案，再用 edit index.html 修改標題。\n左側預覽會即時回應你的修改。\n",
+      "輸入 ls 查看檔案，edit 檔名 開啟編輯器。\n",
     );
   const guides = chapter.sections.filter((s) => s.guide);
+  const component = chapter.sections[0]?.component;
+  const example = component?.type === "code.editor" ? component : null;
+  const suggestions =
+    component?.type === "terminal"
+      ? component.commands
+      : ["ls", `edit ${example?.path.slice(1) || "index.html"}`];
   const manualCues = guides.map((s, i) => ({
     sectionId: s.id,
     start: i * 10,
     end: (i + 1) * 10,
   }));
+  const syncedDemo = audioReady && !manualDemo;
+  useEffect(() => {
+    // Finishing synthesis must not interrupt a manual demonstration.
+    if (audioPlaying) setManualDemo(false);
+  }, [audioPlaying]);
   const frame = guidanceFrame(
     chapter,
-    audioReady ? cues : manualCues,
-    audioReady
+    syncedDemo ? cues : manualCues,
+    syncedDemo
       ? audioTime
       : Math.floor(manualStep / 2) * 10 + (manualStep % 2 ? 8 : 1),
   );
@@ -86,7 +110,6 @@ export function WorkspacePanel({
       frame.previewClick,
     ],
   );
-  const practice = chapter.sections.find((s) => s.intent === "practice");
   useEffect(() => {
     registerLeave(async () => {
       if (busy) throw new Error("正在儲存，請稍候再切換。");
@@ -102,13 +125,13 @@ export function WorkspacePanel({
     return () => window.removeEventListener("beforeunload", block);
   }, [dirty]);
   useEffect(() => {
-    if (!demonstrating || !audioReady || !guides.length) return;
+    if (!demonstrating || !syncedDemo || !guides.length) return;
     const last = cues.find((c) => c.sectionId === guides.at(-1)!.id);
     if (last && audioTime >= last.end) {
       onDemonstrating(false);
       onPlayback(last.end, false);
     }
-  }, [audioTime, demonstrating, audioReady]);
+  }, [audioTime, demonstrating, syncedDemo]);
   async function save() {
     if (!dirty || !path) return workspace;
     const updated = await api<Workspace>(
@@ -165,6 +188,8 @@ export function WorkspacePanel({
       await save();
       setPath(null);
       setManualStep(0);
+      setManualDemo(!audioReady);
+      setShowExample(false);
       onDemonstrating(true);
       if (audioReady)
         onPlayback(
@@ -174,6 +199,7 @@ export function WorkspacePanel({
     });
   }
   function tryIt() {
+    setShowExample(false);
     onDemonstrating(false);
     onPlayback(audioTime, false);
   }
@@ -182,10 +208,22 @@ export function WorkspacePanel({
       <div className="studio-toolbar">
         <div className="studio-title">
           <span className="small-dot" />
-          <strong>Learning by doing</strong>
-          <span>{chapter.title}</span>
+          <strong>{demonstrating ? "操作示範" : "Terminal"}</strong>
         </div>
         <div className="studio-actions">
+          {example && (
+            <button
+              disabled={busy}
+              aria-pressed={showExample && !demonstrating}
+              onClick={() => {
+                onDemonstrating(false);
+                onPlayback(audioTime, false);
+                setShowExample(true);
+              }}
+            >
+              查看範例
+            </button>
+          )}
           {guides.length > 0 && (
             <button
               disabled={busy}
@@ -198,26 +236,28 @@ export function WorkspacePanel({
           )}
           <button
             disabled={busy}
-            className={!demonstrating ? "studio-selected" : ""}
+            className={!demonstrating && !showExample ? "studio-selected" : ""}
             onClick={tryIt}
           >
             <Terminal size={14} />
             自己試試
           </button>
-          <button
-            className="icon-button"
-            disabled={busy}
-            aria-label="關閉實作區"
-            onClick={() =>
-              void action(async () => {
-                await save();
-                onDemonstrating(false);
-                onClose();
-              })
-            }
-          >
-            <X size={18} />
-          </button>
+          {!embedded && (
+            <button
+              className="icon-button"
+              disabled={busy}
+              aria-label="關閉實作區"
+              onClick={() =>
+                void action(async () => {
+                  await save();
+                  onDemonstrating(false);
+                  onClose();
+                })
+              }
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
       </div>
       <div className="studio-columns">
@@ -235,31 +275,6 @@ export function WorkspacePanel({
             </span>
           </div>
           <iframe title="實作網站預覽" sandbox="allow-scripts" srcDoc={src} />
-          <div className="studio-coach" aria-live="polite">
-            <div className="coach-avatar">
-              m<span>✦</span>
-            </div>
-            <div>
-              <span className="eyebrow">
-                {demonstrating
-                  ? "01 / WATCH & UNDERSTAND"
-                  : "02 / MAKE IT YOURS"}
-              </span>
-              <strong>
-                {demonstrating
-                  ? frame.section?.title
-                  : "換你把這一步，變成自己的能力"}
-              </strong>
-              <p>
-                {demonstrating
-                  ? frame.target === "preview"
-                    ? "看看左側的變化，再想想：剛剛修改的是內容、樣式，還是行為？"
-                    : "跟著游標看右側。只改一個地方，保留其他程式碼。"
-                  : practice?.body ||
-                    "輸入 edit index.html，把 h1 裡的文字換成你的標題。觀察左側變化，再儲存並返回課程。"}
-              </p>
-            </div>
-          </div>
         </div>
         <section className="studio-terminal" aria-label="Terminal">
           <div className="studio-terminalbar">
@@ -278,7 +293,7 @@ export function WorkspacePanel({
             <div className="guided-terminal">
               <div className="terminal-demo-label">
                 <span className="small-dot" />
-                {audioReady ? "語音同步示範" : "文字示範 · 尚無語音"}
+                {syncedDemo ? "語音同步示範" : "文字示範"}
               </div>
               <p className="demo-command">
                 <span>❯</span> edit {guide.path.slice(1)}
@@ -319,7 +334,7 @@ export function WorkspacePanel({
                     ? "修改完成 → 觀察左側"
                     : `找到「${guide.find}」`}
                 </span>
-                {!audioReady && (
+                {!syncedDemo && (
                   <button
                     onClick={() => {
                       if (manualStep < guides.length * 2 - 1)
@@ -336,6 +351,16 @@ export function WorkspacePanel({
                   </button>
                 )}
               </div>
+            </div>
+          ) : showExample && example ? (
+            <div className="terminal-editor">
+              <div className="terminal-file-label">
+                {example.path}
+                <span>唯讀範例 · 不會覆蓋你的檔案</span>
+              </div>
+              <pre className="prepared-example" aria-label="本頁程式碼範例">
+                {example.example}
+              </pre>
             </div>
           ) : path ? (
             <div className="terminal-editor">
@@ -399,7 +424,7 @@ export function WorkspacePanel({
                 </button>
               </form>
               <div className="terminal-suggestions">
-                {["ls", "edit index.html", "edit style.css"].map((c) => (
+                {suggestions.map((c) => (
                   <button key={c} disabled={busy} onClick={() => setCommand(c)}>
                     {c}
                   </button>

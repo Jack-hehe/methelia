@@ -53,6 +53,7 @@ it("repairs a chapter bound to the wrong node instead of activating it", async (
 it("sends the whole chapter to Fish once and maps returned timestamps", async () => {
   vi.stubEnv("FISH_AUDIO_API_KEY", "fish-test");
   vi.stubEnv("FISH_AUDIO_REFERENCE_ID", "voice-test");
+  vi.stubEnv("FISH_AUDIO_MODEL", "s2.1-pro-free");
   let requests = 0;
   const chapter = demoChapter(demoGraph().nodes[0]);
   chapter.script = chapter.script.map((s, i) => ({
@@ -64,6 +65,8 @@ it("sends the whole chapter to Fish once and maps returned timestamps", async ()
     const body = JSON.parse(String(options.body));
     expect(body.text).toBe("Hello\nworld\nlearn");
     expect(body.reference_id).toBe("voice-test");
+    expect(new Headers(options.headers).get("model")).toBe("s2.1-pro-free");
+    expect(body.condition_on_previous_chunks).toBe(true);
     return new Response(
       "data: " +
         JSON.stringify({
@@ -85,6 +88,12 @@ it("sends the whole chapter to Fish once and maps returned timestamps", async ()
   const result = await synthesize(chapter);
   expect(result.audio.toString()).toBe("audio");
   expect(result.cues[2]).toEqual({ sectionId: "check", start: 2, end: 3 });
+  expect(result.captions[2]).toEqual({
+    sectionId: "check",
+    text: "learn",
+    start: 2,
+    end: 3,
+  });
   expect(requests).toBe(1);
 });
 it("fails credential errors immediately without retrying a paid request", async () => {
@@ -107,11 +116,78 @@ it("does not repeat paid synthesis when a completed response has invalid alignme
     async () =>
       new Response(
         'data: {"audio_base64":"YQ==","chunk_seq":0,"chunk_audio_offset_sec":0,"alignment":{"segments":[{"text":"wrong","start":0,"end":1}]}}\n\n',
+        { headers: { "Content-Type": "text/event-stream" } },
       ),
   );
   vi.stubGlobal("fetch", fetcher);
   await expect(synthesize(demoChapter(demoGraph().nodes[0]))).rejects.toThrow(
     /alignment/i,
+  );
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("rejects an unknown model before Fish can silently select a paid default", async () => {
+  vi.stubEnv("FISH_AUDIO_API_KEY", "test");
+  vi.stubEnv("FISH_AUDIO_REFERENCE_ID", "test");
+  vi.stubEnv("FISH_AUDIO_MODEL", "s2-pro-free");
+  const fetcher = vi.fn(async () => new Response("", { status: 401 }));
+  vi.stubGlobal("fetch", fetcher);
+  await expect(synthesize(demoChapter(demoGraph().nodes[0]))).rejects.toThrow(
+    /FISH_AUDIO_MODEL/,
+  );
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("does not repeat a synthesis with an ambiguous network failure or expose provider details", async () => {
+  vi.stubEnv("FISH_AUDIO_API_KEY", "test");
+  vi.stubEnv("FISH_AUDIO_REFERENCE_ID", "test");
+  const fetcher = vi.fn(async () => {
+    throw new Error("sensitive provider detail");
+  });
+  vi.stubGlobal("fetch", fetcher);
+  await expect(synthesize(demoChapter(demoGraph().nodes[0]))).rejects.toThrow(
+    /連線中斷/,
+  );
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("rejects a non-SSE success response without automatically synthesizing again", async () => {
+  vi.stubEnv("FISH_AUDIO_API_KEY", "test");
+  vi.stubEnv("FISH_AUDIO_REFERENCE_ID", "test");
+  const fetcher = vi.fn(
+    async () =>
+      new Response("private error page", {
+        headers: { "Content-Type": "text/html" },
+      }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await expect(synthesize(demoChapter(demoGraph().nodes[0]))).rejects.toThrow(
+    /串流格式/,
+  );
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+it("does not retry or activate audio when an accepted stream disconnects", async () => {
+  vi.stubEnv("FISH_AUDIO_API_KEY", "test");
+  vi.stubEnv("FISH_AUDIO_REFERENCE_ID", "test");
+  const fetcher = vi.fn(
+    async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode('data: {"audio_base64":"YQ=="}\n\n'),
+            );
+          },
+          pull(controller) {
+            controller.error(new Error("private network detail"));
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await expect(synthesize(demoChapter(demoGraph().nodes[0]))).rejects.toThrow(
+    /音訊接收失敗/,
   );
   expect(fetcher).toHaveBeenCalledTimes(1);
 });

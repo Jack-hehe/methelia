@@ -50,7 +50,7 @@ export function SiteHeader({
   const exploring = active === "explore";
   return (
     <header className="site-header">
-      <a className="brand" href="/">
+      <a className="brand" href="/?home=1">
         Methelia
       </a>
       <div className="header-right">
@@ -66,7 +66,7 @@ export function SiteHeader({
         <a
           className={"icon-button" + (exploring ? " is-active" : "")}
           href="/explore"
-          aria-label="看看其他人做了什麼"
+          aria-label="課程與作品"
           aria-current={exploring ? "page" : undefined}
         >
           <LayoutGrid size={19} />

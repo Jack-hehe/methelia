@@ -18,9 +18,10 @@ test("explore labels illustrative content and stays usable on narrow phones", as
     ),
   ).toBe(true);
   await page.getByRole("link", { name: "先體驗一堂課" }).click();
-  await expect(
-    page.getByRole("button", { name: "使用完整文字模式" }),
-  ).toBeVisible();
+  await expect(page.locator("[data-section]")).toHaveAttribute(
+    "data-section",
+    "languages",
+  );
 });
 test("text fields have no nested square focus border", async ({ page }) => {
   await page.goto("/");
@@ -29,7 +30,7 @@ test("text fields have no nested square focus border", async ({ page }) => {
   await expect(goal).toHaveCSS("box-shadow", "none");
   await expect(goal).toHaveCSS("outline-style", "none");
   await page.getByRole("button", { name: "先體驗一堂課" }).click();
-  await page.getByRole("button", { name: "使用完整文字模式" }).click();
+  await expect(page.locator("[data-section]").first()).toBeVisible();
   await page.getByRole("button", { name: "小問題" }).click();
   const question = page.getByPlaceholder("哪個地方還不太懂？");
   await question.focus();
@@ -93,11 +94,8 @@ test("JavaScript demonstration shows the result of a real preview button click",
   }
   expect(course.currentNodeId).toBe("js");
   await page.goto("/");
-  await page.getByRole("button", { name: "使用完整文字模式" }).click();
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: "開啟實作區" })
-    .click();
+  await expect(page.locator("[data-section]").first()).toBeVisible();
+  await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByRole("button", { name: "看老師示範", exact: true }).click();
   await page.getByRole("button", { name: "看修改結果" }).click();
   await expect(
@@ -111,7 +109,7 @@ test("leaving practice for home saves the current editor draft", async ({
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "先體驗一堂課" }).click();
-  await page.getByRole("button", { name: "使用完整文字模式" }).click();
+  await expect(page.locator("[data-section]").first()).toBeVisible();
   const snapshot = await (
     await page.request.post("/api/sessions", { data: {} })
   ).json();
@@ -150,10 +148,17 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
   const course = await response.json();
   const pkg = course.chapters.web;
   pkg.speech = "ready";
+  delete pkg.pageAudio;
   pkg.cues = [
     { sectionId: "languages", start: 0, end: 1 },
     { sectionId: "structure", start: 1, end: 7 },
     { sectionId: "check", start: 7, end: 10 },
+  ];
+  pkg.captions = [
+    { sectionId: "languages", text: "先認識網站。", start: 0, end: 1 },
+    { sectionId: "structure", text: "我們先找到標題。", start: 1, end: 4 },
+    { sectionId: "structure", text: "左側畫面已更新。", start: 4, end: 7 },
+    { sectionId: "check", text: "現在換你試試。", start: 7, end: 10 },
   ];
   await page.route("**/api/sessions", (route) =>
     route.fulfill({ json: { course } }),
@@ -204,6 +209,21 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.readyState))
     .toBeGreaterThanOrEqual(2);
   await page.getByRole("button", { name: "播放解說" }).click();
+  await expect
+    .poll(() => audio.evaluate((a: HTMLAudioElement) => a.paused))
+    .toBe(true);
+  await expect(page.locator("[data-section]")).toHaveAttribute(
+    "data-section",
+    "languages",
+  );
+  await page.getByLabel("下一頁", { exact: true }).click();
+  await expect
+    .poll(() => audio.evaluate((a: HTMLAudioElement) => a.currentTime))
+    .toBe(1);
+  await expect
+    .poll(() => audio.evaluate((a: HTMLAudioElement) => a.paused))
+    .toBe(true);
+  await page.getByRole("button", { name: "播放解說" }).click();
   await expect(
     page.getByRole("region", { name: "實作區", exact: true }),
   ).toBeVisible();
@@ -214,6 +234,11 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
   await expect
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.currentTime))
     .toBe(6);
+  await expect(page.locator(".subtitle-line")).toHaveText("左側畫面已更新。");
+  await page.getByRole("button", { name: "切換字幕" }).click();
+  await expect(page.locator(".subtitle-line")).toHaveCount(0);
+  await page.getByRole("button", { name: "切換字幕" }).click();
+  await expect(page.locator(".subtitle-line")).toHaveText("左側畫面已更新。");
   const preview = page.frameLocator('iframe[title="實作網站預覽"]');
   await expect(
     preview.getByRole("heading", { name: "Hello Methelia" }),
@@ -242,6 +267,7 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
     const next = await response.json();
     const chapter = next.chapters[next.currentNodeId];
     chapter.speech = "ready";
+    delete chapter.pageAudio;
     chapter.cues = chapter.chapter.sections.map(
       (s: { id: string }, i: number) => ({
         sectionId: s.id,
@@ -251,9 +277,9 @@ test("prepared audio drives demonstration, pause, seek, replay, and learner hand
     );
     await route.fulfill({ json: next });
   });
-  await page.getByRole("button", { name: "關閉實作區" }).click();
+  await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByRole("button", { name: "CSS：調整外觀樣式" }).click();
-  await page.getByRole("button", { name: "繼續下一章" }).click();
+  await page.getByRole("button", { name: /下一章：/ }).click();
   await expect
     .poll(() => audio.evaluate((a: HTMLAudioElement) => a.readyState))
     .toBeGreaterThanOrEqual(2);
@@ -306,9 +332,9 @@ test("learn, inspect map, practice, add branch, and resume", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await page.getByRole("button", { name: "先體驗一堂課" }).click();
-  await page.getByRole("button", { name: "使用完整文字模式" }).click();
+  await expect(page.locator("[data-section]").first()).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "一個網站，三種默契" }),
+    page.getByRole("heading", { name: "HTML、CSS、JavaScript 的分工" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "開啟 Learning Map" }).click();
   await expect(
@@ -318,17 +344,24 @@ test("learn, inspect map, practice, add branch, and resume", async ({
   await expect(page.getByRole("dialog", { name: "Learning Map" })).toHaveCount(
     0,
   );
+  await page.getByLabel("下一頁", { exact: true }).click();
+  await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByRole("button", { name: "CSS：調整外觀樣式" }).click();
   await expect(page.getByText("練習完成", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "小問題" }).click();
   await page.getByPlaceholder("哪個地方還不太懂？").fill("我不懂 HTML 標籤");
   await page.getByRole("button", { name: "送出問題" }).click();
   await page.getByRole("button", { name: "預覽補強路徑" }).click();
-  await page.getByRole("button", { name: "加入學習路徑" }).click();
+  await page.getByRole("button", { name: "確認新增" }).click();
+  // The proposed node was already visible before confirmation. Wait for the
+  // transaction to finish before exercising Escape (disabled while pending).
+  await expect(
+    page.getByRole("button", { name: "回到課程", exact: true }),
+  ).toBeEnabled();
   await expect(page.getByText("HTML 標籤與元素").first()).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "繼續下一章" }).click();
-  await page.getByRole("button", { name: "使用完整文字模式" }).click();
+  await page.getByRole("button", { name: /下一章：/ }).click();
+  await expect(page.locator("[data-section]").first()).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "HTML 標籤與元素", exact: true }).first(),
   ).toBeVisible();
@@ -381,9 +414,10 @@ test("practice has left live preview, right terminal, and an isolated guided dem
   });
   await page.goto("/");
   await page.getByRole("button", { name: "先體驗一堂課" }).click();
-  await page.getByRole("button", { name: "使用完整文字模式" }).click();
+  await expect(page.locator("[data-section]").first()).toBeVisible();
   const map = page.getByRole("button", { name: "開啟 Learning Map" });
   expect((await map.boundingBox())!.x).toBeGreaterThan(1100);
+  await page.getByLabel("下一頁", { exact: true }).click();
   await page
     .getByRole("banner")
     .getByRole("button", { name: "開啟實作區" })
@@ -393,11 +427,9 @@ test("practice has left live preview, right terminal, and an isolated guided dem
   const left = (await preview.boundingBox())!;
   const right = (await terminal.boundingBox())!;
   expect(left.x + left.width).toBeLessThanOrEqual(right.x + 1);
-  expect(right.width).toBeGreaterThan(600);
+  expect(right.width).toBeGreaterThan(450);
   await page.getByRole("button", { name: "看老師示範", exact: true }).click();
-  await expect(
-    page.getByText("文字示範 · 尚無語音", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("文字示範", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "看修改結果" }).click();
   await expect(
     preview.contentFrame().getByRole("heading", { name: "Hello Methelia" }),
@@ -444,9 +476,9 @@ test("light landing and mobile lesson remain usable with an opaque map", async (
   ).toBeEnabled();
   await page.screenshot({ path: "test-results/landing-desktop.png" });
   await page.getByRole("button", { name: "先體驗一堂課" }).click();
-  await page.getByRole("button", { name: "使用完整文字模式" }).click();
+  await expect(page.locator("[data-section]").first()).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "一個網站，三種默契" }),
+    page.getByRole("heading", { name: "HTML、CSS、JavaScript 的分工" }),
   ).toBeVisible();
   await page.screenshot({
     path: "test-results/lesson-light.png",

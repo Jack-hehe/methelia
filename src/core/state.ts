@@ -1,6 +1,12 @@
 import type { Chapter, Graph, LearningNode } from "./protocol";
-import type { Cue } from "./narration";
+import type { Cue, Caption } from "./narration";
 import type { Workspace } from "./workspace";
+export type PageAudio = {
+  status: "pending" | "generating" | "ready" | "failed";
+  cues: Cue[];
+  captions: Caption[];
+  error?: string;
+};
 export type PackageState = {
   id: string;
   nodeHash: string;
@@ -8,6 +14,9 @@ export type PackageState = {
   speech: "pending" | "generating" | "ready" | "failed";
   chapter: Chapter | null;
   cues: Cue[];
+  captions?: Caption[];
+  // Absence denotes a legacy whole-chapter narration package.
+  pageAudio?: Record<string, PageAudio>;
   error?: string;
 };
 export type Message = {

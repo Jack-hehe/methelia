@@ -1,6 +1,6 @@
 "use client";
 import { useState, type ReactNode } from "react";
-import { ArrowRight, ArrowUpRight, LoaderCircle, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowUpRight, LoaderCircle } from "lucide-react";
 import { SiteHeader } from "./site-header";
 import { useTypewriter } from "./use-typewriter";
 
@@ -93,9 +93,6 @@ export function Landing({
             required
           />
           <div className="goal-bottom">
-            <span className="goal-hint">
-              <Sparkles size={15} /> 從你的目標，生成專屬課程
-            </span>
             <button
               className="primary-button"
               disabled={busy || !ready || !goal.trim()}
@@ -105,7 +102,7 @@ export function Landing({
                 <LoaderCircle className="spin" size={17} />
               ) : (
                 <>
-                  開始探索 <ArrowUpRight size={18} />
+                  建立課程 <ArrowUpRight size={18} />
                 </>
               )}
             </button>
@@ -125,8 +122,6 @@ export function Landing({
       </main>
 
       <footer className="site-footer">
-        <span>LEARN BY MAKING.</span>
-        <span>一段為你展開的學習旅程</span>
         <span>METHELIA / EARLY ACCESS</span>
       </footer>
     </div>

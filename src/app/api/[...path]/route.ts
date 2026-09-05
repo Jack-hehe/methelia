@@ -7,6 +7,7 @@ import { LearningService } from "../../../server/service";
 import { generateHelp, modelConfigured } from "../../../server/model";
 import { nodeSchema } from "../../../core/protocol";
 import { sameOrigin } from "../../../server/origin";
+import { pageAudioArtifactKey } from "../../../server/page-audio";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const short = z.string().min(1).max(150);
@@ -262,10 +263,47 @@ async function handle(request: NextRequest) {
       path[1] === "preview" &&
       request.method === "POST"
     ) {
-      const body = courseBody
-        .extend({ nodes: z.array(nodeSchema).min(1).max(3) })
+      const body = z
+        .union([
+          courseBody
+            .extend({ nodes: z.array(nodeSchema).min(1).max(3) })
+            .strict(),
+          courseBody
+            .extend({
+              topic: z.string().trim().min(1).max(120),
+              baseRevision: z.number().int().nonnegative(),
+              afterId: short,
+            })
+            .strict(),
+        ])
         .parse(data);
-      result = service.previewBranch(session, body.courseId, body.nodes);
+      // A requested topic is a node definition, not a chat message. Its chapter
+      // is prepared by the existing node generator only after confirmation.
+      result =
+        "topic" in body
+          ? service.previewBranch(
+              session,
+              body.courseId,
+              [
+                {
+                  id: "support-" + randomUUID(),
+                  title: body.topic,
+                  objective: body.topic,
+                  minutes: 5,
+                  kind: "support",
+                  prerequisites: [],
+                },
+              ],
+              body,
+            )
+          : service.previewBranch(session, body.courseId, body.nodes);
+    } else if (
+      path[0] === "branches" &&
+      path[1] === "cancel" &&
+      request.method === "POST"
+    ) {
+      const body = courseBody.extend({ previewId: short }).parse(data);
+      result = service.cancelBranch(session, body.courseId, body.previewId);
     } else if (
       path[0] === "branches" &&
       path[1] === "confirm" &&
@@ -286,9 +324,21 @@ async function handle(request: NextRequest) {
         .get(path[1]) as { course_id: string } | undefined;
       if (!row) throw new Error("Audio not found");
       service.owned(session, row.course_id);
+      const pkg = store.getPackage(path[1]);
+      if (!pkg) throw new Error("Audio not found");
+      const sectionId = request.nextUrl.searchParams.get("sectionId");
+      let artifactId = path[1];
+      if (sectionId !== null) {
+        if (!pkg.chapter?.sections.some((section) => section.id === sectionId))
+          throw new Error("Audio not found");
+        const page = pkg.pageAudio?.[sectionId];
+        if (!page || page.status !== "ready")
+          throw new Error("Audio not found");
+        artifactId = pageAudioArtifactKey(pkg.id, sectionId);
+      } else if (pkg.pageAudio) throw new Error("Audio not found");
       const artifact = store.db
         .prepare("SELECT audio,content_type FROM audio_artifacts WHERE id=?")
-        .get(path[1]) as
+        .get(artifactId) as
         { audio: Uint8Array; content_type: string } | undefined;
       if (!artifact) throw new Error("Audio not found");
       const size = artifact.audio.byteLength;

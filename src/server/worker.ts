@@ -3,6 +3,11 @@ import { Store } from "./db";
 import { LearningService } from "./service";
 import { generateGraph, generateChapter } from "./model";
 import { synthesize } from "./fish";
+import {
+  pageAudioArtifactKey,
+  pageAudioForChapter,
+  pageAudioReady,
+} from "./page-audio";
 const store = new Store();
 const service = new LearningService(store);
 type Job = {
@@ -11,6 +16,69 @@ type Job = {
   package_id: string | null;
   kind: string;
 };
+async function synthesizePages(courseId: string, packageId: string) {
+  let pkg = store.getPackage(packageId);
+  if (!pkg?.chapter || !pkg.pageAudio) return;
+  const chapter = pkg.chapter;
+  store.transaction(() => {
+    const current = store.getPackage(packageId);
+    if (!current?.chapter || !current.pageAudio) return;
+    current.pageAudio = pageAudioForChapter(current.chapter, current.pageAudio);
+    current.speech = pageAudioReady(current.chapter, current.pageAudio)
+      ? "ready"
+      : "generating";
+    current.error = undefined;
+    store.putPackage(courseId, current);
+  });
+  for (const entry of chapter.script) {
+    pkg = store.getPackage(packageId);
+    const page = pkg?.pageAudio?.[entry.sectionId];
+    if (!pkg?.chapter || !page) return;
+    const artifactKey = pageAudioArtifactKey(packageId, entry.sectionId);
+    const saved = store.db
+      .prepare("SELECT 1 FROM audio_artifacts WHERE id=? AND length(audio)>0")
+      .get(artifactKey);
+    if (page.status === "ready" && saved) continue;
+    if (page.status === "failed")
+      throw new Error(page.error || "Page audio generation failed");
+    page.status = "generating";
+    store.putPackage(courseId, pkg);
+    try {
+      const result = await synthesize({ ...pkg.chapter, script: [entry] });
+      store.transaction(() => {
+        const current = store.getPackage(packageId);
+        const target = current?.pageAudio?.[entry.sectionId];
+        if (!current || !target) return;
+        store.db
+          .prepare("INSERT OR REPLACE INTO audio_artifacts VALUES(?,?,?)")
+          .run(artifactKey, result.audio, "audio/mpeg");
+        target.cues = result.cues;
+        target.captions = result.captions;
+        target.status = "ready";
+        target.error = undefined;
+        current.speech = pageAudioReady(current.chapter!, current.pageAudio!)
+          ? "ready"
+          : "generating";
+        current.error = undefined;
+        store.putPackage(courseId, current);
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Page audio generation failed";
+      store.transaction(() => {
+        const current = store.getPackage(packageId);
+        const target = current?.pageAudio?.[entry.sectionId];
+        if (!current || !target) return;
+        target.status = "failed";
+        target.error = message;
+        current.speech = "failed";
+        current.error = message;
+        store.putPackage(courseId, current);
+      });
+      throw error;
+    }
+  }
+}
 async function work(job: Job) {
   const course = store.getCourse(job.course_id);
   if (!course) return;
@@ -49,12 +117,26 @@ async function work(job: Job) {
       pkg.chapter = chapter;
       pkg.status = "ready";
       pkg.speech = "pending";
+      pkg.pageAudio = pageAudioForChapter(chapter);
       store.putPackage(c.id, pkg);
       if (c.currentNodeId === nodeId) service.initialize(c, chapter);
       store.putCourse(c);
     });
   }
   if (!pkg.chapter) return;
+  if (pkg.pageAudio) {
+    await synthesizePages(course.id, pkg.id);
+    return;
+  }
+  // Recovered/duplicate deliveries must reuse an already committed audio package.
+  if (
+    pkg.speech === "ready" &&
+    pkg.cues.length &&
+    store.db
+      .prepare("SELECT 1 FROM audio_artifacts WHERE id=? AND length(audio)>0")
+      .get(pkg.id)
+  )
+    return;
   pkg.speech = "generating";
   store.putPackage(course.id, pkg);
   try {
@@ -64,6 +146,7 @@ async function work(job: Job) {
         .prepare("INSERT OR REPLACE INTO audio_artifacts VALUES(?,?,?)")
         .run(pkg.id, result.audio, "audio/mpeg");
       pkg.cues = result.cues;
+      pkg.captions = result.captions;
       pkg.speech = "ready";
       pkg.error = undefined;
       store.putPackage(course.id, pkg);

@@ -72,7 +72,7 @@ type Track = {
 const TRACKS: Track[] = [
   {
     name: "HTML",
-    tagline: "網頁的骨架",
+    tagline: "內容結構",
     tone: "violet",
     glyph: "</>",
     chapters: [
@@ -87,7 +87,7 @@ const TRACKS: Track[] = [
   },
   {
     name: "CSS",
-    tagline: "讓它變好看",
+    tagline: "樣式與排版",
     tone: "blue",
     glyph: "{ }",
     chapters: [
@@ -103,7 +103,7 @@ const TRACKS: Track[] = [
   },
   {
     name: "JavaScript",
-    tagline: "讓它動起來",
+    tagline: "事件與互動",
     tone: "amber",
     glyph: "( )",
     chapters: [
@@ -207,10 +207,7 @@ export function Explore() {
 
       <main>
         <div className="page-head">
-          <p className="eyebrow">
-            <span className="small-dot" /> COMMUNITY
-          </p>
-          <h1>從這些作品構想開始</h1>
+          <h1>課程與作品</h1>
           <p>作品與課程皆為介面示意，非真實學員作品或已開放課程。</p>
         </div>
 
@@ -247,35 +244,19 @@ export function Explore() {
         <section className="catalog">
           <div className="catalog-head">
             <div>
-              <p className="eyebrow">
-                <span className="small-dot" /> COURSE CATALOG
-              </p>
               <h2>學習路徑示意</h2>
             </div>
-            <p>
-              三條主線、{total}{" "}
-              個章節構想。下方卡片展示規劃方向；可操作的五章範例請使用「先體驗一堂課」。
-            </p>
+            <p>3 條路徑 · {total} 個章節示意</p>
           </div>
           {TRACKS.map((track) => (
             <Rail track={track} key={track.name} />
           ))}
         </section>
 
-        <section className="manifesto">
-          <h2>
-            少一點閱讀。<em>多一點動手。</em>
-          </h2>
-          <p>
-            讀過不等於學會。我們把每個主題拆成可以直接操作的短章節 ——
-            你動手做，而不是滑過去。
-          </p>
-        </section>
-
         <section className="demo-invite">
           <div className="demo-card">
-            <h2>先感受一下，學習可以有多不同。</h2>
-            <p>五個示範章節與補強分支，不需要任何 API key。</p>
+            <h2>體驗課程</h2>
+            <p>5 個章節 · 包含實作與補強節點</p>
             <a className="text-button" href="/?demo=1">
               先體驗一堂課 <ArrowRight size={16} />
             </a>
@@ -285,8 +266,6 @@ export function Explore() {
       </main>
 
       <footer className="site-footer">
-        <span>LEARN BY MAKING.</span>
-        <span>一段為你展開的學習旅程</span>
         <span>METHELIA / EARLY ACCESS</span>
       </footer>
     </div>

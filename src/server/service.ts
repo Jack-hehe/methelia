@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Store } from "./db";
 import { demoGraph, demoChapter } from "../core/fixtures";
+import { fishConfig } from "./fish";
 import {
   emptyWorkspace,
   normalizePath,
@@ -149,6 +150,7 @@ export class LearningService {
       speech: chapter ? "failed" : "pending",
       chapter,
       cues: [],
+      pageAudio: {},
       ...(chapter
         ? { error: "體驗課程尚未合成語音，可使用完整文字模式。" }
         : {}),
@@ -273,8 +275,20 @@ export class LearningService {
       const p = c.progress[nodeId];
       if (typeof update.time === "number" && Number.isFinite(update.time))
         p.time = Math.max(0, Math.min(update.time, 7200));
-      if (typeof update.sectionId === "string" && update.sectionId.length < 100)
+      if (
+        typeof update.sectionId === "string" &&
+        update.sectionId.length < 100
+      ) {
+        const pkg = this.store.getPackage(c.chapterIds[nodeId]);
+        if (
+          pkg?.pageAudio &&
+          !pkg.chapter?.sections.some(
+            (section) => section.id === update.sectionId,
+          )
+        )
+          throw new Error("Unknown progress section");
         p.sectionId = update.sectionId;
+      }
       if (typeof update.follow === "boolean") p.follow = update.follow;
       if (update.subtitleOnly === true) {
         const pkg = this.store.getPackage(c.chapterIds[nodeId]);
@@ -290,8 +304,21 @@ export class LearningService {
       return p;
     });
   }
-  previewBranch(session: string, id: string, nodes: LearningNode[]) {
+  previewBranch(
+    session: string,
+    id: string,
+    nodes: LearningNode[],
+    expected?: { baseRevision: number; afterId: string },
+  ) {
     return this.mutate(session, id, (c) => {
+      if (
+        expected &&
+        (expected.baseRevision !== c.revision ||
+          expected.afterId !== c.currentNodeId)
+      )
+        throw new Error(
+          "Graph conflict: 課程已更新，請重新整理頁面後再新增節點",
+        );
       const accepted = nodes.map((n) => nodeSchema.parse(n));
       insertBranch(c.graph!, c.currentNodeId, accepted);
       c.preview = {
@@ -302,6 +329,14 @@ export class LearningService {
         nodes: accepted,
       };
       return c.preview;
+    });
+  }
+  cancelBranch(session: string, id: string, previewId: string) {
+    return this.mutate(session, id, (c) => {
+      if (c.preview && c.preview.id !== previewId)
+        throw new Error("Graph conflict: 節點預覽已更新");
+      c.preview = null;
+      return this.snapshot(c);
     });
   }
   confirmBranch(session: string, id: string, previewId: string, base: number) {
@@ -360,13 +395,14 @@ export class LearningService {
           )
           .run(`chapter:${pkg.id}`);
       } else if (pkg.status === "ready" && pkg.speech === "failed") {
-        if (
-          !process.env.FISH_AUDIO_API_KEY ||
-          !process.env.FISH_AUDIO_REFERENCE_ID
-        )
-          throw new Error(
-            "請先設定 FISH_AUDIO_API_KEY 與 FISH_AUDIO_REFERENCE_ID",
-          );
+        fishConfig();
+        if (pkg.pageAudio) {
+          for (const page of Object.values(pkg.pageAudio))
+            if (page.status === "failed") {
+              page.status = "pending";
+              page.error = undefined;
+            }
+        }
         pkg.speech = "pending";
         pkg.error = undefined;
         this.store.putPackage(id, pkg);

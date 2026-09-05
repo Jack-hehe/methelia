@@ -2,26 +2,28 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
+  ChevronLeft,
   MessageCircle,
   Code2,
   Network,
-  ArrowUpRight,
-  Sparkles,
   LoaderCircle,
   ArrowLeft,
-  Check,
   Download,
-  Focus,
+  Maximize,
+  Minimize,
+  Volume2,
 } from "lucide-react";
 import type { Snapshot, Progress, BranchPreview } from "../core/state";
 import type { LearningNode } from "../core/protocol";
 import { routeNodes } from "../core/graph";
+import { pageIndex, pageTrack } from "../core/lesson-pages";
 import { api } from "./api";
 import { LessonSection } from "./lesson-section";
 import { WorkspacePanel } from "./workspace-panel";
 import { LearningMap } from "./learning-map";
 import { HelpDrawer } from "./help-drawer";
 import { AudioControls } from "./audio-controls";
+
 export function CoursePlayer({
   course,
   onChange,
@@ -39,116 +41,106 @@ export function CoursePlayer({
     [help, setHelp] = useState(false),
     [practice, setPractice] = useState(false),
     [review, setReview] = useState<string | null>(null),
-    [activeSection, setActiveSection] = useState(""),
-    [follow, setFollow] = useState(true),
-    [busy, setBusy] = useState(false);
-  const [demonstrating, setDemonstrating] = useState(false);
-  const [audioTime, setAudioTime] = useState(0);
+    [busy, setBusy] = useState(false),
+    [fullscreen, setFullscreen] = useState(false),
+    [reviewModes, setReviewModes] = useState<Record<string, boolean>>({}),
+    [selection, setSelection] = useState({ nodeId: "", sectionId: "" }),
+    [demonstrating, setDemonstrating] = useState(false),
+    [audioPlaying, setAudioPlaying] = useState(false),
+    [audioTime, setAudioTime] = useState(0);
   const [playbackRequest, setPlaybackRequest] = useState<{
     time: number;
     play: boolean;
     id: number;
     packageId: string;
+    sectionId: string;
   }>();
+  const shell = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const leaveWorkspace = useRef<(() => Promise<void>) | null>(null);
-  const seenGuide = useRef("");
-  function playback(time: number, play: boolean) {
-    setAudioTime(time);
-    setPlaybackRequest((r) => ({
-      time,
-      play,
-      id: (r?.id || 0) + 1,
-      packageId: pkg?.id || "",
-    }));
-  }
+  const progressQueue = useRef<Promise<unknown>>(Promise.resolve());
   const current = useRef(course);
   current.current = course;
+  const activeKey = useRef("");
+  const leavingPage = useRef(false);
+  const seenGuide = useRef("");
   const nodeId = review || course.currentNodeId,
     pkg = course.chapters[nodeId],
-    node = course.graph?.nodes.find((n) => n.id === nodeId);
-  const progress = course.progress[nodeId] || {
+    chapter = pkg?.chapter;
+  const node = course.graph?.nodes.find((n) => n.id === nodeId);
+  const storedProgress: Progress = course.progress[nodeId] || {
     time: 0,
     sectionId: "",
     done: [],
     subtitleOnly: false,
-    follow: true,
+    follow: false,
   };
-  const chapter = pkg?.chapter;
-  const canEnter = Boolean(
-    chapter && (pkg.speech === "ready" || progress.subtitleOnly),
-  );
+  const progress =
+    review && typeof reviewModes[nodeId] === "boolean"
+      ? { ...storedProgress, subtitleOnly: reviewModes[nodeId] }
+      : storedProgress;
+  const index = chapter
+    ? pageIndex(
+        chapter,
+        selection.nodeId === nodeId ? selection.sectionId : progress.sectionId,
+      )
+    : 0;
+  const section = chapter?.sections[index],
+    sectionId = section?.id || "";
+  activeKey.current = `${pkg?.id}:${sectionId}`;
+  const track = pkg ? pageTrack(pkg, sectionId) : null;
+  const canEnter = Boolean(chapter && pkg.status === "ready");
+  const workspacePage =
+    section &&
+    (["terminal", "code.editor", "file.tree"].includes(
+      section.component.type,
+    ) ||
+      section.template === "workspace");
+  const workOpen = Boolean(canEnter && (practice || workspacePage));
   const route = course.graph ? routeNodes(course.graph) : [];
-  const allDone =
-    course.graph && course.completed.length === course.graph.nodes.length;
+  const allDone = Boolean(
+    course.graph && course.completed.length === course.graph.nodes.length,
+  );
+  const lastPage = Boolean(chapter && index === chapter.sections.length - 1);
+  const nextNodeId = course.graph?.edges.find(
+    (edge) => edge.from === nodeId,
+  )?.to;
+  const nextNode = course.graph?.nodes.find((n) => n.id === nextNodeId);
+  const pendingPractice = chapter?.sections.find(
+    (s) => s.completion && !progress.done.includes(s.id),
+  );
+
   useEffect(() => {
-    setFollow(progress.follow);
-    setActiveSection(progress.sectionId);
-    window.scrollTo(0, 0);
+    leavingPage.current = false;
     setPractice(false);
     setDemonstrating(false);
-    setAudioTime(progress.time);
+    setAudioPlaying(false);
     setPlaybackRequest(undefined);
     seenGuide.current = "";
-  }, [nodeId]);
+    setAudioTime(track?.start || 0);
+    content.current?.scrollTo({ top: 0 });
+  }, [pkg?.id, sectionId]);
   useEffect(() => {
-    const manual = () => setFollow(false);
-    window.addEventListener("wheel", manual, { passive: true });
-    window.addEventListener("touchmove", manual, { passive: true });
-    return () => {
-      window.removeEventListener("wheel", manual);
-      window.removeEventListener("touchmove", manual);
-    };
+    const changed = () =>
+      setFullscreen(document.fullscreenElement === shell.current);
+    document.addEventListener("fullscreenchange", changed);
+    return () => document.removeEventListener("fullscreenchange", changed);
   }, []);
-  useEffect(() => {
-    if (!canEnter || !chapter) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries)
-          if (entry.isIntersecting)
-            setActiveSection(entry.target.getAttribute("data-section") || "");
-      },
-      { rootMargin: "-15% 0px -65% 0px" },
-    );
-    document
-      .querySelectorAll("[data-section]")
-      .forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [canEnter, nodeId]);
-  useEffect(() => {
-    if (!canEnter) return;
-    const id = progress.sectionId;
-    if (id)
-      requestAnimationFrame(() =>
-        document
-          .getElementById("section-" + id)
-          ?.scrollIntoView({ block: "start" }),
-      );
-  }, [canEnter, nodeId]);
-  async function persist(time: number, extra: Partial<Progress> = {}) {
+  async function toggleFullscreen() {
     try {
-      const result = await api<Progress>("progress/events", {
-        courseId: course.id,
-        nodeId,
-        time,
-        sectionId: activeSection,
-        follow,
-        ...extra,
-      });
-      const c = current.current;
-      onChange({ ...c, progress: { ...c.progress, [nodeId]: result } });
-    } catch (e) {
-      onError((e as Error).message);
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (shell.current?.requestFullscreen)
+        await shell.current.requestFullscreen();
+      else onError("此瀏覽器不支援全螢幕，仍可在網頁內使用。 ");
+    } catch {
+      onError("無法進入全螢幕，請保留網頁模式或再試一次。");
     }
   }
-  useEffect(() => {
-    if (!canEnter) return;
-    const timer = setTimeout(
-      () => void persist(current.current.progress[nodeId]?.time || 0),
-      1200,
-    );
-    return () => clearTimeout(timer);
-  }, [activeSection, follow]);
+  function pauseAudio() {
+    shell.current?.querySelector("audio")?.pause();
+  }
   async function action(work: () => Promise<void>) {
+    if (busy) return;
     setBusy(true);
     try {
       await work();
@@ -156,6 +148,120 @@ export function CoursePlayer({
       onError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+  function persist(
+    time: number,
+    extra: Partial<Progress> = {},
+    target = sectionId,
+  ) {
+    if (review) {
+      // Review playback preferences are local; do not move the saved learning cursor.
+      if (typeof extra.subtitleOnly === "boolean") {
+        const subtitleOnly = extra.subtitleOnly;
+        setReviewModes((modes) => ({ ...modes, [nodeId]: subtitleOnly }));
+      }
+      return Promise.resolve();
+    }
+    const update = {
+      courseId: course.id,
+      nodeId,
+      time,
+      sectionId: target,
+      follow: false,
+      ...extra,
+    };
+    const result = progressQueue.current
+      .catch(() => {})
+      .then(async () => {
+        const saved = await api<Progress>("progress/events", update);
+        const c = current.current;
+        onChange({ ...c, progress: { ...c.progress, [nodeId]: saved } });
+      });
+    progressQueue.current = result;
+    return result;
+  }
+  function saveAudio(time: number) {
+    const key = `${pkg?.id}:${sectionId}`;
+    if (leavingPage.current || activeKey.current !== key) return;
+    void persist(time).catch((e) => onError((e as Error).message));
+  }
+  async function turnPage(target: number) {
+    if (
+      !chapter ||
+      target < 0 ||
+      target >= chapter.sections.length ||
+      target === index ||
+      busy ||
+      map ||
+      help
+    )
+      return;
+    await action(async () => {
+      // Native pause/timeupdate events arrive later. They must not enqueue an
+      // outgoing-page save behind the explicit destination-page save.
+      leavingPage.current = true;
+      try {
+        pauseAudio();
+        await leaveWorkspace.current?.();
+        const id = chapter.sections[target].id;
+        const start = pageTrack(pkg!, id).start;
+        await persist(start, {}, id);
+        setSelection({ nodeId, sectionId: id });
+        setPractice(false);
+        setDemonstrating(false);
+      } catch (error) {
+        leavingPage.current = false;
+        throw error;
+      }
+    });
+  }
+  useEffect(() => {
+    const keys = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        map ||
+        help ||
+        !canEnter
+      )
+        return;
+      const target = event.target as HTMLElement;
+      if (
+        target.closest(
+          "input, textarea, select, [contenteditable=true], [role=slider], dialog",
+        )
+      )
+        return;
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        void turnPage(index + (event.key === "ArrowRight" ? 1 : -1));
+      }
+    };
+    window.addEventListener("keydown", keys);
+    return () => window.removeEventListener("keydown", keys);
+  }, [index, busy, sectionId, map, help, canEnter]);
+  function playback(time: number, play: boolean) {
+    setAudioTime(time);
+    setPlaybackRequest((r) => ({
+      time,
+      play,
+      id: (r?.id || 0) + 1,
+      packageId: pkg?.id || "",
+      sectionId,
+    }));
+  }
+  function narration(time: number) {
+    setAudioTime(time);
+    // Guided behavior stays on the selected page. It never turns a page.
+    const a = shell.current?.querySelector("audio");
+    if (section?.guide && a && !a.paused && seenGuide.current !== sectionId) {
+      seenGuide.current = sectionId;
+      setPractice(true);
+      setDemonstrating(true);
     }
   }
   async function check(id: string, answer?: number) {
@@ -176,29 +282,6 @@ export function CoursePlayer({
       return false;
     }
   }
-  function narration(time: number) {
-    setAudioTime(time);
-    const cue = pkg?.cues.find((c) => time >= c.start && time < c.end);
-    if (
-      follow &&
-      cue &&
-      chapter?.sections.find((s) => s.id === cue.sectionId)?.guide &&
-      seenGuide.current !== cue.sectionId
-    ) {
-      seenGuide.current = cue.sectionId;
-      setPractice(true);
-      setDemonstrating(true);
-    }
-    if (cue && follow && cue.sectionId !== activeSection) {
-      setActiveSection(cue.sectionId);
-      document.getElementById("section-" + cue.sectionId)?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "instant"
-          : "smooth",
-        block: "start",
-      });
-    }
-  }
   async function preview(nodes: LearningNode[]) {
     await action(async () => {
       const p = await api<BranchPreview>("branches/preview", {
@@ -210,25 +293,65 @@ export function CoursePlayer({
       setMap(true);
     });
   }
+  async function home() {
+    await action(async () => {
+      pauseAudio();
+      await leaveWorkspace.current?.();
+      await progressQueue.current;
+      if (document.fullscreenElement === shell.current)
+        await document.exitFullscreen();
+      onHome();
+    });
+  }
+  const nextDisabled =
+    busy ||
+    Boolean(review) ||
+    allDone ||
+    Boolean(
+      chapter?.sections.some(
+        (s) => s.completion && !progress.done.includes(s.id),
+      ),
+    );
+
+  const canvasTools = (
+    <>
+      <button
+        className="mini-map"
+        aria-label="開啟 Learning Map"
+        onClick={() => {
+          pauseAudio();
+          setMap(true);
+        }}
+      >
+        <Network size={17} />
+        <span>Learning Map</span>
+      </button>
+      <button
+        className="fullscreen-button"
+        aria-label={fullscreen ? "離開全螢幕" : "進入全螢幕"}
+        title={fullscreen ? "離開全螢幕" : "全螢幕"}
+        onClick={() => void toggleFullscreen()}
+      >
+        {fullscreen ? <Minimize size={19} /> : <Maximize size={19} />}
+      </button>
+    </>
+  );
+
   return (
-    <div className={"course-shell " + (practice ? "with-workspace" : "")}>
+    <div
+      ref={shell}
+      className={
+        "course-shell paged-course " + (workOpen ? "with-workspace" : "")
+      }
+    >
       <header className="course-header">
-        <button
-          className="brand"
-          disabled={busy}
-          onClick={() =>
-            void action(async () => {
-              await leaveWorkspace.current?.();
-              onHome();
-            })
-          }
-        >
+        <button className="brand" disabled={busy} onClick={() => void home()}>
           Methelia
         </button>
         <div className="breadcrumb">
-          <span>{course.graph?.title || "正在規劃你的課程"}</span>
+          <span>{course.graph?.title || "建立課程"}</span>
           <ChevronRight size={13} />
-          <strong>{node?.title || "建立學習路徑"}</strong>
+          <strong>{node?.title}</strong>
         </div>
         <div className="header-right">
           {course.mode === "demo" && (
@@ -238,50 +361,32 @@ export function CoursePlayer({
           <button
             className="icon-button"
             aria-label="開啟實作區"
-            disabled={!canEnter}
-            onClick={() => {
-              setFollow(false);
-              setPractice(true);
-            }}
+            disabled={!canEnter || busy}
+            onClick={() => setPractice(true)}
           >
             <Code2 size={20} />
           </button>
           <button
             className="help-button"
             disabled={!canEnter}
-            onClick={() => setHelp(true)}
+            onClick={() => {
+              pauseAudio();
+              setHelp(true);
+            }}
           >
             <MessageCircle size={16} /> 小問題
           </button>
         </div>
       </header>
-      <div className="course-progress">
-        <span
-          style={{
-            width: `${course.graph ? (course.completed.length / course.graph.nodes.length) * 100 : 0}%`,
-          }}
-        />
-      </div>
       {course.status !== "ready" ? (
         <main className="preparation">
-          <div className="preparation-orbit">
-            {course.status === "failed" ? (
-              <Sparkles size={35} />
-            ) : (
-              <LoaderCircle className="spin" size={35} />
-            )}
-          </div>
-          <span className="eyebrow">YOUR PATH IS TAKING SHAPE</span>
+          {course.status !== "failed" && (
+            <LoaderCircle className="spin" size={32} />
+          )}
           <h1>
-            {course.status === "failed"
-              ? "還差一步，重新試試"
-              : "正在把好奇心，變成學習路徑"}
+            {course.status === "failed" ? "課程生成失敗" : "正在規劃課程"}
           </h1>
-          <p>
-            {course.error ||
-              "先規劃完整 Course Graph，再為你準備第一個互動章節。"}
-          </p>
-          <span className="goal-quote">「{course.goal}」</span>
+          <p>{course.error || "先建立學習路徑，再準備章節內容。"}</p>
           {course.status === "failed" && (
             <button
               className="primary-button"
@@ -297,114 +402,57 @@ export function CoursePlayer({
               重新生成
             </button>
           )}
-          <button className="text-button" onClick={onHome}>
-            <ArrowLeft size={14} /> 回到學習首頁
+          <button className="text-button" onClick={() => void home()}>
+            <ArrowLeft size={14} /> 回首頁
           </button>
         </main>
       ) : (
         <>
-          <main className="lesson-main">
-            <div className="lesson-heading">
-              <div className="lesson-topline">
-                <span className="eyebrow">
+          <main className="lesson-canvas" aria-label="課程畫布">
+            <div className="canvas-heading">
+              <div>
+                <span className="canvas-chapter">
                   {review
-                    ? "REVISIT & REFLECT"
-                    : node?.kind === "support"
-                      ? "A LITTLE EXTRA UNDERSTANDING"
-                      : `CHAPTER ${String(route.findIndex((n) => n.id === nodeId) + 1).padStart(2, "0")} / YOUR FIRST WEBSITE`}
+                    ? "複習"
+                    : `第 ${route.findIndex((n) => n.id === nodeId) + 1} 章`}{" "}
+                  · {node?.title}
                 </span>
-                <span className="reading-time">約 {node?.minutes} 分鐘</span>
+                <h1>{canEnter ? section?.title : node?.title}</h1>
               </div>
-              <h1>{node?.title}</h1>
-              <p>{node?.objective}</p>
-              <div className="narrator-row">
-                <div className="avatar">
-                  m<span>✦</span>
-                </div>
-                <div>
-                  <strong>和 Methelia 一起，慢慢弄懂。</strong>
-                  <span>
-                    {review
-                      ? "複習模式 · 保留主線進度"
-                      : course.mode === "demo"
-                        ? "示範課程 · 完整互動體驗"
-                        : "為你的目標生成的互動章節"}
-                  </span>
-                </div>
-                {canEnter &&
-                  pkg &&
-                  (pkg.speech === "failed" || progress.subtitleOnly) && (
-                    <button
-                      className="text-button"
-                      disabled={
-                        busy || ["pending", "generating"].includes(pkg.speech)
-                      }
-                      onClick={() => {
-                        if (pkg.speech === "ready")
-                          void persist(progress.time, { subtitleOnly: false });
-                        else
-                          void action(async () =>
-                            onChange(
-                              await api<Snapshot>(`chapters/${pkg.id}/retry`, {
-                                courseId: course.id,
-                                nodeId,
-                              }),
-                            ),
-                          );
-                      }}
-                    >
-                      {pkg.speech === "ready"
-                        ? "啟用語音解說"
-                        : pkg.speech === "failed"
-                          ? "準備章節語音"
-                          : "語音準備中…"}
-                    </button>
-                  )}
-                {canEnter && (
+              {fullscreen && canEnter && (
+                <div className="canvas-page-actions">
                   <button
-                    className={
-                      follow ? "follow-button following" : "follow-button"
-                    }
+                    className="icon-button"
+                    aria-label="開啟實作區"
+                    disabled={!canEnter || busy}
+                    onClick={() => setPractice(true)}
+                  >
+                    <Code2 size={19} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label="小問題"
                     onClick={() => {
-                      setFollow(true);
-                      narration(progress.time);
+                      pauseAudio();
+                      setHelp(true);
                     }}
                   >
-                    <Focus size={14} /> 跟隨解說
+                    <MessageCircle size={19} />
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
             {!canEnter ? (
               <div className="chapter-gate">
-                <div className="gate-icon">
-                  {pkg?.status === "failed" || pkg?.speech === "failed" ? (
-                    <Sparkles size={28} />
-                  ) : (
-                    <LoaderCircle className="spin" size={28} />
-                  )}
-                </div>
+                {pkg?.status !== "failed" && (
+                  <LoaderCircle className="spin" size={28} />
+                )}
                 <h2>
-                  {pkg?.status === "failed"
-                    ? "這一章需要重新準備"
-                    : pkg?.speech === "failed"
-                      ? "完整章節已就緒"
-                      : "正在準備這一小章"}
+                  {pkg?.status === "failed" ? "章節生成失敗" : "正在準備章節"}
                 </h2>
-                <p>
-                  {pkg?.error ||
-                    "正在一次準備好解說、互動與語音，完成後就能流暢地開始。"}
-                </p>
+                <p>{pkg?.error || "正在準備章節內容。"}</p>
                 <div>
-                  {pkg?.status === "ready" && pkg.speech === "failed" && (
-                    <button
-                      className="primary-button"
-                      onClick={() => void persist(0, { subtitleOnly: true })}
-                    >
-                      使用完整文字模式 <ArrowRightIcon />
-                    </button>
-                  )}
-                  {(pkg?.status === "failed" || pkg?.speech === "failed") && (
+                  {pkg?.status === "failed" && (
                     <button
                       className="secondary-button"
                       disabled={busy}
@@ -419,177 +467,301 @@ export function CoursePlayer({
                         )
                       }
                     >
-                      重試{pkg?.status === "ready" ? "語音" : "章節"}
+                      重試章節
                     </button>
                   )}
                 </div>
-                <small>章節內容準備完成後才開始，學習途中不插入新內容。</small>
               </div>
             ) : (
-              <div className="lesson-document">
-                {chapter!.sections.map((section, i) => (
+              <div ref={content} className="canvas-content">
+                {workOpen ? (
+                  <div className="workspace-page" data-section={sectionId}>
+                    <p className="workspace-instruction">{section?.body}</p>
+                    <WorkspacePanel
+                      key={`${pkg!.id}:${sectionId}`}
+                      courseId={course.id}
+                      chapter={chapter!}
+                      activeSectionId={sectionId}
+                      embedded={Boolean(workspacePage)}
+                      cues={track!.cues}
+                      audioTime={audioTime}
+                      audioReady={Boolean(
+                        track?.ready && !progress.subtitleOnly,
+                      )}
+                      audioPlaying={audioPlaying}
+                      demonstrating={demonstrating}
+                      onDemonstrating={setDemonstrating}
+                      onPlayback={playback}
+                      registerLeave={(save) => {
+                        leaveWorkspace.current = save;
+                      }}
+                      workspace={course.workspace}
+                      onChange={(workspace) =>
+                        onChange({ ...current.current, workspace })
+                      }
+                      onClose={() => setPractice(false)}
+                      onError={onError}
+                    />
+                    {section?.completion && (
+                      <div className="canvas-check">
+                        <button
+                          className="primary-button"
+                          disabled={
+                            progress.done.includes(sectionId) ||
+                            Boolean(review) ||
+                            busy
+                          }
+                          onClick={() =>
+                            void action(async () => {
+                              await leaveWorkspace.current?.();
+                              await check(sectionId);
+                            })
+                          }
+                        >
+                          {progress.done.includes(sectionId)
+                            ? "練習完成"
+                            : "驗證我的練習"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
                   <LessonSection
-                    key={nodeId + section.id}
-                    section={section}
-                    index={i}
-                    done={progress.done.includes(section.id)}
+                    key={`${pkg!.id}:${sectionId}`}
+                    section={section!}
+                    index={index}
+                    hideHeading
+                    done={progress.done.includes(sectionId)}
                     files={course.workspace.files}
                     onCheck={check}
                     onPractice={() => setPractice(true)}
                   />
-                ))}
-                <div className="chapter-end">
-                  <span>✳</span>
-                  <h2>
-                    {allDone
-                      ? "你的第一個網站，準備好了。"
-                      : "每理解一點，都離目標更近。"}
-                  </h2>
-                  <p>
-                    {allDone
-                      ? "把檔案帶走，繼續做出屬於你的作品。"
-                      : "完成本章練習，再走向學習路徑的下一步。"}
-                  </p>
-                  {allDone && (
-                    <a
-                      className="primary-button"
-                      href={"/api/workspace/export?courseId=" + course.id}
-                    >
-                      <Download size={16} /> 匯出我的網站
-                    </a>
-                  )}
-                  {review && (
-                    <button
-                      className="primary-button"
-                      onClick={() => setReview(null)}
-                    >
-                      回到目前章節
-                    </button>
-                  )}
-                </div>
+                )}
+                {lastPage && !review && !allDone && pendingPractice && (
+                  <div
+                    id="chapter-prerequisite"
+                    className="chapter-prerequisite"
+                    role="status"
+                  >
+                    {pendingPractice.id === sectionId ? (
+                      "完成本頁練習後，就能進入下一章。"
+                    ) : (
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void turnPage(
+                            chapter!.sections.findIndex(
+                              (s) => s.id === pendingPractice.id,
+                            ),
+                          )
+                        }
+                      >
+                        先完成「{pendingPractice.title}」{" "}
+                        <ChevronLeft size={12} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </main>
-          <button
-            className="mini-map"
-            aria-label="開啟 Learning Map"
-            onClick={() => setMap(true)}
-          >
-            <div>
-              <Network size={15} />
-              <strong>Learning Map</strong>
-              <ArrowUpRight size={14} />
-            </div>
-            <div className="mini-map-route">
-              {route.slice(0, 7).map((n, i) => (
-                <span
-                  key={n.id}
-                  className={
-                    (n.id === course.currentNodeId ? "current " : "") +
-                    (course.completed.includes(n.id) ? "done" : "")
+          <footer className="canvas-controls">
+            {pkg ? (
+              <>
+                <AudioControls
+                  key={`${pkg.id}:${sectionId}`}
+                  pkg={pkg}
+                  sectionId={sectionId}
+                  progress={progress}
+                  paused={map || help || busy}
+                  playbackRequest={playbackRequest}
+                  onTime={narration}
+                  onSave={saveAudio}
+                  onError={onError}
+                  onPlayingChange={setAudioPlaying}
+                  trailingControls={canvasTools}
+                  statusControl={
+                    !canEnter ? (
+                      <span className="audio-preparation-status">
+                        {pkg.status === "failed" ? "章節未就緒" : "章節準備中"}
+                      </span>
+                    ) : (
+                      (pkg.speech !== "ready" || progress.subtitleOnly) && (
+                        <button
+                          className="speech-prepare"
+                          disabled={
+                            busy ||
+                            ["pending", "generating"].includes(pkg.speech)
+                          }
+                          onClick={() =>
+                            void action(async () => {
+                              if (pkg.speech === "ready")
+                                await persist(track?.start || 0, {
+                                  subtitleOnly: false,
+                                });
+                              else
+                                onChange(
+                                  await api<Snapshot>(
+                                    `chapters/${pkg.id}/retry`,
+                                    {
+                                      courseId: course.id,
+                                      nodeId,
+                                    },
+                                  ),
+                                );
+                            })
+                          }
+                        >
+                          <Volume2 size={16} />
+                          {pkg.speech === "ready"
+                            ? "啟用語音解說"
+                            : pkg.speech === "failed"
+                              ? "準備章節語音"
+                              : "語音準備中…"}
+                        </button>
+                      )
+                    )
                   }
-                >
-                  {course.completed.includes(n.id) ? (
-                    <Check size={10} />
-                  ) : (
-                    i + 1
-                  )}
-                </span>
-              ))}
-            </div>
-            <small>
-              {course.completed.length} / {route.length} 已完成 · 看看我在哪裡
-            </small>
-          </button>
-          {practice && canEnter && (
-            <WorkspacePanel
-              key={"workspace-" + pkg!.id}
-              courseId={course.id}
-              chapter={chapter!}
-              cues={pkg!.cues}
-              audioTime={audioTime}
-              audioReady={pkg!.speech === "ready" && !progress.subtitleOnly}
-              demonstrating={demonstrating}
-              onDemonstrating={(value) => {
-                setDemonstrating(value);
-                if (!value) setFollow(false);
-              }}
-              onPlayback={playback}
-              registerLeave={(save) => {
-                leaveWorkspace.current = save;
-              }}
-              workspace={course.workspace}
-              onChange={(workspace) =>
-                onChange({ ...current.current, workspace })
-              }
-              onClose={() => setPractice(false)}
-              onError={onError}
-            />
-          )}
-          {canEnter && pkg && (
-            <AudioControls
-              key={pkg.id}
-              pkg={pkg}
-              progress={progress}
-              paused={map || help || Boolean(review)}
-              playbackRequest={playbackRequest}
-              onTime={narration}
-              onSave={(time) => void persist(time)}
-              onNext={() =>
-                void action(async () => {
-                  setReview(null);
-                  onChange(
-                    await api<Snapshot>(`courses/${course.id}/advance`, {}),
-                  );
-                })
-              }
-              nextDisabled={
-                busy ||
-                practice ||
-                Boolean(review) ||
-                Boolean(allDone) ||
-                chapter!.sections.some(
-                  (s) => s.completion && !progress.done.includes(s.id),
-                )
-              }
-              onError={onError}
-            />
-          )}
+                />
+                <nav className="lesson-navigation" aria-label="課程翻頁">
+                  <div className="page-navigation-buttons">
+                    <button
+                      className="page-nav-button"
+                      aria-label="上一頁"
+                      disabled={!canEnter || busy || index === 0}
+                      onClick={() => void turnPage(index - 1)}
+                    >
+                      <ChevronLeft size={17} /> <span>上一頁</span>
+                    </button>
+                    <span className="page-count" aria-label="頁碼">
+                      {canEnter
+                        ? `${index + 1} / ${chapter!.sections.length}`
+                        : "— / —"}
+                    </span>
+                    {canEnter && lastPage ? (
+                      review ? (
+                        <button
+                          className="page-nav-button page-nav-next"
+                          aria-label="回到目前章節"
+                          disabled={busy}
+                          onClick={() =>
+                            void action(async () => {
+                              pauseAudio();
+                              await leaveWorkspace.current?.();
+                              await progressQueue.current;
+                              setReview(null);
+                            })
+                          }
+                        >
+                          回到課程
+                        </button>
+                      ) : allDone ? (
+                        <a
+                          className="page-nav-button page-nav-next"
+                          href={`/api/workspace/export?courseId=${course.id}`}
+                        >
+                          <Download size={16} />
+                          匯出網站
+                        </a>
+                      ) : (
+                        <button
+                          className="page-nav-button page-nav-next"
+                          disabled={nextDisabled}
+                          aria-describedby={
+                            pendingPractice ? "chapter-prerequisite" : undefined
+                          }
+                          aria-label={
+                            nextNode ? `下一章：${nextNode.title}` : "完成課程"
+                          }
+                          title={
+                            nextNode ? `下一章：${nextNode.title}` : "完成課程"
+                          }
+                          onClick={() =>
+                            void action(async () => {
+                              pauseAudio();
+                              await leaveWorkspace.current?.();
+                              await progressQueue.current;
+                              onChange(
+                                await api<Snapshot>(
+                                  `courses/${course.id}/advance`,
+                                  {},
+                                ),
+                              );
+                            })
+                          }
+                        >
+                          <span>{nextNode ? "下一章" : "完成課程"}</span>{" "}
+                          <ChevronRight size={15} />
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        className="page-nav-button page-nav-next"
+                        aria-label="下一頁"
+                        disabled={!canEnter || busy}
+                        onClick={() => void turnPage(index + 1)}
+                      >
+                        <span>下一頁</span> <ChevronRight size={17} />
+                      </button>
+                    )}
+                  </div>
+                </nav>
+              </>
+            ) : (
+              <span className="canvas-status">章節準備中</span>
+            )}
+            {!pkg && <div className="canvas-tools">{canvasTools}</div>}
+          </footer>
         </>
       )}
       {map && course.graph && (
         <LearningMap
           course={course}
+          busy={busy}
           onClose={() => setMap(false)}
-          onAdd={() => {
-            setMap(false);
-            setHelp(true);
-          }}
-          onReview={(id) => {
-            void action(async () => {
-              await leaveWorkspace.current?.();
-              setReview(id);
-              setMap(false);
+          onAdd={async (topic) => {
+            const preview = await api<BranchPreview>("branches/preview", {
+              courseId: course.id,
+              topic,
+              baseRevision: course.revision,
+              afterId: course.currentNodeId,
             });
+            onChange({ ...current.current, preview });
           }}
-          onConfirm={() =>
+          onCancelPreview={async () => {
+            onChange(
+              await api<Snapshot>("branches/cancel", {
+                courseId: course.id,
+                previewId: course.preview!.id,
+              }),
+            );
+          }}
+          onReview={(id) =>
             void action(async () => {
-              const p = course.preview!;
-              onChange(
-                await api<Snapshot>("branches/confirm", {
-                  courseId: course.id,
-                  previewId: p.id,
-                  baseRevision: p.baseRevision,
-                }),
-              );
+              pauseAudio();
+              await leaveWorkspace.current?.();
+              await progressQueue.current;
+              setReview(id);
+              setPractice(false);
+              setMap(false);
             })
           }
+          onConfirm={async () => {
+            const p = course.preview!;
+            onChange(
+              await api<Snapshot>("branches/confirm", {
+                courseId: course.id,
+                previewId: p.id,
+                baseRevision: p.baseRevision,
+              }),
+            );
+          }}
         />
       )}
       {help && (
         <HelpDrawer
           course={course}
-          sectionId={activeSection}
+          sectionId={sectionId}
           onClose={() => setHelp(false)}
           onMessages={(messages) => onChange({ ...current.current, messages })}
           onPreview={(nodes) => void preview(nodes)}
@@ -598,7 +770,4 @@ export function CoursePlayer({
       )}
     </div>
   );
-}
-function ArrowRightIcon() {
-  return <ArrowUpRight size={16} />;
 }

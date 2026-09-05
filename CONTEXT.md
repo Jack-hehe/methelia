@@ -1,8 +1,24 @@
 # Methelia Learning
 
-Methelia is an AI-native learning environment that generates structured courses and presents them through narrated, interactive web experiences.
+Methelia is an AI-native learning environment that generates structured courses across subjects and presents them through narrated, interactive web experiences. Subject coverage and available practice tools are distinct.
 
 ## Language
+
+**Learning Goal**:
+The learner's intended knowledge or ability, with the starting level and desired outcome needed to plan a course. It is not a choice of a predefined course or a particular teaching tool.
+_Avoid_: Course selection, component request
+
+**Generation Policy**:
+The shared rules that bound course size, chapter size, preparation, and teaching quality while allowing the plan to adapt to a Learning Goal.
+_Avoid_: Fixed curriculum, hardcoded chapter count
+
+**Learning Capability**:
+A supported way to explain, demonstrate, practice, or assess knowledge. The subject a learner requests does not by itself establish that every practical capability needed to teach it is available.
+_Avoid_: Supported subject, unlimited tool access
+
+**Learning Environment**:
+The practical setting in which a learner performs an activity and observes its results, such as a website preview or a Python exercise environment. A Terminal is one possible interface to an environment, not the environment itself.
+_Avoid_: Terminal, lesson layout
 
 **Course Graph**:
 The authoritative structure of a generated course, including learning dependencies, progress, and branches.
@@ -17,11 +33,11 @@ A mastery unit with one clear learning objective, delivered through one Chapter 
 _Avoid_: Page, slide, video
 
 **Course Player**:
-The full-screen experience that synchronizes narration and subtitles with a scrollable Lesson Document while preserving familiar media controls.
+The learning surface that presents one interactive Lesson Section at a time, with narration, subtitles, manual page navigation, and an optional fullscreen view.
 _Avoid_: Video player, slide viewer
 
 **Lesson Section**:
-One explanation, demonstration, practice, or knowledge check inside a Lesson Document. Sections are laid out together in reading order and can be targeted by narration cues.
+One focused explanation, demonstration, practice, or knowledge check inside a Lesson Document, presented as a single interactive page.
 _Avoid_: Scene, slide, video clip
 
 **Chapter Script**:
@@ -33,7 +49,7 @@ A stable, reusable interactive surface such as a Terminal, Code Editor, Browser 
 _Avoid_: AI-generated widget, slide template
 
 **Lesson Document**:
-The scrollable course page generated for one Learning Node, containing its Lesson Sections in reading order.
+The ordered collection of interactive Lesson Sections generated for one Learning Node.
 _Avoid_: Video, slide deck, article
 
 **Chapter Package**:
@@ -41,12 +57,12 @@ The complete generated delivery unit for one Learning Node, containing its entir
 _Avoid_: Sentence stream, partial page generation
 
 **Narration Cursor**:
-The current narrated position in a Chapter Package, used to synchronize subtitles, playback progress, highlighting, and guided scrolling to the relevant HTML section.
+The current narrated position within the selected Lesson Section, synchronizing subtitles, playback progress, and guided interaction without changing pages.
 _Avoid_: Video timestamp, page position
 
-**Chapter Audio Track**:
-The complete narration audio for one Chapter Package, with timing information linking spoken passages to its Chapter Script and Lesson Sections.
-_Avoid_: Sentence audio, teacher video
+**Page Audio Track**:
+The complete narration for one Lesson Section, with its own subtitles and timing. All Page Audio Tracks in a Chapter Package are prepared before narrated learning begins.
+_Avoid_: Sentence audio, teacher video, chapter-wide playback
 
 **Course Planner**:
 The service that turns a learner's goal into a complete Course Graph without generating detailed Lesson Sections.
@@ -105,5 +121,5 @@ An anonymous persisted learning journey containing one learner's Course Graph, a
 _Avoid_: User account, guest account
 
 **Learning Workspace**:
-The persistent virtual project shared by the Code Editor, File Tree, Terminal, and Browser Preview during a Learner Session.
+The persistent learner-owned working materials shared by the Learning Components used in a practical activity. A conceptual lesson need not have a Learning Workspace.
 _Avoid_: Shell session, temporary code snippet
