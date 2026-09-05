@@ -14,8 +14,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "format": "prettier --write src tests docs README.md CONTEXT.md \"*.json\" \"*.ts\"",
-    "format:check": "prettier --check src tests docs README.md CONTEXT.md \"*.json\" \"*.ts\""
+    "format": "prettier --write src tests docs README.md README.zh-TW.md CONTEXT.md \"*.json\" \"*.ts\"",
+    "format:check": "prettier --check src tests docs README.md README.zh-TW.md CONTEXT.md \"*.json\" \"*.ts\""
   },
   "dependencies": {
     "concurrently": "^10.0.5",
