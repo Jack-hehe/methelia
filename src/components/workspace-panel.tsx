@@ -79,6 +79,8 @@ export function WorkspacePanel({
   const shellAvailable = environment === "terminal" || legacyTerminal;
   const component = chapter.sections[0]?.component;
   const example = component?.type === "code.editor" ? component : null;
+  const domElements = component?.type === "dom.explorer" ? component.elements : [];
+  const [selectedTag, setSelectedTag] = useState<string>();
   const defaultPath =
     example && Object.hasOwn(workspace.files, example.path)
       ? example.path
@@ -187,6 +189,7 @@ export function WorkspacePanel({
       buildPreview(
         visibleFiles,
         demonstrating ? frame.previewClick : undefined,
+        selectedTag,
       ),
     [
       demonstrating,
@@ -197,6 +200,7 @@ export function WorkspacePanel({
       frame.previewClick,
       showExample,
       example,
+      selectedTag,
     ],
   );
   useEffect(() => {
@@ -582,6 +586,18 @@ export function WorkspacePanel({
                     : t("即時", "LIVE")}
               </span>
             </div>
+            {domElements.length > 0 && (
+              <div className="studio-dom-tools">
+                <div className="studio-actions" role="group" aria-label={t("HTML 元素", "HTML elements")}>
+                  {domElements.map(element => (
+                    <button key={element.tag} aria-pressed={selectedTag === element.tag}
+                      className={selectedTag === element.tag ? "studio-selected" : ""}
+                      onClick={() => setSelectedTag(element.tag)}>{element.tag}</button>
+                  ))}
+                </div>
+                <p aria-live="polite">{domElements.find(element => element.tag === selectedTag)?.description || t("點選標籤，在預覽中找出對應的元素。", "Select a tag to highlight its element in the preview.")}</p>
+              </div>
+            )}
             <iframe
               title={t("實作網站預覽", "Practice website preview")}
               sandbox="allow-scripts"
