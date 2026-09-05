@@ -1,4 +1,5 @@
 import { copyFor, type Language } from "./language";
+import { parsePythonArtifacts } from "./python-artifacts";
 export const PYODIDE_VERSION = "0.28.3";
 export const PYTHON_OUTPUT_LIMIT = 20000;
 export const PYTHON_EXECUTION_MS = 10000;
@@ -17,6 +18,7 @@ export function pythonRunnerDocument(
   const workerSource = String.raw`
     const CDN = ${JSON.stringify(cdn)};
     const LIMIT = ${PYTHON_OUTPUT_LIMIT};
+    const parseArtifacts = ${parsePythonArtifacts.toString()};
     const send = self.postMessage.bind(self);
     const allowed = new Set(["pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"].map(name => CDN + name));
     const runtimeFetch = self.fetch.bind(self);
@@ -96,7 +98,27 @@ export function pythonRunnerDocument(
         runningLearner = true;
         await pyodide.runPythonAsync("import runpy, sys, importlib\nfor name, module in list(sys.modules.items()):\n    if str(getattr(module, '__file__', '')).startswith('/practice/'):\n        sys.modules.pop(name, None)\nsys.path[:] = [p for p in sys.path if not p.startswith('/practice')]\nsys.path.insert(0, '/practice')\nsys.path.insert(0, _practice_entry.rsplit('/', 1)[0])\nsys.dont_write_bytecode = True\nimportlib.invalidate_caches()\nrunpy.run_path(_practice_entry, run_name='__main__')");
         flush();
-        send({ kind: "done" });
+        const artifacts = {};
+        let visited = 0, artifactCount = 0, artifactSize = 0;
+        const collect = (directory, depth = 0) => {
+          if (depth > 20) throw new Error("Generated directories are too deep.");
+          for (const name of pyodide.FS.readdir(directory)) {
+            if (name === "." || name === "..") continue;
+            if (pyodide.FS.isLink(pyodide.FS.lstat(directory).mode)) throw new Error("Generated file directories cannot be symbolic links.");
+            if (++visited > 500) throw new Error("Too many generated filesystem entries.");
+            const path = directory + "/" + name, info = pyodide.FS.lstat(path);
+            if (pyodide.FS.isLink(info.mode)) continue;
+            if (pyodide.FS.isDir(info.mode)) { collect(path, depth + 1); continue; }
+            if (!pyodide.FS.isFile(info.mode) || !/\.(html|css|js|json|txt|csv)$/i.test(name)) continue;
+            if (++artifactCount > 20 || info.size > 800000) throw new Error("Generated files exceed the export limit.");
+            const content = new TextDecoder("utf-8", { fatal: true }).decode(pyodide.FS.readFile(path));
+            artifactSize += content.length;
+            if (artifactSize > 200000) throw new Error("Generated files exceed 200,000 characters.");
+            artifacts[path.slice("/practice".length)] = content;
+          }
+        };
+        collect("/practice");
+        send({ kind: "done", artifacts: parseArtifacts(artifacts) });
       } catch (error) {
         flush();
         // Python exceptions are normal exercise feedback, not a broken runtime.
@@ -109,20 +131,21 @@ export function pythonRunnerDocument(
     (() => {
       const channel = ${JSON.stringify(channel)};
       const source = ${JSON.stringify(workerSource)};
+      const parseArtifacts = ${parsePythonArtifacts.toString()};
       let worker = null, url = null, timer = null, runId = null, count = 0, running = false, ready = false;
-      const send = (kind, text) => parent.postMessage({ channel, runId, kind, text }, "*");
+      const send = (kind, text, artifacts) => parent.postMessage({ channel, runId, kind, text, ...(artifacts ? { artifacts } : {}) }, "*");
       const dispose = () => {
         if (timer) clearTimeout(timer);
         if (worker) worker.terminate();
         if (url) URL.revokeObjectURL(url);
         worker = null; url = null; timer = null; running = false; ready = false;
       };
-      const finish = (kind, text, reusable = false) => {
+      const finish = (kind, text, reusable = false, artifacts) => {
         const hadRun = !!runId;
         const keepWorker = kind === "done" || reusable;
         if (keepWorker) { clearTimeout(timer); timer = null; running = false; }
         else dispose();
-        send(kind, text); runId = null;
+        send(kind, text, artifacts); runId = null;
         if (!keepWorker && hadRun) warmup();
       };
       const warmup = () => {
@@ -149,7 +172,10 @@ export function pythonRunnerDocument(
               count += message.text.length;
               if (text) send("output", text);
               if (count >= ${PYTHON_OUTPUT_LIMIT}) finish("error", ${JSON.stringify(t("輸出已達 20,000 字元上限，已停止。", "Output reached the 20,000 character limit. Execution stopped."))});
-            } else if (message?.kind === "done") finish("done");
+            } else if (message?.kind === "done" && runId) {
+              try { finish("done", undefined, false, parseArtifacts(message.artifacts || {})); }
+              catch { finish("error", "Invalid generated files."); }
+            }
             else if (message?.kind === "error") finish("error", String(message.text || ${JSON.stringify(t("Python 執行失敗。", "Python execution failed."))}).slice(0, 4000), message.reusable === true);
           };
           current.onerror = () => finish("error", ${JSON.stringify(t("Python 無法啟動，請確認瀏覽器支援 WebAssembly 並可連線至執行環境 CDN。", "Python could not start. Check that WebAssembly and the runtime CDN are accessible."))});

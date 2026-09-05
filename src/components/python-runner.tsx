@@ -11,6 +11,8 @@ import {
 } from "../core/python-runner-document";
 
 import { usePythonRuntime } from "./python-runtime-provider";
+import { buildPreview } from "../core/preview";
+import { zipSync, strToU8 } from "fflate";
 
 type Status =
   "connecting" | "ready" | "loading" | "running" | "done" | "stopped" | "error";
@@ -51,6 +53,9 @@ export function PythonRunner({
   const [status, setStatus] = useState<Status>(initial?.status || "ready");
   const [output, setOutput] = useState(initial?.output || "");
   const [error, setError] = useState(initial?.error || "");
+  const [artifacts, setArtifacts] = useState<Record<string, string>>(
+    initial?.artifacts || {},
+  );
   const busy = status === "loading" || status === "running";
   useEffect(() => {
     if (
@@ -62,10 +67,11 @@ export function PythonRunner({
         status,
         output,
         error,
+        artifacts,
       });
       if (results.size > 100) results.delete(results.keys().next().value!);
     }
-  }, [sessionKey, status, output, error, results]);
+  }, [sessionKey, status, output, error, artifacts, results]);
 
   useEffect(() => {
     return subscribe((message) => {
@@ -75,6 +81,7 @@ export function PythonRunner({
           setStatus(result.status);
           setOutput(result.output);
           setError(result.error);
+          setArtifacts(result.artifacts || {});
         }
         return;
       }
@@ -90,6 +97,7 @@ export function PythonRunner({
         if (watchdog.current) clearTimeout(watchdog.current);
         activeRun.current = null;
         setStatus(message.kind as Status);
+        setArtifacts(message.kind === "done" ? message.artifacts || {} : {});
         if (message.kind === "error")
           setError(
             String(message.text || t("執行失敗。", "Execution failed.")).slice(
@@ -122,6 +130,7 @@ export function PythonRunner({
     submitted.current = false;
     setOutput("");
     setError("");
+    setArtifacts({});
     setStatus("loading");
     watchdog.current = setTimeout(() => {
       if (activeRun.current !== runId) return;
@@ -250,11 +259,63 @@ export function PythonRunner({
           )}
         </div>
       )}
+      {Object.keys(artifacts).length > 0 && (
+        <section aria-label={t("Python 產生的檔案", "Python generated files")}>
+          <div className="practice-pane-header">
+            <strong>
+              {t("產生的檔案", "Generated files")} (
+              {Object.keys(artifacts).length})
+            </strong>
+            <button
+              onClick={() => {
+                const archive = zipSync(
+                  Object.fromEntries(
+                    Object.entries(artifacts).map(([path, content]) => [
+                      path.slice(1),
+                      strToU8(content),
+                    ]),
+                  ),
+                );
+                const url = URL.createObjectURL(
+                  new Blob([new Uint8Array(archive)], {
+                    type: "application/zip",
+                  }),
+                );
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "python-generated-site.zip";
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }}
+            >
+              {t("下載 ZIP", "Download ZIP")}
+            </button>
+          </div>
+          <p>{Object.keys(artifacts).join(" · ")}</p>
+          {artifacts["/index.html"] !== undefined && (
+            <iframe
+              title={t(
+                "Python 產生的網站預覽",
+                "Python generated website preview",
+              )}
+              sandbox="allow-scripts"
+              referrerPolicy="no-referrer"
+              srcDoc={buildPreview(artifacts)}
+              style={{
+                width: "100%",
+                minHeight: 360,
+                border: 0,
+                background: "#fff",
+              }}
+            />
+          )}
+        </section>
+      )}
       <small className="practice-footnote">
         Pyodide {PYODIDE_VERSION} ·{" "}
         {t(
-          "Python 標準函式庫 · 每次執行上限 10 秒。執行產生的檔案不會寫回作品；不支援互動輸入。",
-          "Python standard library · 10 seconds per run. Generated files are not saved to your project; interactive input is not supported.",
+          "Python 標準函式庫 · 每次執行上限 10 秒。產生的靜態網站可預覽及下載（最多 20 檔、共 200,000 字元），不自動寫回作品。不提供 Flask 伺服器或互動輸入。",
+          "Python standard library · 10 seconds per run. Preview and download generated static files (20 files, 200,000 characters total); they are not automatically saved to your project. No Flask server or interactive input.",
         )}
       </small>
     </section>

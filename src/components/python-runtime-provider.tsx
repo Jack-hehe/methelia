@@ -13,13 +13,20 @@ import {
 } from "react";
 import { pythonRunnerDocument } from "../core/python-runner-document";
 import { PYTHON_OUTPUT_LIMIT } from "../core/python-runner-document";
+import { parsePythonArtifacts } from "../core/python-artifacts";
 
-type RuntimeMessage = { kind: string; runId?: string; text?: string };
+type RuntimeMessage = {
+  kind: string;
+  runId?: string;
+  text?: string;
+  artifacts?: Record<string, string>;
+};
 export type PythonResult = {
   snapshot: string;
   output: string;
   error: string;
   status: "done" | "stopped" | "error";
+  artifacts: Record<string, string>;
 };
 type Runtime = {
   results: Map<string, PythonResult>;
@@ -61,7 +68,13 @@ export function PythonRuntimeProvider({
     job.current = {
       runId,
       key,
-      result: { snapshot, output: "", error: "", status: "stopped" },
+      result: {
+        snapshot,
+        output: "",
+        error: "",
+        status: "stopped",
+        artifacts: {},
+      },
     };
   }, []);
   const [channel, setChannel] = useState("");
@@ -120,7 +133,52 @@ export function PythonRuntimeProvider({
         event.data?.channel !== channel
       )
         return;
-      const message = event.data as RuntimeMessage;
+      const raw = event.data;
+      if (
+        !raw ||
+        typeof raw !== "object" ||
+        ![
+          "ready",
+          "warming",
+          "running",
+          "output",
+          "done",
+          "stopped",
+          "error",
+        ].includes(raw.kind)
+      )
+        return;
+      if (
+        raw.runId != null &&
+        (typeof raw.runId !== "string" ||
+          raw.runId.length > 100 ||
+          raw.runId !== active.current)
+      )
+        return;
+      if (
+        ["running", "output", "done", "stopped"].includes(raw.kind) &&
+        !raw.runId
+      )
+        return;
+      const message: RuntimeMessage = {
+        kind: raw.kind,
+        runId: raw.runId || undefined,
+        text:
+          typeof raw.text === "string"
+            ? raw.text.slice(0, PYTHON_OUTPUT_LIMIT)
+            : undefined,
+      };
+      if (message.kind === "done") {
+        try {
+          message.artifacts = parsePythonArtifacts(raw.artifacts || {});
+        } catch {
+          message.kind = "error";
+          message.text = t(
+            "產生的檔案格式或大小無效。",
+            "Generated files have an invalid format or size.",
+          );
+        }
+      }
       const current = job.current;
       if (current && current.runId === message.runId) {
         if (message.kind === "output" && typeof message.text === "string")
@@ -134,6 +192,8 @@ export function PythonRuntimeProvider({
           message.kind === "error"
         ) {
           current.result.status = message.kind;
+          current.result.artifacts =
+            message.kind === "done" ? message.artifacts || {} : {};
           current.result.error =
             message.kind === "error"
               ? String(
