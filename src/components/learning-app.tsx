@@ -5,8 +5,8 @@ import type { Snapshot } from "../core/state";
 import { api } from "./api";
 import { CoursePlayer } from "./course-player";
 import { Landing } from "./landing";
-import { ThemeToggle } from "./theme-toggle";
-import { useTheme } from "./use-theme";
+import { useHomeLanguage } from "./use-home-language";
+import { homeCopy, homeError } from "./home-language";
 
 export function LearningApp() {
   const initialized = useRef(false);
@@ -16,15 +16,19 @@ export function LearningApp() {
     [goal, setGoal] = useState(""),
     [error, setError] = useState(""),
     [home, setHome] = useState(false);
-  const { dark, toggle } = useTheme();
+  const { language, changeLanguage } = useHomeLanguage();
+  const copy = homeCopy[language];
 
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
     // The explore route's demo card hands off through the URL, so that button
     // means exactly what the one on the landing means.
-    const wantsDemo = new URLSearchParams(window.location.search).has("demo");
-    if (wantsDemo)
+    const params = new URLSearchParams(window.location.search);
+    const wantsHome = params.has("home");
+    const wantsDemo = !wantsHome && params.has("demo");
+    if (wantsHome) setHome(true);
+    if (wantsDemo || wantsHome)
       window.history.replaceState(null, "", window.location.pathname);
     api<{ course: Snapshot | null }>("sessions", {})
       .then((r) => {
@@ -79,14 +83,30 @@ export function LearningApp() {
     }
   }
 
-  const themeControl = <ThemeToggle dark={dark} onToggle={toggle} />;
+  const showingLanding = !course || home;
+
+  useEffect(() => {
+    if (!showingLanding) return;
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = copy.lang;
+    return () => {
+      document.documentElement.lang = previous;
+    };
+  }, [showingLanding, copy.lang]);
 
   return (
     <>
       {error && (
-        <div className="toast" role="alert">
-          <span>{error}</span>
-          <button aria-label="關閉訊息" onClick={() => setError("")}>
+        <div
+          className="toast"
+          role="alert"
+          lang={showingLanding ? copy.lang : undefined}
+        >
+          <span>{showingLanding ? homeError(error, language) : error}</span>
+          <button
+            aria-label={showingLanding ? copy.dismiss : "關閉訊息"}
+            onClick={() => setError("")}
+          >
             <X size={16} />
           </button>
         </div>
@@ -97,18 +117,17 @@ export function LearningApp() {
           onChange={setCourse}
           onError={setError}
           onHome={() => setHome(true)}
-          themeControl={themeControl}
         />
       ) : (
         <Landing
+          language={language}
+          onLanguageChange={changeLanguage}
           goal={goal}
           onGoalChange={setGoal}
           busy={busy}
           ready={ready}
           onStart={() => void start("live")}
           onDemo={() => void start("demo")}
-          onMyCourses={course ? () => setHome(false) : undefined}
-          themeControl={themeControl}
         />
       )}
     </>

@@ -27,13 +27,11 @@ export function CoursePlayer({
   onChange,
   onError,
   onHome,
-  themeControl,
 }: {
   course: Snapshot;
   onChange: (c: Snapshot) => void;
   onError: (e: string) => void;
   onHome: () => void;
-  themeControl: React.ReactNode;
 }) {
   const [map, setMap] = useState(false),
     [help, setHelp] = useState(false),
@@ -234,7 +232,6 @@ export function CoursePlayer({
           {course.mode === "demo" && (
             <span className="demo-badge">體驗課程</span>
           )}
-          {themeControl}
           <button
             className="icon-button"
             aria-label="開啟實作區"

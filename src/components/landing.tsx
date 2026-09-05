@@ -1,24 +1,10 @@
 "use client";
-import { useState, type ReactNode } from "react";
-import { ArrowRight, ArrowUpRight, LoaderCircle, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Play, ArrowUpRight, LoaderCircle } from "lucide-react";
 import { SiteHeader } from "./site-header";
 import { useTypewriter } from "./use-typewriter";
-
-const SUBJECTS = [
-  "網頁設計",
-  "CSS 排版",
-  "互動動畫",
-  "JavaScript",
-  "響應式版面",
-] as const;
-
-const IDEAS = [
-  "我想從零開始，做一個屬於自己的網站",
-  "我想學會 CSS 排版",
-  "我想讓網頁上的按鈕動起來",
-  "我想做一個放作品的個人網頁",
-  "我想看懂別人的網頁是怎麼寫的",
-] as const;
+import { homeCopy, type HomeLanguage } from "./home-language";
+import { CourseCatalog } from "./course-catalog";
 
 export function Landing({
   goal,
@@ -27,8 +13,8 @@ export function Landing({
   ready,
   onStart,
   onDemo,
-  onMyCourses,
-  themeControl,
+  language,
+  onLanguageChange,
 }: {
   goal: string;
   onGoalChange: (value: string) => void;
@@ -36,15 +22,16 @@ export function Landing({
   ready: boolean;
   onStart: () => void;
   onDemo: () => void;
-  onMyCourses?: () => void;
-  themeControl: ReactNode;
+  language: HomeLanguage;
+  onLanguageChange: (language: HomeLanguage) => void;
 }) {
+  const copy = homeCopy[language];
   const [focused, setFocused] = useState(false);
-  const subject = useTypewriter({ words: SUBJECTS, startMs: 600 });
+  const subject = useTypewriter({ words: copy.subjects, startMs: 600 });
   // Ideas are inspiration, never input: they only reach the placeholder, and
   // they stop the moment the field is in use so they never fight the writer.
   const idea = useTypewriter({
-    words: IDEAS,
+    words: copy.ideas,
     typeMs: 95,
     eraseMs: 45,
     holdMs: 2600,
@@ -54,81 +41,87 @@ export function Landing({
   });
 
   return (
-    <div className="landing">
-      <SiteHeader themeControl={themeControl} onMyCourses={onMyCourses} />
+    <div className="landing" lang={copy.lang}>
+      <div className="landing-hero">
+        <SiteHeader language={language} onLanguageChange={onLanguageChange} />
 
-      <main className="landing-main">
-        <h1 className="hero-title">
-          <span className="title-line">
-            I want to{" "}
-            <span className="learn-word">
-              learn<span className="word-star">✳</span>
-            </span>
-          </span>
-          <span className="title-line title-typed">
-            <span className="typed">{subject.text}</span>
-            <span className={"cursor" + (subject.idle ? " is-idle" : "")} />
-          </span>
-          <span className="sr-only">{SUBJECTS.join("、")}</span>
-        </h1>
-
-        <form
-          className={"goal-box" + (focused ? " is-focused" : "")}
-          onSubmit={(e) => {
-            e.preventDefault();
-            onStart();
-          }}
-        >
-          <label className="sr-only" htmlFor="goal">
-            你想學什麼？
-          </label>
-          <textarea
-            id="goal"
-            value={goal}
-            onChange={(e) => onGoalChange(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder={idea.text}
-            maxLength={1500}
-            required
-          />
-          <div className="goal-bottom">
-            <span className="goal-hint">
-              <Sparkles size={15} /> 從你的目標，生成專屬課程
-            </span>
-            <button
-              className="primary-button"
-              disabled={busy || !ready || !goal.trim()}
-              type="submit"
-            >
-              {busy ? (
-                <LoaderCircle className="spin" size={17} />
-              ) : (
+        <main className="landing-main">
+          <h1 className="hero-title">
+            <span className="title-line">
+              {language === "en" ? (
                 <>
-                  開始探索 <ArrowUpRight size={18} />
+                  I want to{" "}
+                  <span className="learn-word">
+                    learn
+                    <span className="word-star" aria-hidden="true">
+                      ✳
+                    </span>
+                  </span>
                 </>
+              ) : (
+                copy.title
               )}
+            </span>
+            <span className="title-line title-typed">
+              <span className="typed">{subject.text}</span>
+              <span className={"cursor" + (subject.idle ? " is-idle" : "")} />
+            </span>
+            <span className="sr-only">
+              {copy.subjects.join(language === "zh" ? "、" : ", ")}
+            </span>
+          </h1>
+
+          <form
+            className={"goal-box" + (focused ? " is-focused" : "")}
+            onSubmit={(e) => {
+              e.preventDefault();
+              onStart();
+            }}
+          >
+            <label className="sr-only" htmlFor="goal">
+              {copy.goal}
+            </label>
+            <textarea
+              id="goal"
+              value={goal}
+              onChange={(e) => onGoalChange(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              placeholder={idea.text}
+              maxLength={1500}
+              required
+            />
+            <div className="goal-bottom">
+              <button
+                className="primary-button"
+                disabled={busy || !ready || !goal.trim()}
+                type="submit"
+                aria-label={copy.start}
+                aria-busy={busy}
+              >
+                {busy ? (
+                  <LoaderCircle className="spin" size={17} />
+                ) : (
+                  <>
+                    {copy.start} <ArrowUpRight size={18} />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+
+          <div className="demo-line">
+            <button
+              className="lesson-button"
+              onClick={onDemo}
+              disabled={busy || !ready}
+            >
+              <Play size={14} aria-hidden="true" /> <span>{copy.demo}</span>
             </button>
           </div>
-        </form>
-
-        <div className="demo-line">
-          <button
-            className="text-button"
-            onClick={onDemo}
-            disabled={busy || !ready}
-          >
-            先體驗一堂課 <ArrowRight size={14} />
-          </button>
-          <small>固定示範課程 · 不需 API key</small>
-        </div>
-      </main>
-
-      <footer className="site-footer">
-        <span>LEARN BY MAKING.</span>
-        <span>一段為你展開的學習旅程</span>
-        <span>METHELIA / EARLY ACCESS</span>
-      </footer>
+        </main>
+      </div>
+      <CourseCatalog language={language} home />
     </div>
   );
 }
