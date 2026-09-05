@@ -1,169 +1,158 @@
 # Methelia
 
-[English](README.md) | **繁體中文**
+[English](README.md) | **繁體中文** · **[開啟 Methelia](https://methelia.com)**
 
-輸入一句話——_「我想自己做出一個個人網站」_——Methelia 就為它規劃一門課：一張有學習依賴的節點圖，每一章在你走到之前才整章生成，逐頁講解，而且練習沒真的通過就不讓你往下走。
+Methelia 把學習目標變成一套結合理解與實作的課程。精簡說明搭配視覺模型、動畫、實驗、程式實作與檢查點，讓學習者能把觀念用出來。可以直接選擇完整專題，也可以描述想學的內容，建立個人化學習路徑。
 
-真正有意思的限制是模型**不能**做的事：**它一行介面程式碼都不會寫。**
+網站已公開，所有人都能免帳號、免共用密碼使用。課程與作品保存在伺服器，由瀏覽器 cookie 識別各個匿名學習者。目前尚未提供會員登入或跨裝置進度取回功能。
 
-## 問題與目標
+## 學習流程
 
-現有的學習素材只有兩種，而且對「有明確目標的人」都不好用。
+1. **選擇專題或描述目標。** 個人化課程會依主題逐步詢問經驗、興趣與深度；支援的題目可多選或跳過，也能取消本次製作。
+2. **查看 Learning Map。** 節點說明觀念、前置知識與學習成果。個人化章節逐步準備；精選專題則已備妥每堂五章的完整內容。
+3. **透過操作理解。** 閱讀重點、調整模型、觀看示範，或在適合的編輯器中實作。
+4. **驗證理解並調整路徑。** 題目與作品檢查提供回饋。個人化路徑在準備後續章節時會參考學習表現；延伸單元從所選節點分出支線，學完可回到主課程。
 
-錄好的線上課程是固定的。兩年前有人決定了大綱，你要嘛剛好想學那個，要嘛不是。聊天機器人剛好相反——它什麼都答得出來，但回給你的是一整段文字：沒有順序、沒有可以動手的東西、也沒有人確認你到底學會了沒。你讀完一段 CSS 權重的解釋，點點頭，關掉分頁，什麼都沒留下。
+### 精選專題
 
-看起來最省事的解法是讓模型連教學介面一起生成。那是拿一個問題換一個更糟的：每一堂課都變成一坨沒測過的 markup，「Terminal」是個道具，練習檢查是模型當天心情的產物，而你等於在一個作業系統裡開了任意程式執行的洞。
+目前有 **20 堂專題 × 每堂 5 章**，提供**英文與繁體中文版本**：共 100 個章節、200 份在地化章節內容。200 份章節語音皆已預製完成，總長約 154 分鐘。
 
-Methelia 從另一邊切：**模型只規劃與撰寫，不負責呈現。** 它輸出的是結構化 JSON——先是一張帶真正前置關係的 Course Graph，然後一次一整章，包含分頁內容、示範、題目、練習完成條件與旁白腳本。學習者碰到的每一個東西——編輯器、Terminal、預覽、地圖、播放器——都是我們自己寫好也測過的固定 React 元件。練習有沒有通過，由後端去看實際存下來的檔案系統，不採信模型，也不採信瀏覽器說「我做完了」。
+| 領域                | 專題                                                          |
+| ------------------- | ------------------------------------------------------------- |
+| 網頁、Python 與運算 | 互動作品集、Python 資料網站、文字冒險、CSV 資料故事、迷宮尋路 |
+| 數學                | 2D／3D 方程探索器、平滑雲霄飛車與導數、機率遊戲               |
+| 物理與聲音          | 碰撞關卡、衛星任務、可調式燈具、迷你合成器                    |
+| 視覺設計            | 色彩工具、資訊層級海報、彈跳角色                              |
+| 科學與環境          | 小型生態系、粒子分離、防雨社區                                |
+| 經濟與邏輯          | 咖啡店經營模擬、數位邏輯門                                    |
 
-整個賭注就是這件事：課程內容可以是任何主題，但練習仍然可被驗證、執行仍然有邊界。
+每堂專題將背景與用途連到可操作的模型或程式，再透過實驗與題目確認理解。**17 種可重用實驗元件**支援參數保存、操作示範、重設與實驗匯出；三堂程式課程則產出能運作的程式或可下載檔案。
 
-## 核心功能
+詳見[課程發行指南](docs/featured-courses-release.md)、[元件介面與模型限制](docs/teaching-components.md)、[各課程參考來源](src/core/featured/references.ts)。
 
-- **20 堂可以直接動手的精選專案。** 每堂五章，包含網站、Python 專案，以及數學、科學、設計等領域的 17 種互動實驗元件。所有課程都有英文與繁體中文內容、實驗進度儲存與預製語音快取。詳見[課程與元件指南](docs/featured-courses-release.md)。
-- **目標變成一張圖，不是播放清單。** 規劃器輸出帶前置條件的學習節點與一條排好序的路徑。Learning Map 把它畫出來，可全螢幕、可拖曳縮放，也可以回頭進入任何已完成的節點而不會弄丟你現在的進度。
-- **章節整章生成，而且是即時準備。** 章節不會在你邊看的時候一句一句吐給你。所有分頁、範例、檢查點與整份旁白腳本，都在你看到第一頁之前就生成並驗證完畢，而且在你上這一章的期間結構不再改變。
-- **字幕是對齊出來的，不是估出來的。** 每一章以一次 with-timestamps 請求送給 ElevenLabs，各頁共用同一音檔與分頁時間點，短句字幕由回傳的字元時間對齊。播完停在當頁，手動選擇下一頁時自動播放。
-- **實作環境配合學習活動。** 新網站課程直接使用編輯器與即時預覽；Python 使用真正的瀏覽器內 Pyodide 執行環境；Terminal 操作虛擬檔案。純概念課程不要求程式碼工作區，既有網站體驗課程則保留教學 Terminal。檔案存在 SQLite，可整包 ZIP 匯出。
-- **老師會示範，但不會幫你寫作業。** 示範區塊是在一份隔離的檔案副本上重播一段預先驗證過的 find/replace 並展示結果。你自己的作品完全沒被動到，接下來的練習還是得你自己做。
-- **練習驗收在伺服器端。** `file.includes`、`file.exists`、`directory.exists`、`cwd.equals` 或答對題目——每一種都由後端對照存下來的狀態判定。前端送一個「我完成了」過來不會有任何效果。
-- **問問題，就多繞一段路。** Help Drawer 可以針對你剛卡住的地方推薦補強節點。你會先看到它教什麼、在哪裡接回主線，確認之後才會生效——而且是把圖分出一個新的不可變版本，不是覆蓋掉你原本的路徑。
+### 播放與實作
+
+- **整章共用一個音檔。** ElevenLabs 的字元時間對齊用來建立字幕與分頁邊界。播到分頁邊界會暫停，手動選擇下一頁或下一章則自動播放；既有逐頁語音仍相容。
+- **字幕獨立覆蓋。** 字幕浮在課程上方。滑鼠閒置時播放欄隱藏，字幕仍保持可見，並留有底部間距。
+- **重用 Python 執行環境。** Pyodide 在瀏覽器 worker 中執行 Python，學習介面持續掛載時會重用執行環境。產生的文字檔案可預覽並下載為 ZIP。
+- **配合活動的工作區。** 網站課程使用編輯器與沙箱預覽；Terminal 操作可保存的虛擬檔案系統；純概念課程不需要程式工作區。
+- **有範圍的示範與驗收。** 老師使用隔離的作品視圖或暫時的實驗控制示範。伺服器依題目答案與已保存的檔案狀態檢查宣告條件；這不等於證明任意程式都正確。
 
 ## 系統架構
 
+模型選擇已支援的元件，提供結構化課程內容、範例與檢查條件；React 元件實作教學介面。模型產生的網站範例可以包含 HTML、CSS 與 JavaScript，但會在預覽沙箱內執行，不會直接變成平台介面程式碼。
+
 ```mermaid
 flowchart TB
-    subgraph browser["瀏覽器 — 固定的 React 19 元件"]
-        player["Course Player · Learning Map · 實作工作區"]
-        sandbox["沙箱 iframe<br/>網站預覽，不授予同源權限"]
-    end
-
-    subgraph service["Next.js 16 服務 — 單一執行個體"]
-        api["API Route<br/>匿名 session · 來源檢查 · 每日用量上限"]
-        core["LearningService<br/>進度 · 工作區 · 分支 · 練習判定"]
-        validator["Protocol Validator<br/>Zod schema ＋ 圖形／元件語意規則"]
-        worker["背景 Worker<br/>content lane ＋ speech lane"]
-    end
-
-    db[("SQLite — node:sqlite, WAL<br/>課程 · 圖形版本 · 進度 · 音檔 · 工作佇列")]
-    llm["OpenRouter<br/>課程規劃、章節生成"]
-    tts["ElevenLabs<br/>with-timestamps 合成"]
-
-    player -->|fetch| api --> core --> db
-    player --> sandbox
+    learner["瀏覽器：播放器、Learning Map、實驗元件"]
+    runtime["沙箱預覽與 Pyodide worker"]
+    api["Next.js API：匿名 session、歸屬與來源檢查"]
+    service["LearningService：課程、進度、作品與分支"]
+    catalog["預製課程與語音資產"]
+    db[("SQLite：課程、作品、音檔與生成工作")]
+    worker["背景 worker：內容、預取與語音"]
+    model["設定的 AI 供應商"]
+    validator["Zod 與語意驗證"]
+    speech["ElevenLabs with-timestamps"]
+    learner --> api --> service --> db
+    learner --> runtime
+    catalog --> service
     worker <--> db
-    worker -->|附 schema 的請求| llm
-    llm -->|JSON| validator
-    validator -->|驗證通過才寫入| db
-    worker -->|每頁一次完整請求| tts
-    tts -->|MP3 ＋ 字元對齊| db
+    worker --> model --> validator --> db
+    worker --> speech --> db
 ```
 
-整個系統就是一個 Next.js 程序加一個背景 worker，用 `concurrently -k` 一起啟動，共用同一個 SQLite 檔案。沒有 Redis、沒有 Postgres、沒有佇列服務、沒有第二台機器——工作佇列就是一張資料表。這讓部署維持在一個付費執行個體、一顆要備份的磁碟，也讓 `npm run dev` 就能在筆電上跑起完整的系統。
+Next.js 與背景 worker 由 `concurrently -k` 一起執行，共用 WAL 模式的 SQLite 資料庫。課程圖、章節與語音工作保存在資料庫，內容、預取與語音分別排程。前置問題與部分教學協助仍透過 API handler 呼叫模型，因此這些互動仍受供應商回應速度影響。
 
-有五件事值得說明：
-
-**耗時的事情都不在請求裡做。** HTTP handler 只負責驗證、寫入、排入佇列。規劃一門課或合成旁白要幾十秒，所以交給 worker，UI 用輪詢等結果。連線中斷不會弄丟已經生成好的東西。
-
-**Validator 是唯一的入口。** 模型輸出先過 Zod schema，再過 [`src/core/protocol.ts`](src/core/protocol.ts) 裡的語意規則：圖必須無環且每個節點都可達、前置節點必須真的排在它前面、元件必須是該版型允許的、練習區塊必須附可驗證的檢查點、示範用的 `find` 字串必須真的出現在它宣稱要改的那個檔案裡、Terminal 指令必須是執行端跑得動的。不通過就退回去修，最多兩次，絕不會讓半合法的內容進到學習者面前。
-
-**兩條 lane，同一個佇列。** 內容生成與語音合成從同一張 `generation_jobs` 表分兩條 lane 取工作，所以一個很慢的 TTS 請求不會擋住下一章的準備。每個工作取 240 秒的 lease、30 秒送一次 heartbeat，worker 中途被砍掉時工作會被釋放，而不是永遠卡在那裡。
-
-**晚到的寫入會輸。** 每次提交都在自己的交易裡重新確認：現在要寫的這一章，仍然是這門課的現役版本。使用者完全可能在供應商請求還在路上時就刪掉課程或重建語音；等回應終於回來，結果會被丟棄，而不是把已刪除的資料復活。[刪除測試](tests/worker-deletion.test.ts) 就是為了這個情境存在的。
-
-**學習者的程式碼離主機很遠。** 網站預覽是沒有同源權限的沙箱 iframe，CSP 擋掉外部載入。Terminal 不是 shell，而是一個跑在資料庫裡的虛擬檔案系統之上的直譯器。
-
-TypeScript 程式碼包含學習引擎、可重用實驗元件、完整課程內容與瀏覽器回歸測試。
+生成內容必須通過 schema 與語意驗證，包括圖形、前置關係、元件參數及檢查條件；不合格輸出最多進行兩次修復。Worker 寫入前會確認課程與章節版本仍有效。供應商失敗會顯示並提供重試；外部請求中斷時，仍可能無法確定是否已計費。
 
 ## 使用技術
 
-| 類別         | 技術／服務                                                  | 用途                                                       |
-| ------------ | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| AI 模型      | OpenRouter · `z-ai/glm-5.3-flash`                           | 規劃 Course Graph、生成整章 Chapter Package（結構化 JSON） |
-| 前端         | Next.js 16（App Router）、React 19、TypeScript 7            | 課程播放器、Learning Map、實作工作區等所有固定元件         |
-| 後端         | Next.js Route Handler（Node.js 22）、Zod 4                  | API、匿名 session、Protocol 驗證與練習判定                 |
-| 後端         | 自建背景 worker（tsx ＋ concurrently）                      | 內容與語音兩條 lane 的持久化生成佇列                       |
-| 資料庫       | `node:sqlite`（WAL）                                        | 課程、圖形版本、進度、工作區、音檔、每日用量               |
-| Sponsor 技術 | **ElevenLabs**（`eleven_v3`、with-timestamps） | 整章語音合成與字元級字幕對齊                               |
-| 部署         | Render Blueprint ＋ 持久化磁碟                              | 單一服務同時執行網站與 worker                              |
-| 測試         | Vitest 5、Playwright                                        | 核心／服務／worker 單元測試與瀏覽器回歸測試                |
+| 層級       | 實作                                                                     |
+| ---------- | ------------------------------------------------------------------------ |
+| 介面       | Next.js 16 App Router、React 19、TypeScript 7、Lucide 圖示               |
+| 內容與 API | Zod 4、Node.js 22、可設定的 OpenAI 相容 AI 端點；正式部署使用 OpenRouter |
+| 資料保存   | 內建 `node:sqlite`、WAL、資料庫工作佇列                                  |
+| Python     | Pyodide 0.28.3，由 jsDelivr 載入瀏覽器 worker                            |
+| 語音       | ElevenLabs with-timestamps；正式精選語音使用 `eleven_v3`                 |
+| 匯出       | fflate ZIP 壓縮檔、實驗 JSON                                             |
+| 部署       | Render Web Service 與持久化磁碟，網站和 worker 共用單一執行個體          |
+| 驗證       | Vitest、Playwright                                                       |
 
-## 安裝與執行
+## 本機執行
 
-需要 **Node.js 22.17 或更新版本**——SQLite 用的是 Node 內建的 `node:sqlite`，這個版本會顯示 experimental warning。
+使用 **Node.js 22.17 或更新版本**。Node 22 的內建 SQLite 模組可能顯示 experimental warning。
 
 ```bash
 git clone https://github.com/Jack-hehe/methelia.git
 cd methelia
-git switch main
 npm ci
-
-# 填入 AI_BASE_URL / AI_MODEL / AI_API_KEY
-# 與 ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID
 cp .env.example .env.local
-
-# 同時啟動 Next.js 與背景 worker，Ctrl+C 一起停止
 npm run dev
 ```
 
-開啟 <http://127.0.0.1:3000>。**不用 API key 也能試**——點「Try a Lesson／先體驗一堂課」就會進入預先做好的示範課程；要生成新課程與語音才需要憑證。
+開啟 [http://127.0.0.1:3000](http://127.0.0.1:3000)。PowerShell 請使用 `Copy-Item .env.example .env.local`；若執行原則擋住 `npm.ps1`，可改用 `npm.cmd`。
+
+**精選課程內容與入門課程不需要供應商 API key。** 要生成個人化課程，請在 `.env.local` 設定 `AI_BASE_URL`、`AI_MODEL` 與 `AI_API_KEY`。使用 OpenRouter 的 `https://openrouter.ai/api/v1` 等 OpenAI 相容端點，以及支援應用程式所需結構化輸出的模型。
+
+要合成新語音，請設定 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID` 與 `ELEVENLABS_MODEL`。範例環境預設為 `eleven_flash_v2_5`，正式精選音檔使用 `eleven_v3`。預製語音快取需要相符的聲音、模型與語言設定，但命中快取不需要合成用金鑰。更換設定後需重新準備音檔；正式網站已設定好相符的配置。
 
 ```bash
-npm test && npm run typecheck && npm run build
-npx playwright install chromium && npm run test:e2e
+# 建置並啟動本機 production 版本
+npm run build
+npm start
 ```
 
-Windows PowerShell 請改用 `npm.cmd`／`npx.cmd`，並用 `Copy-Item .env.example .env.local`。憑證設定、語音生成規則與 Render 部署步驟見 [docs/operations.md](docs/operations.md)。
+本機資料預設存於 `.data/`，可用 `METHELIA_DATA_DIR` 修改。Python 初始化與 Google Fonts 需要網路連線。憑證放在 Git 忽略的 `.env.local` 中。
 
-## 作品展示
+## 驗證修改
 
-- 正式網站：[methelia.com](https://methelia.com)，所有人皆可免帳號使用，學習進度由目前瀏覽器的 session 保存。
-- 評選影片：_待補_
+```bash
+npm test
+npm run build
+npx playwright install chromium
+```
 
-## 限制與未來工作
+若要使用隔離的瀏覽器驗收環境，先建立專用的建置輸出：
 
-寫在這裡，免得有人在展示途中才發現。
+```bash
+# macOS / Linux
+METHELIA_TEST_BUILD=1 npm run build
+npx playwright test --config playwright.general.config.ts
+```
 
-- **Terminal 是有真實狀態的教學介面，不是 shell。** `pwd`、`ls`、`cd`、`mkdir`、`touch`、`cat`、`clear` 操作的是一個會存下來的虛擬檔案系統。沒有參數旗標、管線、重新導向、套件安裝或行程。`python -m http.server 8000` 是接到預覽的轉接器，不會執行 Python。
-- **預覽沙箱沒有資源配額。** iframe 沒有同源權限，CSP 擋掉外部載入，但沒有東西擋得住 `while (true)`。不要把這一版當成公開的任意程式執行服務。
-- **沒有帳號。** Session 就是一個 cookie。清掉之後那些課程就找不回來，目前沒有救援機制。
-- **只有一條路徑，不是排程器。** 補強節點是串進單一主線的。任意多分支的課程編排還沒實作。
-- **語音只同步到 Section。** 區塊內的引導游標是按固定相對進度前進，不是逐字語意對齊；也還沒有老師形象與口型同步。
-- **測試過不代表內容過。** 示範課程有端到端測試覆蓋，但那不能說明一個剛生成出來、主題任意的章節在教學上是否正確——那還是得有人真的讀過。
-- **用量上限算的是次數，不是金額。** 每個 UTC 日 100 次 AI 請求、30,000 個語音字元，由 SQLite 原子計數。供應商仍然照模型與 token 另外計費。
+```powershell
+# PowerShell
+$env:METHELIA_TEST_BUILD = '1'
+npm run build
+Remove-Item Env:METHELIA_TEST_BUILD
+npx playwright test --config playwright.general.config.ts
+```
 
-接下來大致的順序：
+這個設定使用暫存資料庫、固定回應的本機模型替身與 3100 port，實際執行 API、worker 及瀏覽器執行環境。預設的 `npm run test:e2e` 則啟動或重用 3000 port 的開發伺服器；部分隔離伺服器專用案例會在該模式下跳過。
 
-- **學科無關。** 已接上能力範圍確認、四種學習環境（`none`、`web`、`python`、`terminal`）與獨立的內容／語音工作通道。驗證方式與能力限制見[通用課程驗證紀錄](docs/general-learning-validation.md)。講義目前只有 HTML renderer，尚未提供匯出入口；更完整的目標見[通用課程架構](docs/superpowers/specs/2026-09-05-general-learning-architecture-design.md)。
-- 會員登入與跨裝置的進度同步。
-- 引導游標的逐字語意對齊，讓示範跟著句子走而不是跟著時鐘走。
-- 多分支課程排程，以及對生成章節更嚴格的驗收流程。
+精選課程版本於 2026-09-06 通過 294 項單元測試與 59 項選定的瀏覽器案例，200 個 MP3 全部通過解碼、字幕與分頁時間檢查。後續公開模式也驗證了匿名開課與不同訪客之間的資料隔離。這些是當時的驗證結果，不代表任意生成內容的品質保證。詳見[發行驗證紀錄與語音準備指令](docs/featured-courses-release.md)；生成語音可能消耗供應商額度。
 
-## 第三方服務、資料與素材
+## 部署與目前限制
 
-| 項目                | 來源                                                                                                   | 使用方式與授權                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| ElevenLabs TTS      | [with-timestamps API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps) | 依帳號訂閱方案呼叫，整章合成旁白並對齊字幕；金鑰只存在 `.env.local` 與 Render 環境變數 |
-| OpenRouter          | <https://openrouter.ai>                                                                                | 模型代理服務，依其服務條款與各模型供應商規範使用                                   |
-| Next.js / React     | <https://nextjs.org> · <https://react.dev>                                                             | MIT                                                                                |
-| Zod                 | <https://zod.dev>                                                                                      | MIT                                                                                |
-| lucide-react        | <https://lucide.dev>                                                                                   | ISC                                                                                |
-| fflate              | <https://github.com/101arrowz/fflate>                                                                  | MIT——作品 ZIP 匯出                                                                 |
-| Vitest / Playwright | <https://vitest.dev> · <https://playwright.dev>                                                        | MIT／Apache-2.0，僅開發相依                                                        |
-| Render              | <https://render.com>                                                                                   | 付費 Web Service 與持久化磁碟，依其服務條款                                        |
-| 課程內容            | 由模型於執行時生成                                                                                     | 未使用任何外部教材資料集或受版權保護的課程內容                                     |
-| 字型                | 系統字型（`system-ui`、Noto Sans TC 等）                                                               | 未內嵌或散布第三方字型檔                                                           |
-| 音訊                | 旁白由 ElevenLabs 合成；測試使用專案自建的靜音 WAV                                                     | 未使用第三方錄音素材                                                               |
+[render.yaml](render.yaml) 將 `main` 部署到一個附持久化磁碟的 Render 服務。`METHELIA_PUBLIC_ACCESS=true` 讓網站免除選用的私有進站限制，session 歸屬與設定的來源檢查仍保持啟用。程式採手動部署，設定變更需經 Blueprint 同步流程確認。安裝、備份與用量設定見[操作說明](docs/operations.md)。
 
-金鑰與個人資料不進版控：`.env.local`、`.data/` 與測試輸出都在 `.gitignore` 裡，`.env.example` 只有空白欄位。
+- **瀏覽器身分，尚無帳號救援。** 清除識別 cookie 後會失去該學習者課程的存取權，目前沒有跨裝置登入或救援流程。
+- **教學用執行環境。** Terminal 支援有限指令，不是主機 shell。Python 在瀏覽器中執行；Python 網站課程產生靜態 HTML，不會架設 Flask 或 Django。預覽 JavaScript 沒有伺服器端資源配額，仍可能使瀏覽器執行環境卡住。
+- **明確範圍的實驗模型。** 模擬只開放支援的參數，不是任意方程求解器或工程分析工具；模型假設記錄在元件說明中。
+- **自適應路徑仍有範圍。** 已提供延伸支線與依表現調整的功能；任意課程排程與全自動教學品質評估仍待完成。
+- **供應商與主機限制。** 新 AI 內容與未快取語音需要設定供應商。Render 設定為每個 UTC 日全站共 100 次 AI 請求與 30,000 個合成字元；播放快取音檔不消耗該合成額度。這些是用量計數，不是金額上限。
 
-## 團隊成員
+後續工作包括會員進度同步、更豐富的教學元件、更精準的示範時間，以及更完整的內容評估。
 
-| 姓名     | 分工   |
-| -------- | ------ |
-| Jack     | _待補_ |
-| Casanova | _待補_ |
+## 來源與致謝
 
-## License
+- 精選課程與簡化模型位於 [src/core/featured](src/core/featured) 與 [src/core/labs](src/core/labs)；[參考清單](src/core/featured/references.ts) 收錄官方文件與開放教科書。個人化內容於執行時生成。
+- 曾參考 [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) 的學習介面；本次精選課程版本未納入其程式碼或圖像。
+- ElevenLabs 提供合成旁白，OpenRouter 提供設定的模型代理服務。服務與生成輸出適用各供應商條款。
+- Pyodide 資產由 jsDelivr 載入。DM Sans 與 Noto Sans TC 透過 Google Fonts 載入並提供系統字型 fallback，並非隨專案打包的字型檔。
+- 相依套件各自適用其授權；本專案的 MIT 授權不取代第三方授權或服務條款。
 
-MIT，完整條款見 [LICENSE](LICENSE)。
+## 團隊與授權
+
+由 **Jack** 與 **Casanova** 製作。專案程式碼採用 [MIT](LICENSE) 授權。

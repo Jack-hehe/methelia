@@ -1,169 +1,158 @@
 # Methelia
 
-**English** | [繁體中文](README.zh-TW.md)
+**English** | [繁體中文](README.zh-TW.md) · **[Open Methelia](https://methelia.com)**
 
-Type one sentence — _"I want to build my own personal website"_ — and Methelia plans a course for it: a dependency graph of short lessons, each chapter generated whole just before you reach it, narrated page by page, with exercises the server actually checks before it lets you continue.
+Methelia turns a learning goal into a guided course built around understanding and making things. Short explanations connect to visual models, animations, experiments, coding activities and checkpoints. Start with a ready-made project or describe what you want to learn and build a personalized path.
 
-The interesting constraint is what the model is _not_ allowed to do. **It never writes a line of interface code.**
+The website is open to everyone without an account or shared password. Courses and saved work are stored on the server; a browser cookie identifies each anonymous learner. Account login and cross-device progress recovery are not implemented yet.
 
-## Problem and goals
+## Learning experience
 
-Two kinds of learning material exist today and neither fits someone with a specific goal.
+1. **Choose a project or describe a goal.** Personalized courses ask topic-aware questions about experience, interests and depth, one at a time. Supported questions allow multiple selections or skipping, and creation can be cancelled.
+2. **Review the Learning Map.** Nodes describe concepts, prerequisites and outcomes. Personalized chapters are prepared incrementally; featured projects have all five authored chapters ready immediately.
+3. **Learn by doing.** Read a concise explanation, manipulate a visual model, watch a demonstration, or work in the appropriate editor.
+4. **Check understanding and adapt.** Quizzes and saved-work checkpoints provide feedback. Personalized routes use learning results when preparing subsequent chapters. Extension units branch from a selected node and let learners return to the main course.
 
-Recorded courses are fixed. Somebody chose the syllabus two years ago and you either wanted exactly that or you didn't. Chatbots are the opposite — they will answer anything, but what comes back is a wall of text: no ordering, nothing to do with your hands, and nobody checking whether it landed. You read an explanation of CSS specificity, nod, close the tab, and have learned nothing.
+### Featured projects
 
-The tempting fix is to let the model generate the lesson interface too. That trades one problem for a worse one. Every lesson becomes a pile of untested markup, the "terminal" is a prop, the exercise checker is whatever the model felt like emitting that day, and you have shipped arbitrary code execution inside a homework app.
+**20 projects × 5 chapters**, in **English and Traditional Chinese**: 100 chapters and 200 localized chapter packages. All 200 chapter narration files are prepared, with approximately 154 minutes of audio.
 
-Methelia splits it the other way: **the model plans and writes, and never renders.** It emits structured JSON — first a Course Graph of learning nodes with real prerequisites, then one complete chapter at a time containing sections, worked examples, quiz items, checkpoint conditions and a narration script. Everything a learner touches — editor, terminal, preview, map, player — is fixed React that we wrote and tested. Whether an exercise passed is decided by the backend inspecting the saved filesystem, never by the model or the browser claiming success.
+| Area                      | Projects                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| Web, Python and computing | Interactive portfolio; Python data website; text adventure; CSV data story; maze pathfinder |
+| Mathematics               | 2D/3D equation explorer; smooth coaster and derivatives; probability game                   |
+| Physics and sound         | Collision level; satellite mission; adjustable lamp; mini synthesizer                       |
+| Visual design             | Color tool; hierarchy poster; bouncing character                                            |
+| Science and environment   | Small ecosystem; particle separation; rain-ready neighborhood                               |
+| Economics and logic       | Coffee shop simulation; digital logic door                                                  |
 
-That is the whole bet: content can be about anything, while practice stays verifiable and execution stays bounded.
+Each project connects background and purpose to a working model or program, an experiment and an explanation checkpoint. The **17 reusable laboratories** retain learner parameters and support demonstrations, resets and experiment exports. Three coding courses produce working code or downloadable files.
 
-## Core features
+See the [course release guide](docs/featured-courses-release.md), [component contracts and model limits](docs/teaching-components.md), and [per-course references](src/core/featured/references.ts).
 
-- **20 ready-to-build projects.** Five connected chapters per course cover websites, Python projects and 17 interactive laboratories across mathematics, science, design and other domains. Every course has English and Traditional Chinese content, persistent experiments and a prepared narration cache. See [the course and component guide](docs/featured-courses-release.md).
-- **A goal becomes a graph, not a playlist.** The planner emits learning nodes with prerequisites and an ordered route. The Learning Map draws it, opens fullscreen, pans and zooms, and lets you re-enter any finished node without losing your position in the course.
-- **Chapters are generated whole, just in time.** A chapter is never streamed at you sentence by sentence while you read. Every page, example, checkpoint and line of narration is generated and validated before you see page one, and stays immutable while you work through it.
-- **Narration is aligned, not estimated.** Each chapter goes to ElevenLabs as one with-timestamps request. Its pages share one audio file with section cues; short subtitles use the returned character alignment. Playback pauses at page boundaries, while manually choosing the next page starts it automatically.
-- **The workspace matches the activity.** New website lessons open an editor and live preview directly; Python lessons use a real in-browser Pyodide runtime; terminal lessons operate on virtual files. Concept lessons need no code workspace. The existing website demo retains its teaching terminal. Files persist in SQLite and can be exported as a ZIP.
-- **The teacher demonstrates without doing your homework.** A demonstration section replays a pre-validated find/replace against an isolated copy of the files and shows the result. Your own work is untouched, and the exercise that follows is still yours to do.
-- **Checkpoints are server-side.** `file.includes`, `file.exists`, `directory.exists`, `cwd.equals`, or a quiz answer — every one is evaluated in the backend against saved state. A client that POSTs "I finished" gets nothing.
-- **Ask a question, get a detour.** The help drawer can propose support nodes for a gap you just hit. You see what they cover and where they rejoin before anything changes; approving one forks the graph into a new immutable revision instead of overwriting your route.
+### Playback and practice
 
-## System architecture
+- **One audio file per chapter.** ElevenLabs character alignment supplies captions and page boundaries. Playback pauses at page boundaries; manually choosing the next page or chapter starts playback automatically. Legacy page-based audio remains supported.
+- **Independent captions.** Captions overlay the lesson. Idle playback controls hide while captions remain visible with bottom spacing.
+- **Reusable Python runtime.** Pyodide runs Python in a browser worker and is reused while the learning interface remains mounted. Generated text files can be previewed and downloaded as a ZIP.
+- **Activity-specific workspaces.** Website lessons use an editor and sandboxed preview. Terminal lessons operate on a persisted virtual filesystem. Pure concept lessons need no programming workspace.
+- **Bounded demonstrations and checks.** Demonstrations use an isolated view of learner work or temporary lab controls. The server checks quiz answers and declared filesystem conditions against saved state; these checks do not prove arbitrary program correctness.
+
+## Architecture
+
+The model selects supported components and supplies structured course content, examples and checkpoint conditions. React components implement the learning interface. Generated website examples can contain HTML, CSS and JavaScript, but run in the preview sandbox rather than becoming application UI code.
 
 ```mermaid
 flowchart TB
-    subgraph browser["Browser — fixed React 19 components"]
-        player["Course Player · Learning Map · Workspace"]
-        sandbox["Sandboxed iframe<br/>website preview, no same-origin access"]
-    end
-
-    subgraph service["Next.js 16 service — one instance"]
-        api["API route<br/>anonymous session · origin checks · daily quotas"]
-        core["LearningService<br/>progress · workspace · branches · checkpoints"]
-        validator["Protocol Validator<br/>Zod schema + graph/component semantics"]
-        worker["Background worker<br/>content lane + speech lane"]
-    end
-
-    db[("SQLite — node:sqlite, WAL<br/>courses · graph revisions · progress · audio · job queue")]
-    llm["OpenRouter<br/>course planning, chapter generation"]
-    tts["ElevenLabs<br/>with-timestamps synthesis"]
-
-    player -->|fetch| api --> core --> db
-    player --> sandbox
+    learner["Browser: player, Learning Map, laboratories"]
+    runtime["Sandboxed preview and Pyodide worker"]
+    api["Next.js API: sessions, ownership and origin checks"]
+    service["LearningService: courses, progress, workspaces and branches"]
+    catalog["Authored courses and bundled narration"]
+    db[("SQLite: courses, work, audio and generation jobs")]
+    worker["Background worker: content, prefetch and speech"]
+    model["Configured AI provider"]
+    validator["Zod and semantic validation"]
+    speech["ElevenLabs with-timestamps"]
+    learner --> api --> service --> db
+    learner --> runtime
+    catalog --> service
     worker <--> db
-    worker -->|schema-constrained request| llm
-    llm -->|JSON| validator
-    validator -->|written only if valid| db
-    worker -->|one request per chapter| tts
-    tts -->|MP3 + character alignment| db
+    worker --> model --> validator --> db
+    worker --> speech --> db
 ```
 
-The whole system is one Next.js process and one background worker, started together by `concurrently -k` and sharing a single SQLite file. No Redis, no Postgres, no queue service, no second machine — the job queue is a table. That keeps the deployment to one paid instance with one disk to back up, and means `npm run dev` gives you the entire stack on a laptop.
+Next.js and a background worker run together through `concurrently -k`, sharing SQLite in WAL mode. Graph, chapter and narration jobs are persisted in the database. Content, prefetch and speech work are scheduled separately. Intake questions and some assistance requests call the model through API handlers, so those interactions still depend on provider latency.
 
-Five things are worth knowing about how the pieces fit:
+Generated packages pass schema and semantic validation before use. Graphs, prerequisites, component parameters and declared checkpoints are checked; invalid model output can receive up to two repair attempts. Worker writes recheck that the course and package are still current. Provider failures are surfaced for retry; interrupted external requests can have uncertain billing outcomes.
 
-**Nothing expensive happens inside a request.** An HTTP handler validates, writes, and enqueues. Planning a course and synthesizing narration take tens of seconds, so they run in the worker and the UI polls. A dropped connection never loses generated work.
+## Technology
 
-**The validator is the only door.** Model output is parsed by a Zod schema and then run through semantic rules in [`src/core/protocol.ts`](src/core/protocol.ts): the graph must be acyclic and fully reachable, prerequisites must actually precede their node, a component must be legal for the template it sits in, a practice section must carry a verifiable checkpoint, a guided edit's `find` string must genuinely occur in the file it claims to edit, and every terminal command must be one the runtime can execute. Failing output is sent back for repair, at most twice, and never reaches a learner half-valid.
+| Layer           | Implementation                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------- |
+| Interface       | Next.js 16 App Router, React 19, TypeScript 7, Lucide icons                               |
+| Content and API | Zod 4, Node.js 22, configurable OpenAI-compatible AI endpoint; deployment uses OpenRouter |
+| Persistence     | Built-in `node:sqlite`, WAL, database-backed job queue                                    |
+| Python          | Pyodide 0.28.3, loaded from jsDelivr into a browser worker                                |
+| Narration       | ElevenLabs with-timestamps; deployed featured audio uses `eleven_v3`                      |
+| Exports         | fflate ZIP archives; experiment JSON                                                      |
+| Hosting         | Render web service and persistent disk, with website and worker on one instance           |
+| Verification    | Vitest and Playwright                                                                     |
 
-**Two lanes, one queue.** Content generation and speech synthesis pull from the same `generation_jobs` table on separate lanes, so a slow TTS call never blocks the next chapter from being prepared. Each job takes a 240-second lease with a 30-second heartbeat, so a worker killed mid-job releases its work instead of parking it forever.
+## Run locally
 
-**Late writes lose.** Every commit re-checks, inside its own transaction, that the chapter it is writing is still the live version of that course. A learner can delete a course or rebuild its narration while a provider request is still in flight; when the response finally lands it is discarded rather than resurrecting deleted data. This is the case the [deletion tests](tests/worker-deletion.test.ts) exist for.
-
-**The learner's code runs nowhere near the host.** The website preview is a sandboxed iframe with no same-origin access and a CSP that blocks external loads. The terminal is not a shell — it is an interpreter over a virtual filesystem stored in the database.
-
-The TypeScript codebase includes the learning engine, reusable laboratories, authored courses and browser regression tests.
-
-## Tech stack
-
-| Category     | Technology / service                                       | Purpose                                                                 |
-| ------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
-| AI model     | OpenRouter · `z-ai/glm-5.3-flash`                          | Plans the Course Graph and generates whole Chapter Packages as JSON     |
-| Frontend     | Next.js 16 (App Router), React 19, TypeScript 7            | Course player, Learning Map, workspace, and every other fixed component |
-| Backend      | Next.js Route Handler (Node.js 22), Zod 4                  | API, anonymous sessions, protocol validation, checkpoint evaluation     |
-| Backend      | Custom background worker (tsx + concurrently)              | Durable generation queue with separate content and speech lanes         |
-| Database     | `node:sqlite` (WAL)                                        | Courses, graph revisions, progress, workspace, audio, daily usage       |
-| Sponsor tech | **ElevenLabs** (`eleven_v3`, with-timestamps) | Whole-chapter synthesis and character-level subtitle alignment               |
-| Deployment   | Render Blueprint + persistent disk                         | One service running both the website and the worker                     |
-| Testing      | Vitest 5, Playwright                                       | Core, service and worker unit tests plus browser regression tests       |
-
-## Setup and running
-
-Needs **Node.js 22.17 or newer** — SQLite comes from Node's built-in `node:sqlite`, which prints an experimental warning on this version.
+Use **Node.js 22.17 or newer**. Node 22 may print an experimental warning for its built-in SQLite module.
 
 ```bash
 git clone https://github.com/Jack-hehe/methelia.git
 cd methelia
-git switch main
 npm ci
-
-# Fill in AI_BASE_URL / AI_MODEL / AI_API_KEY and
-# ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID
 cp .env.example .env.local
-
-# Starts Next.js and the background worker together; Ctrl+C stops both
 npm run dev
 ```
 
-Open <http://127.0.0.1:3000>. **You do not need an API key to try it** — "Try a Lesson" opens a pre-built demo course. Credentials are only needed to generate new courses and narration.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). On PowerShell, use `Copy-Item .env.example .env.local`; use `npm.cmd` if execution policy blocks `npm.ps1`.
+
+**Featured course content and the starter lesson work without provider API keys.** For personalized generation, set `AI_BASE_URL`, `AI_MODEL` and `AI_API_KEY` in `.env.local`. Use an OpenAI-compatible endpoint such as OpenRouter's `https://openrouter.ai/api/v1` and a model supporting the structured output expected by the application.
+
+For new narration, set `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` and `ELEVENLABS_MODEL`. The example environment defaults to `eleven_flash_v2_5`; deployed featured assets use `eleven_v3`. A bundled audio cache hit requires the matching voice/model/language profile, but no synthesis key. Changing that profile requires preparing new audio. The hosted website already has the matching configuration.
 
 ```bash
-npm test && npm run typecheck && npm run build
-npx playwright install chromium && npm run test:e2e
+# Production application, locally
+npm run build
+npm start
 ```
 
-On Windows PowerShell use `npm.cmd`/`npx.cmd` and `Copy-Item .env.example .env.local`. Credential setup, narration rules and Render deployment live in [docs/operations.md](docs/operations.md).
+Data defaults to `.data/`; `METHELIA_DATA_DIR` overrides it. Python initialization and Google Fonts require network access. Keep credentials in `.env.local`, which is ignored by Git.
 
-## Website
+## Verify changes
 
-- Website: [methelia.com](https://methelia.com), open to everyone without an account. Progress belongs to the current browser session.
-- Judging video: _to be added_
+```bash
+npm test
+npm run build
+npx playwright install chromium
+```
 
-## Limitations and future work
+For isolated browser acceptance tests, first build the dedicated output:
 
-Written down here so nobody has to discover them during a demo.
+```bash
+# macOS / Linux
+METHELIA_TEST_BUILD=1 npm run build
+npx playwright test --config playwright.general.config.ts
+```
 
-- **The terminal is a teaching surface with real state, not a shell.** `pwd`, `ls`, `cd`, `mkdir`, `touch`, `cat` and `clear` operate on a persisted virtual filesystem. No flags, pipes, redirection, package installs or processes. `python -m http.server 8000` is wired to the preview and does not run Python.
-- **The preview sandbox has no resource quota.** The iframe has no same-origin access and CSP blocks external loads, but nothing stops a `while (true)`. Don't expose this build as a public code runner.
-- **No accounts.** A session is a cookie. Clear it and those courses are unreachable; there is no recovery path yet.
-- **One route, not a scheduler.** Support nodes splice into a single main path. Arbitrary multi-branch curricula are not implemented.
-- **Narration syncs at section granularity.** The guided cursor inside a section advances on fixed relative progress, not word-level semantics, and there is no teacher avatar or lip sync.
-- **Passing tests is not passing content.** The demo course is covered end to end. That says nothing about whether a freshly generated chapter on an arbitrary topic is pedagogically sound — a human still has to read it.
-- **Daily caps count requests, not dollars.** 100 AI requests and 30,000 synthesized characters per UTC day, counted atomically in SQLite. Providers still bill by model and token.
+```powershell
+# PowerShell
+$env:METHELIA_TEST_BUILD = '1'
+npm run build
+Remove-Item Env:METHELIA_TEST_BUILD
+npx playwright test --config playwright.general.config.ts
+```
 
-Next, roughly in order:
+This configuration uses a temporary database, a deterministic local model substitute and port 3100. It exercises the real API, worker and browser runtime. The default `npm run test:e2e` instead starts or reuses the development server on port 3000; some isolated-server cases are skipped there.
 
-- **Subject independence.** Scope confirmation, four learning environments (`none`, `web`, `python`, `terminal`), and separate content/speech lanes are connected. See the [validation record and capability limits](docs/general-learning-validation.md). Handouts currently have an HTML renderer but no export entry point. The [architecture design](docs/superpowers/specs/2026-09-05-general-learning-architecture-design.md) describes the broader roadmap.
-- Accounts and cross-device progress sync.
-- Word-level alignment for the guided cursor, so the demonstration follows the sentence rather than the clock.
-- Multi-branch scheduling, and stricter acceptance checks on generated chapters.
+The featured release passed 294 unit tests and 59 selected browser cases on 2026-09-06. All 200 MP3s passed decoding and caption/page timing checks. Subsequent public-access checks verified anonymous enrollment and isolation between visitors. These are dated results, not a guarantee of arbitrary generated content quality. See the [verification record and narration preparation commands](docs/featured-courses-release.md); generation can consume provider credits.
 
-## Third-party services, data, and assets
+## Deployment and boundaries
 
-| Item                | Source                                                                                                 | Usage and license                                                                                                                             |
-| ------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| ElevenLabs TTS      | [with-timestamps API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps) | Called under the account's subscription for chapter narration and aligned subtitles; keys live only in `.env.local` and Render environment variables |
-| OpenRouter          | <https://openrouter.ai>                                                                                | Model gateway, used under its terms and each provider's rules                                                                                 |
-| Next.js / React     | <https://nextjs.org> · <https://react.dev>                                                             | MIT                                                                                                                                           |
-| Zod                 | <https://zod.dev>                                                                                      | MIT                                                                                                                                           |
-| lucide-react        | <https://lucide.dev>                                                                                   | ISC                                                                                                                                           |
-| fflate              | <https://github.com/101arrowz/fflate>                                                                  | MIT — ZIP export of learner work                                                                                                              |
-| Vitest / Playwright | <https://vitest.dev> · <https://playwright.dev>                                                        | MIT / Apache-2.0, development dependencies only                                                                                               |
-| Render              | <https://render.com>                                                                                   | Paid web service and persistent disk, under its terms                                                                                         |
-| Course content      | Generated by the model at runtime                                                                      | No external courseware dataset or copyrighted course material is used                                                                         |
-| Fonts               | System fonts (`system-ui`, Noto Sans TC and similar)                                                   | No third-party font files embedded or redistributed                                                                                           |
-| Audio               | Narration synthesized by ElevenLabs; tests use a silent WAV built for this project                     | No third-party recordings are used                                                                                                            |
+[render.yaml](render.yaml) deploys `main` to one Render service with a persistent disk. `METHELIA_PUBLIC_ACCESS=true` opens the site without the optional private access gate. Session ownership and configured origin checks remain active. Deploys are manual; configuration changes should be reviewed through Blueprint sync. See [operations](docs/operations.md) for setup, backups and usage settings.
 
-No credentials or personal data are committed. `.env.local`, `.data/` and test output are all in `.gitignore`, and `.env.example` holds empty placeholders only.
+- **Browser identity, no account recovery.** Clearing the identifying cookie loses access to that learner's courses. There is no cross-device login or recovery flow.
+- **Teaching runtimes.** The terminal supports a bounded command set, not a host shell. Python runs in the browser; the Python website course generates static HTML and does not host Flask or Django. Preview JavaScript can stall its browser context and has no server-side resource quota.
+- **Defined laboratory models.** Simulations expose supported parameters; they are not general equation solvers or engineering analysis tools. Model assumptions are documented with the components.
+- **Adaptive paths have limits.** Extension routes and performance-based adjustments exist. Arbitrary curriculum scheduling and fully automatic teaching-quality assessment remain future work.
+- **Provider and hosting limits.** New AI content and uncached speech require configured providers. Render sets global UTC-day limits of 100 AI requests and 30,000 synthesized characters. Cached playback does not consume synthesis limits. These are usage counters, not currency limits.
 
-## Team
+Planned work includes account-based progress sync, richer learning components, more precise demonstration timing and stronger content evaluation.
 
-| Name     | Role          |
-| -------- | ------------- |
-| Jack     | _to be added_ |
-| Casanova | _to be added_ |
+## Sources and attribution
 
-## License
+- Authored featured courses and simplified models live in [src/core/featured](src/core/featured) and [src/core/labs](src/core/labs). Their [references](src/core/featured/references.ts) point to primary documentation and open textbooks. Personalized course content is generated at runtime.
+- [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) was consulted as a learning-interface reference. No OpenMAIC code or artwork was incorporated in the featured release.
+- ElevenLabs supplies synthesized narration; OpenRouter provides the configured model gateway. Provider terms apply to their services and generated outputs.
+- Pyodide assets are fetched from jsDelivr. DM Sans and Noto Sans TC are loaded through Google Fonts with system fallbacks; they are not bundled font files.
+- Dependencies retain their own licenses. The repository's MIT license does not replace third-party licenses or service terms.
 
-MIT. See [LICENSE](LICENSE).
+## Team and license
+
+Built by **Jack** and **Casanova**. Repository code is licensed under [MIT](LICENSE).
