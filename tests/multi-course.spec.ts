@@ -85,7 +85,8 @@ test("each saved card restores its own page and files even after newer courses a
   await page.getByRole("link", { name: "Methelia", exact: true }).click();
   await expect(page.locator(".landing")).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "我的課程", exact: true }).click();
+  await page.getByRole("link", { name: "課程", exact: true }).click();
+  await page.locator(".saved-course", { hasText: "First website" }).click();
   await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");
 
   await page.goto("/explore");
