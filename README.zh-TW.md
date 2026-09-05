@@ -70,6 +70,43 @@ Next.js 與背景 worker 由 `concurrently -k` 一起執行，共用 WAL 模式�
 
 生成內容必須通過 schema 與語意驗證，包括圖形、前置關係、元件參數及檢查條件；不合格輸出最多進行兩次修復。Worker 寫入前會確認課程與章節版本仍有效。供應商失敗會顯示並提供重試；外部請求中斷時，仍可能無法確定是否已計費。
 
+## Project Structure
+
+```text
+methelia/
+├── src/
+│   ├── app/                         # Next.js 頁面、版型與 API 路由
+│   │   ├── api/[...path]/route.ts   # 課程、session、進度與作品 API
+│   │   ├── api/health/route.ts      # 部署健康檢查
+│   │   └── explore/page.tsx         # 課程目錄頁面
+│   ├── components/                  # 播放器、Learning Map、前置問題與工作區
+│   │   └── labs/                    # 可重用的互動教學實驗元件
+│   ├── core/                        # 課程結構、狀態與學習邏輯
+│   │   ├── featured/                # 精選課程內容與參考來源
+│   │   ├── labs/                    # 模擬模型與實驗邏輯
+│   │   └── starter-teaching.ts      # 中英文入門教學內容與旁白講稿
+│   ├── server/                      # 資料保存、供應商串接與流程協調
+│   │   ├── service.ts               # 課程生命週期、進度與作品管理
+│   │   ├── worker.ts                # 背景內容與語音生成工作
+│   │   ├── db.ts                    # SQLite 結構與儲存
+│   │   └── speech.ts                # ElevenLabs 合成與時間對齊驗證
+│   └── proxy.ts                     # 選用的私有進站限制
+├── public/
+│   ├── featured-audio/              # 精選課程 MP3、字幕與分頁時間
+│   └── starter-audio/               # 入門課程 MP3、字幕與分頁時間
+├── scripts/                         # 語音資產準備、檢查與驗證工具
+├── tests/                           # Vitest 單元測試與 Playwright 瀏覽器測試
+│   └── fixtures/                    # 測試課程、供應商替身與測試伺服器
+├── docs/                            # 教學元件介面、操作說明與發行紀錄
+│   └── course-scripts/              # 已審閱的中英文入門旁白講稿
+├── .env.example                     # 本機環境設定範本
+├── next.config.ts                   # Next.js 建置設定
+├── render.yaml                      # Render 服務、磁碟與環境設定
+└── package.json                     # 相依套件與開發指令
+```
+
+修改入門教學內容可從 [starter-teaching.ts](src/core/starter-teaching.ts) 與[審閱講稿](docs/course-scripts) 開始。互動實驗元件位於 [src/components/labs](src/components/labs)，模型邏輯位於 [src/core/labs](src/core/labs)。本機執行資料 `.data/` 與建置輸出 `.next/` 由程式產生，不納入 Git。
+
 ## 使用技術
 
 | 層級       | 實作                                                                     |
@@ -78,7 +115,7 @@ Next.js 與背景 worker 由 `concurrently -k` 一起執行，共用 WAL 模式�
 | 內容與 API | Zod 4、Node.js 22、可設定的 OpenAI 相容 AI 端點；正式部署使用 OpenRouter |
 | 資料保存   | 內建 `node:sqlite`、WAL、資料庫工作佇列                                  |
 | Python     | Pyodide 0.28.3，由 jsDelivr 載入瀏覽器 worker                            |
-| 語音       | ElevenLabs with-timestamps；正式精選語音使用 `eleven_v3`                 |
+| 語音       | ElevenLabs with-timestamps；正式入門與精選語音使用 `eleven_v3`           |
 | 匯出       | fflate ZIP 壓縮檔、實驗 JSON                                             |
 | 部署       | Render Web Service 與持久化磁碟，網站和 worker 共用單一執行個體          |
 | 驗證       | Vitest、Playwright                                                       |
@@ -99,7 +136,7 @@ npm run dev
 
 **精選課程內容與入門課程不需要供應商 API key。** 要生成個人化課程，請在 `.env.local` 設定 `AI_BASE_URL`、`AI_MODEL` 與 `AI_API_KEY`。使用 OpenRouter 的 `https://openrouter.ai/api/v1` 等 OpenAI 相容端點，以及支援應用程式所需結構化輸出的模型。
 
-要合成新語音，請設定 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID` 與 `ELEVENLABS_MODEL`。範例環境預設為 `eleven_flash_v2_5`，正式精選音檔使用 `eleven_v3`。預製語音快取需要相符的聲音、模型與語言設定，但命中快取不需要合成用金鑰。更換設定後需重新準備音檔；正式網站已設定好相符的配置。
+要合成新語音，請設定 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID` 與 `ELEVENLABS_MODEL`。範例環境預設為 `eleven_flash_v2_5`，正式入門與精選音檔使用 `eleven_v3`。預製語音快取需要相符的聲音、模型與語言設定，但命中快取不需要合成用金鑰。更換設定後需重新準備音檔；正式網站已設定好相符的配置。
 
 ```bash
 # 建置並啟動本機 production 版本
@@ -136,6 +173,8 @@ npx playwright test --config playwright.general.config.ts
 這個設定使用暫存資料庫、固定回應的本機模型替身與 3100 port，實際執行 API、worker 及瀏覽器執行環境。預設的 `npm run test:e2e` 則啟動或重用 3000 port 的開發伺服器；部分隔離伺服器專用案例會在該模式下跳過。
 
 精選課程版本於 2026-09-06 通過 294 項單元測試與 59 項選定的瀏覽器案例，200 個 MP3 全部通過解碼、字幕與分頁時間檢查。後續公開模式也驗證了匿名開課與不同訪客之間的資料隔離。這些是當時的驗證結果，不代表任意生成內容的品質保證。詳見[發行驗證紀錄與語音準備指令](docs/featured-courses-release.md)；生成語音可能消耗供應商額度。
+
+新版入門課程另通過 87 項相關單元測試、28 項既有瀏覽器案例，以及兩項新增的中英文元素操作案例。十個入門音檔全數通過解碼與時間檢查；正式網站也已走完兩種語言的課程流程，確認快取播放、分頁暫停、練習完成與 ZIP 匯出。詳見[入門課程發行紀錄](docs/starter-course-release.md)。
 
 ## 部署與目前限制
 

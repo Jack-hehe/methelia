@@ -70,6 +70,43 @@ Next.js and a background worker run together through `concurrently -k`, sharing 
 
 Generated packages pass schema and semantic validation before use. Graphs, prerequisites, component parameters and declared checkpoints are checked; invalid model output can receive up to two repair attempts. Worker writes recheck that the course and package are still current. Provider failures are surfaced for retry; interrupted external requests can have uncertain billing outcomes.
 
+## Project Structure
+
+```text
+methelia/
+├── src/
+│   ├── app/                         # Next.js pages, layouts and API routes
+│   │   ├── api/[...path]/route.ts   # Course, session, progress and workspace API
+│   │   ├── api/health/route.ts      # Deployment health check
+│   │   └── explore/page.tsx         # Course catalog page
+│   ├── components/                  # Player, Learning Map, intake and workspaces
+│   │   └── labs/                    # Reusable interactive learning laboratories
+│   ├── core/                        # Course schemas, state and learning logic
+│   │   ├── featured/                # Authored featured courses and references
+│   │   ├── labs/                    # Simulation models and experiment logic
+│   │   └── starter-teaching.ts      # Bilingual starter teaching copy and scripts
+│   ├── server/                      # Persistence, providers and orchestration
+│   │   ├── service.ts               # Course lifecycle, progress and workspaces
+│   │   ├── worker.ts                # Background content and speech jobs
+│   │   ├── db.ts                    # SQLite schema and storage
+│   │   └── speech.ts                # ElevenLabs synthesis and alignment validation
+│   └── proxy.ts                     # Optional private access gate
+├── public/
+│   ├── featured-audio/              # Prepared featured MP3s and caption/page timing
+│   └── starter-audio/               # Prepared starter MP3s and caption/page timing
+├── scripts/                         # Prepare, inspect and verify narration assets
+├── tests/                           # Vitest unit tests and Playwright browser tests
+│   └── fixtures/                    # Test courses, provider substitutes and servers
+├── docs/                            # Teaching contracts, operations and release records
+│   └── course-scripts/              # Reviewed starter narration in both languages
+├── .env.example                     # Local environment configuration template
+├── next.config.ts                   # Next.js build configuration
+├── render.yaml                      # Render service, disk and environment settings
+└── package.json                     # Dependencies and development commands
+```
+
+To change starter teaching content, begin with [starter-teaching.ts](src/core/starter-teaching.ts) and its [reviewed scripts](docs/course-scripts). Learning components live in [src/components/labs](src/components/labs), with their model logic in [src/core/labs](src/core/labs). Local runtime data in `.data/` and build output in `.next/` are generated and ignored by Git.
+
 ## Technology
 
 | Layer           | Implementation                                                                            |
@@ -78,7 +115,7 @@ Generated packages pass schema and semantic validation before use. Graphs, prere
 | Content and API | Zod 4, Node.js 22, configurable OpenAI-compatible AI endpoint; deployment uses OpenRouter |
 | Persistence     | Built-in `node:sqlite`, WAL, database-backed job queue                                    |
 | Python          | Pyodide 0.28.3, loaded from jsDelivr into a browser worker                                |
-| Narration       | ElevenLabs with-timestamps; deployed featured audio uses `eleven_v3`                      |
+| Narration       | ElevenLabs with-timestamps; deployed starter and featured audio use `eleven_v3`          |
 | Exports         | fflate ZIP archives; experiment JSON                                                      |
 | Hosting         | Render web service and persistent disk, with website and worker on one instance           |
 | Verification    | Vitest and Playwright                                                                     |
@@ -99,7 +136,7 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). On PowerShell, use `Copy-It
 
 **Featured course content and the starter lesson work without provider API keys.** For personalized generation, set `AI_BASE_URL`, `AI_MODEL` and `AI_API_KEY` in `.env.local`. Use an OpenAI-compatible endpoint such as OpenRouter's `https://openrouter.ai/api/v1` and a model supporting the structured output expected by the application.
 
-For new narration, set `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` and `ELEVENLABS_MODEL`. The example environment defaults to `eleven_flash_v2_5`; deployed featured assets use `eleven_v3`. A bundled audio cache hit requires the matching voice/model/language profile, but no synthesis key. Changing that profile requires preparing new audio. The hosted website already has the matching configuration.
+For new narration, set `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` and `ELEVENLABS_MODEL`. The example environment defaults to `eleven_flash_v2_5`; deployed starter and featured assets use `eleven_v3`. A bundled audio cache hit requires the matching voice/model/language profile, but no synthesis key. Changing that profile requires preparing new audio. The hosted website already has the matching configuration.
 
 ```bash
 # Production application, locally
@@ -136,6 +173,8 @@ npx playwright test --config playwright.general.config.ts
 This configuration uses a temporary database, a deterministic local model substitute and port 3100. It exercises the real API, worker and browser runtime. The default `npm run test:e2e` instead starts or reuses the development server on port 3000; some isolated-server cases are skipped there.
 
 The featured release passed 294 unit tests and 59 selected browser cases on 2026-09-06. All 200 MP3s passed decoding and caption/page timing checks. Subsequent public-access checks verified anonymous enrollment and isolation between visitors. These are dated results, not a guarantee of arbitrary generated content quality. See the [verification record and narration preparation commands](docs/featured-courses-release.md); generation can consume provider credits.
+
+The revised starter release also passed 87 focused unit tests, 28 selected existing browser cases and two new bilingual element-inspection cases. All ten starter MP3s passed decoding and timing checks. Both language routes were verified on the deployed site, including cached playback, page-boundary pauses, practice completion and ZIP export. See the [starter release record](docs/starter-course-release.md).
 
 ## Deployment and boundaries
 
