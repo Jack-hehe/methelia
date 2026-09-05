@@ -73,9 +73,10 @@ function parseAudio(payload: { audio_base64: string; alignment: Alignment }) {
   if (
     typeof payload?.audio_base64 !== "string" ||
     !payload.audio_base64.length ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-      payload.audio_base64,
-    ) ||
+    // Repeating four-character groups over multi-megabyte chapter audio can
+    // overflow V8's regexp stack. Check length and a flat character class.
+    payload.audio_base64.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(payload.audio_base64) ||
     !Array.isArray(alignment?.characters) ||
     !alignment.characters.length ||
     !Array.isArray(alignment.character_start_times_seconds) ||
