@@ -48,7 +48,11 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 40px 28px;
 }
+/* A column so the chapter line can sit on the card's floor: titles run to one
+   or two lines depending on the language, and the row has to stay level. */
 .featured-course {
+  display: flex;
+  flex-direction: column;
   padding: 0;
   text-align: left;
   border: 0;
@@ -88,6 +92,9 @@
   color: var(--course-accent);
 }
 .featured-copy {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   padding: 20px 2px 0;
 }
 .featured-copy h3 {
@@ -101,10 +108,10 @@
   line-height: 1.6;
   color: var(--muted, #777);
   margin: 0 0 18px;
-  min-height: 54px;
 }
 .featured-meta {
   display: flex;
+  margin-top: auto;
   justify-content: space-between;
   gap: 15px;
   align-items: center;
@@ -133,9 +140,6 @@
   }
   .featured-copy h3 {
     font-size: 23px;
-  }
-  .featured-copy > p {
-    min-height: 0;
   }
   .featured-filters button {
     font-size: 14px;

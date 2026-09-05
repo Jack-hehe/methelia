@@ -5,10 +5,13 @@ export const scienceCourses: CuratedCourse[] = [
     id: "equation-explorer",
     kind: "geometry",
     domain: b("Mathematics", "數學"),
-    title: b("Build a 2D / 3D equation explorer", "打造 2D／3D 方程式探索器"),
+    title: b(
+      "Draw circles and spheres from the distance formula",
+      "用座標與距離公式畫出圓與球面",
+    ),
     description: b(
-      "Connect distance, circles and sphere slices in an adjustable geometric model.",
-      "從距離、圓到球面切片，建立可調整的幾何模型。",
+      "Go from the distance between two points to the circle equation, then extend it to a sphere and its cross-sections.",
+      "從兩點距離推到圓的方程式，再延伸到三維球面與它的截面。",
     ),
     lessons: [
       l(
@@ -124,10 +127,13 @@ export const scienceCourses: CuratedCourse[] = [
     id: "smooth-coaster",
     kind: "calculus",
     domain: b("Mathematics", "數學"),
-    title: b("Design a smooth roller coaster", "設計平順的過山車"),
+    title: b(
+      "Design a smooth coaster track with slopes and derivatives",
+      "用斜率與導數設計平順的軌道曲線",
+    ),
     description: b(
-      "Use slopes and matching conditions to inspect a joined track.",
-      "用斜率與連接條件檢查一段分段軌道。",
+      "Compute each segment's slope and match them at the joins so the track changes direction without a sudden kink.",
+      "計算每段軌道的斜率，調整接點讓兩段銜接時方向一致，避免突然的轉折。",
     ),
     lessons: [
       l(
@@ -249,10 +255,13 @@ export const scienceCourses: CuratedCourse[] = [
     id: "fair-game",
     kind: "probability",
     domain: b("Probability", "機率"),
-    title: b("Design a fair game", "設計公平的遊戲"),
+    title: b(
+      "Design a fair prize game with probability and expected value",
+      "用機率與期望值設計公平的抽獎遊戲",
+    ),
     description: b(
-      "Balance win probability, reward and entry cost, then compare repeated trials.",
-      "平衡中獎機率、獎勵與入場成本，再比較重複試驗。",
+      "Compute the win probability and expected return, tune the prize and entry fee, then check it against repeated trials.",
+      "計算中獎機率與期望報酬、調整獎金與入場費，再用重複試驗檢驗結果。",
     ),
     lessons: [
       l(
@@ -368,10 +377,13 @@ export const scienceCourses: CuratedCourse[] = [
     id: "collision-level",
     kind: "collision",
     domain: b("Physics", "物理"),
-    title: b("Build a collision game level", "製作碰撞遊戲關卡"),
+    title: b(
+      "Compute motion after a collision with momentum and kinetic energy",
+      "用動量與動能守恆計算碰撞後的運動",
+    ),
     description: b(
-      "Transfer motion while tracking momentum and kinetic energy.",
-      "追蹤動量與動能，設計運動傳遞的關卡。",
+      "Compare elastic and inelastic collisions, track conserved momentum and lost energy, then tune a level that can be cleared.",
+      "比較彈性與非彈性碰撞、追蹤守恆的動量與損失的能量，再調出能通關的關卡。",
     ),
     lessons: [
       l(
@@ -499,10 +511,13 @@ export const scienceCourses: CuratedCourse[] = [
     id: "satellite-mission",
     kind: "orbit",
     domain: b("Astronomy", "天文"),
-    title: b("Complete a satellite orbit mission", "完成衛星入軌任務"),
+    title: b(
+      "Put a satellite into orbit with gravity and orbital speed",
+      "用重力與軌道速度把衛星送上軌道",
+    ),
     description: b(
-      "Compare falling, orbiting and escaping in a normalized gravity model.",
-      "在標準化引力模型中比較墜落、繞行與逃逸。",
+      "Compare falling, orbiting and escaping, then find the speed that holds a stable orbit.",
+      "比較墜落、繞行與逃逸三種結果，找出能讓衛星穩定繞行的速度。",
     ),
     lessons: [
       l(
@@ -624,10 +639,13 @@ export const scienceCourses: CuratedCourse[] = [
     id: "adjustable-lamp",
     kind: "circuit",
     domain: b("Electricity", "電學"),
-    title: b("Design an adjustable lamp", "設計可調亮度的燈"),
+    title: b(
+      "Design a dimmable lamp circuit with Ohm's law",
+      "用歐姆定律設計可調亮度的燈泡電路",
+    ),
     description: b(
-      "Explore a resistive circuit and compare voltage, current and power.",
-      "探索電阻電路，比較電壓、電流與功率。",
+      "Vary the resistance to see how current and voltage respond, then get the lamp's brightness from the power.",
+      "改變電阻，觀察電流與電壓如何變化，再從功率算出燈泡的實際亮度。",
     ),
     lessons: [
       l(
@@ -746,10 +764,13 @@ export const scienceCourses: CuratedCourse[] = [
     id: "mini-synthesizer",
     kind: "sound",
     domain: b("Music", "音樂"),
-    title: b("Build a mini synthesizer", "打造迷你合成器"),
+    title: b(
+      "Synthesize an instrument sound from frequency and waveform",
+      "用頻率與波形合成樂器的聲音",
+    ),
     description: b(
-      "Shape pitch, timbre and envelopes, then play a short phrase.",
-      "塑造音高、音色與包絡，再播放一段短旋律。",
+      "Set pitch from frequency, shape timbre with harmonics, control attack and decay with an envelope, then play a phrase.",
+      "用頻率決定音高、用泛音調出音色、用包絡控制起音與衰減，再彈出一段旋律。",
     ),
     lessons: [
       l(
@@ -886,10 +907,13 @@ export const scienceCourses: CuratedCourse[] = [
     id: "color-tool",
     kind: "color",
     domain: b("Color", "色彩"),
-    title: b("Make an interactive color tool", "製作互動調色工具"),
+    title: b(
+      "Build a palette tool from RGB mixing and contrast ratio",
+      "用 RGB 混色與對比度做出配色工具",
+    ),
     description: b(
-      "Mix RGB light, evaluate contrast and export a reusable color.",
-      "混合 RGB 光線、評估對比，並匯出可重用色彩。",
+      "Mix red, green and blue light, compute the contrast between text and background, then export a usable color code.",
+      "混合紅綠藍三色光、計算文字與背景的對比度，再輸出可以直接使用的色碼。",
     ),
     lessons: [
       l(

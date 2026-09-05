@@ -33,10 +33,13 @@ const web: CuratedCourse = {
   id: "interactive-portfolio",
   kind: "web",
   domain: b("Web development", "網頁開發"),
-  title: b("Build an interactive portfolio", "打造互動作品集"),
+  title: b(
+    "Build an interactive portfolio page with HTML and CSS",
+    "用 HTML 與 CSS 打造可互動的作品集網頁",
+  ),
   description: b(
-    "Build one semantic page, style its projects, add a real interaction and verify it with a keyboard.",
-    "建立語意清楚的網頁、安排作品版面、加入真實互動，最後以鍵盤驗證。",
+    "Write semantic markup, lay out the project grid, add a JavaScript interaction, then check it works from the keyboard.",
+    "寫出語意清楚的標籤、排好作品區塊版面、加上 JavaScript 點擊互動，最後用鍵盤操作驗證。",
   ),
   lessons: [
     {
@@ -236,8 +239,8 @@ const pythonSite: CuratedCourse = {
     "用 Python 製作個人資料網站",
   ),
   description: b(
-    "Turn structured project data into a real HTML file, escape text safely and download your generated site.",
-    "把結構化作品資料轉為真實 HTML 檔案，安全處理文字並下載產生的網站。",
+    "Turn structured project data into a real HTML file, escape text safely, then download the site you generated.",
+    "把結構化的作品資料轉成真實 HTML 檔案，安全處理文字，再下載自己產生的網站。",
   ),
   lessons: [
     {
@@ -419,10 +422,13 @@ const adventure: CuratedCourse = {
   id: "python-text-adventure",
   kind: "python",
   domain: b("Python", "Python"),
-  title: b("Build a replayable text adventure", "打造可重玩的文字冒險"),
+  title: b(
+    "Write a branching story game with Python dictionaries and functions",
+    "用 Python 字典與函式寫出分支故事遊戲",
+  ),
   description: b(
-    "Turn a branching story into explicit state, reusable actions and a tested ending without interactive input.",
-    "把分支故事轉為明確狀態、可重用行動與經過測試的結局，不需要互動式輸入。",
+    "Store each branch as dictionary state, reuse actions as functions, then test that every ending can be reached.",
+    "把每個分支存成字典狀態、用函式重複使用行動，再寫測試確認每個結局都走得到。",
   ),
   lessons: [
     {

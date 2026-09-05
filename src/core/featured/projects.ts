@@ -5,10 +5,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "csv-story",
     kind: "data",
     domain: b("Data", "資料"),
-    title: b("Turn a CSV into a story", "把 CSV 變成故事"),
+    title: b(
+      "Clean a CSV and find its trend with Python",
+      "用 Python 清理 CSV 並找出資料趨勢",
+    ),
     description: b(
-      "Clean a small dataset, compare summaries and communicate the evidence.",
-      "清理小型資料集、比較摘要，並傳達有證據的解讀。",
+      "Handle missing and duplicate rows, compute averages and extremes, then say what the data actually supports.",
+      "處理缺漏與重複的資料列、計算平均與極值，再說明這份資料到底支持什麼結論。",
     ),
     lessons: [
       l(
@@ -136,10 +139,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "maze-pathfinder",
     kind: "pathfinding",
     domain: b("Algorithms", "演算法"),
-    title: b("Build a maze pathfinder", "打造迷宮尋路器"),
+    title: b(
+      "Find the shortest maze path with breadth-first search",
+      "用廣度優先搜尋找出迷宮最短路徑",
+    ),
     description: b(
-      "Model a grid as a graph and verify breadth-first shortest paths.",
-      "把格子建成圖，驗證廣度優先最短路徑。",
+      "Model the grid as a graph, expand it level by level with a queue, and verify the path really is the shortest.",
+      "把格子地圖建成圖、用佇列逐層展開，並驗證找到的真的是最短路徑。",
     ),
     lessons: [
       l(
@@ -264,10 +270,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "hierarchy-poster",
     kind: "design",
     domain: b("Design", "設計"),
-    title: b("Make a poster with visual hierarchy", "製作有視覺層級的海報"),
+    title: b(
+      "Build a poster's visual hierarchy with type scale, space and grid",
+      "用字級、留白與網格排出海報視覺層級",
+    ),
     description: b(
-      "Arrange an event message using type, space, grid and color.",
-      "使用字級、留白、網格與色彩安排活動訊息。",
+      "Set the gap between headline and body sizes, align elements on a grid, and lead the eye to the key message first.",
+      "決定標題與內文的字級差距、用網格對齊元素，讓讀者第一眼就看到最重要的訊息。",
     ),
     lessons: [
       l(
@@ -401,10 +410,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "bouncing-character",
     kind: "animation",
     domain: b("Animation", "動畫"),
-    title: b("Animate a bouncing character", "製作彈跳角色動畫"),
+    title: b(
+      "Animate a bounce with timing curves and easing",
+      "用時間曲線與緩動做出彈跳動畫",
+    ),
     description: b(
-      "Shape a bounce using timing, easing and controlled deformation.",
-      "以時間、緩動與受控變形塑造彈跳。",
+      "Space the keyframes, control acceleration with easing, then add squash and stretch to sell the weight.",
+      "安排關鍵影格的間距、用緩動控制加速與減速，再加入擠壓與拉伸強化重量感。",
     ),
     lessons: [
       l(
@@ -517,10 +529,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "small-ecosystem",
     kind: "ecosystem",
     domain: b("Biology", "生物"),
-    title: b("Build a small ecosystem", "建立小型生態系"),
+    title: b(
+      "Model predator and prey populations over time",
+      "用族群模型模擬掠食者與獵物的數量變化",
+    ),
     description: b(
-      "Compare population scenarios under resource limits and predation.",
-      "在資源限制與捕食下比較族群情境。",
+      "Set birth rate, death rate and carrying capacity, then watch the populations oscillate, settle or collapse.",
+      "設定出生率、死亡率與環境容納量，再觀察族群如何震盪、達到平衡或崩潰。",
     ),
     lessons: [
       l(
@@ -648,10 +663,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "particle-separation",
     kind: "separation",
     domain: b("Chemistry", "化學"),
-    title: b("Design a particle separation experiment", "設計粒子分離實驗"),
+    title: b(
+      "Separate a mixture using particle size and evaporation",
+      "用粒徑與蒸發原理分離混合物",
+    ),
     description: b(
-      "Separate a modeled mixture using particle size and evaporation.",
-      "利用粒子大小與蒸發，分離模型混合物。",
+      "Choose filtering or evaporation by particle size, order the steps, then confirm every component comes out.",
+      "依粒子大小選擇過濾或蒸發、安排步驟順序，再確認每種成分都被分離出來。",
     ),
     lessons: [
       l(
@@ -782,10 +800,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "rain-ready-neighborhood",
     kind: "flood",
     domain: b("Geography", "地理"),
-    title: b("Design a rain-ready neighborhood", "設計能接住暴雨的街區"),
+    title: b(
+      "Size a neighborhood's flood storage from a rainfall budget",
+      "用降雨收支算出街區需要的滯洪空間",
+    ),
     description: b(
-      "Balance green space and storage against a simplified rainfall budget.",
-      "以簡化降雨收支，平衡綠地與蓄水配置。",
+      "Compare runoff from paving and green space, then compute how much storage a storm needs to stay dry.",
+      "比較不透水鋪面與綠地的逕流量，再算出暴雨時需要多少蓄水容量才不會淹水。",
     ),
     lessons: [
       l(
@@ -916,10 +937,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "coffee-shop",
     kind: "economy",
     domain: b("Economics", "經濟"),
-    title: b("Run a simulated coffee shop", "經營模擬咖啡店"),
+    title: b(
+      "Run a coffee shop with cost, price and demand",
+      "用成本、定價與需求關係經營咖啡店",
+    ),
     description: b(
-      "Compare pricing, stock and costs across demand scenarios.",
-      "在不同需求情境中比較定價、庫存與成本。",
+      "Work out fixed and variable costs, find the price that maximizes profit, then test stock decisions against demand scenarios.",
+      "算出固定與變動成本、找出讓利潤最大的定價，再用不同需求情境檢驗庫存決策。",
     ),
     lessons: [
       l(
@@ -1044,10 +1068,13 @@ export const projectCourses: CuratedCourse[] = [
     id: "logic-door",
     kind: "logic",
     domain: b("Logic", "邏輯"),
-    title: b("Build a logic password door", "建造邏輯密碼門"),
+    title: b(
+      "Design a password lock from AND, OR and NOT gates",
+      "用 AND／OR／NOT 邏輯閘設計密碼鎖",
+    ),
     description: b(
-      "Compose switches and gates, then verify every input case.",
-      "組合開關與邏輯閘，再驗證所有輸入案例。",
+      "Combine switches and gates, write out the truth table, and confirm only the right combination opens the door.",
+      "組合開關與邏輯閘、列出真值表，確認只有正確的組合才會開門。",
     ),
     lessons: [
       l(
