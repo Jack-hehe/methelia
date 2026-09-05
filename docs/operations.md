@@ -123,7 +123,7 @@ npm.cmd start
 2. Branch 選 **`main`**，Blueprint Path 使用 `render.yaml`。
 3. 依畫面提示填入本機 `.env.local` 的 `AI_MODEL`、`AI_API_KEY`、`ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID`。不要把金鑰貼到聊天室或 GitHub。
 4. 確認資源只有一個 2 GB 服務和一個 1 GB 磁碟，再按 Deploy。這一步開始建立付費資源。`AI_BASE_URL` 預設為 OpenRouter，`ELEVENLABS_MODEL` 預設為 `eleven_v3`；預製精選語音的 Voice ID 與模型必須和 Render 一致。準備方式見[精選課程操作說明](featured-courses-release.md)。
-5. 部署成功後，開啟 Render 提供的 `https://…onrender.com` 網址。登入帳號是 **`demo`**；密碼在該服務 Environment 的 **`METHELIA_DEMO_PASSWORD`**，由 Render 隨機產生。不設密碼或密碼少於 16 字元時，Render 環境不會開放網站。
+5. 部署成功後開啟網站。`METHELIA_PUBLIC_ACCESS=true` 讓所有人免帳號進站，既有匿名 session 仍隔離各人的課程與進度。若日後關閉公開模式，才會啟用原有的私有存取密碼設定。
 6. 在最終展示網址生成一堂小課程，確認語音、翻頁、實作、重新整理後的進度。語音／AI 的實際呼叫另計費，部署健康檢查不會呼叫它們。
 
 ### 綁定 methelia.com
@@ -138,9 +138,9 @@ npm.cmd start
 - 本機 `.data` 和 `.env.local` 不會隨程式上傳。這次部署預設建立空的雲端資料庫，不修改本機資料。舊資料若要搬移，需要一致性的 SQLite 備份及匯入；匿名 cookie 不會跨 `localhost`、`onrender.com`、`methelia.com` 共用，還要處理課程歸屬。正式展示課程請在最終網址建立。
 - 預設全站每日最多 **100 次 AI HTTP 請求**與 **30,000 個送出合成的語音字元**，由 SQLite 原子計數，UTC 00:00 重置。失敗、不確定結果與模型格式修正請求仍計入；已快取音檔的播放不計入。`0` 表示禁止新呼叫，不是無上限。這不是美元支出硬上限，供應商仍依模型、token、語音等規則計費。
 - 在 Render Environment 修改 `METHELIA_AI_DAILY_REQUESTS` 或 `METHELIA_SPEECH_DAILY_CHARACTERS` 可調整額度。超過限制仍能閱讀已準備的課程；失敗任務需手動重試，不自動重送付費請求。
-- 網站使用 HTTP Basic demo 帳密，不是會員系統；只透過 HTTPS 分享給可信任的 demo 參與者。不要開放任意主機 shell。
+- 正式網站以 `METHELIA_PUBLIC_ACCESS=true` 開放使用，不要求共用帳密，也不是會員系統；清除瀏覽器 cookie 後仍沒有跨裝置取回進度的機制。API 的 session 歸屬檢查、來源檢查與每日使用額度保持啟用。
 - 已關閉程式 commit 自動部署，避免展示途中更新；需要更新時在 Render 執行 **Manual Deploy → Deploy latest commit**。不要在語音生成途中部署，尚未保存的供應商回應可能於任務恢復時再次計費。
-- `/api/health` 公開但只回傳健康狀態，檢查資料庫可讀與 demo 密碼設定；不回傳課程、金鑰，也不保證外部 AI 供應商可用。網站或 worker 結束時 `concurrently -k` 會一起停止，交由 Render 重啟。
+- `/api/health` 只回傳健康狀態，檢查資料庫可讀；私有模式另外檢查密碼設定。它不回傳課程或金鑰，也不保證外部 AI 供應商可用。網站或 worker 結束時 `concurrently -k` 會一起停止，交由 Render 重啟。
 - 展示結束，先備份資料，再刪除不需要的服務與磁碟以停止相關計費；刪除磁碟會失去雲端資料。關閉瀏覽器不會停止主機計費。
 
 官方參考：[Blueprint](https://render.com/docs/blueprint-spec)、[持久化磁碟](https://render.com/docs/disks)、[自訂網域](https://render.com/docs/custom-domains)。

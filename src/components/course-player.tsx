@@ -591,7 +591,7 @@ function CoursePlayerContent({
         </div>
         <div className="header-right">
           {course.mode === "demo" && !course.featuredId && (
-            <span className="demo-badge">{t("體驗課程", "Demo course")}</span>
+            <span className="demo-badge">{t("入門課程", "Starter course")}</span>
           )}
           {themeControl}
           <button

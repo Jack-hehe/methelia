@@ -117,7 +117,7 @@ Windows PowerShell 請改用 `npm.cmd`／`npx.cmd`，並用 `Copy-Item .env.exam
 
 ## 作品展示
 
-- 作品展示網址：[methelia.com](https://methelia.com)（Render 部署，HTTP Basic 保護，帳號 `demo`）
+- 正式網站：[methelia.com](https://methelia.com)，所有人皆可免帳號使用，學習進度由目前瀏覽器的 session 保存。
 - 評選影片：_待補_
 
 ## 限制與未來工作

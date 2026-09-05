@@ -51,7 +51,7 @@ export function LoginEntry({ language }: { language: HomeLanguage }) {
         <p id="login-description">{copy.loginMessage}</p>
         <button
           className="primary-button"
-          onClick={() => dialog.current?.close()}
+          onClick={() => window.location.assign("/explore")}
         >
           {copy.loginClose}
         </button>

@@ -1,4 +1,5 @@
 import { getStore } from "../../../server/db";
+import { publicAccessEnabled } from "../../../server/deployment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,6 +8,7 @@ export function GET() {
   try {
     if (
       process.env.RENDER === "true" &&
+      !publicAccessEnabled() &&
       (process.env.METHELIA_DEMO_PASSWORD?.length || 0) < 16
     )
       throw new Error("Demo access not configured");

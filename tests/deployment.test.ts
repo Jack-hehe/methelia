@@ -3,6 +3,16 @@ import { Store } from "../src/server/db";
 
 afterEach(() => vi.unstubAllEnvs());
 
+it("allows anonymous public access on Render even with an existing private password", async () => {
+  const { demoAccess } = await import("../src/server/deployment");
+  vi.stubEnv("RENDER", "true");
+  vi.stubEnv("METHELIA_PUBLIC_ACCESS", "true");
+  vi.stubEnv("METHELIA_DEMO_PASSWORD", "old-private-password");
+  expect(demoAccess(new Headers())).toBeNull();
+  vi.stubEnv("METHELIA_DEMO_PASSWORD", "");
+  expect(demoAccess(new Headers())).toBeNull();
+});
+
 it("blocks the demo without credentials and fails closed on Render without a password", async () => {
   const { demoAccess } = await import("../src/server/deployment");
   vi.stubEnv("RENDER", "true");

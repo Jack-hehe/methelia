@@ -115,9 +115,9 @@ npx playwright install chromium && npm run test:e2e
 
 On Windows PowerShell use `npm.cmd`/`npx.cmd` and `Copy-Item .env.example .env.local`. Credential setup, narration rules and Render deployment live in [docs/operations.md](docs/operations.md).
 
-## Demo
+## Website
 
-- Live demo: [methelia.com](https://methelia.com) (Render, behind HTTP Basic; username `demo`)
+- Website: [methelia.com](https://methelia.com), open to everyone without an account. Progress belongs to the current browser session.
 - Judging video: _to be added_
 
 ## Limitations and future work

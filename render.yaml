@@ -1,4 +1,4 @@
-# Paid, single-instance demo. Website and worker share one persistent SQLite DB.
+# Public website. Website and worker share one persistent SQLite DB.
 services:
   - type: web
     name: methelia-demo
@@ -16,6 +16,8 @@ services:
       mountPath: /var/data
       sizeGB: 1
     envVars:
+      - key: METHELIA_PUBLIC_ACCESS
+        value: "true"
       - key: NODE_VERSION
         value: 22.22.0
       - key: METHELIA_DATA_DIR

@@ -1,10 +1,14 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
+export const publicAccessEnabled = () =>
+  process.env.METHELIA_PUBLIC_ACCESS === "true";
+
 /** Small, optional demo gate. This is not an account or learner identity system. */
 export function demoAccess(headers: Headers): Response | null {
+  if (publicAccessEnabled()) return null;
   const password = process.env.METHELIA_DEMO_PASSWORD;
   if (process.env.RENDER === "true" && (!password || password.length < 16))
-    return new Response("Demo access is not configured.", {
+    return new Response("Site access is not configured.", {
       status: 503,
       headers: { "Cache-Control": "no-store" },
     });
@@ -15,10 +19,10 @@ export function demoAccess(headers: Headers): Response | null {
   const digest = (value: string) => createHash("sha256").update(value).digest();
   if (timingSafeEqual(digest(supplied), digest(`demo:${password}`)))
     return null;
-  return new Response("Methelia demo — sign in to continue.", {
+  return new Response("Methelia — sign in to continue.", {
     status: 401,
     headers: {
-      "WWW-Authenticate": 'Basic realm="Methelia Demo", charset="UTF-8"',
+      "WWW-Authenticate": 'Basic realm="Methelia", charset="UTF-8"',
       "Cache-Control": "no-store",
     },
   });
