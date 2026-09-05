@@ -115,7 +115,7 @@ To change starter teaching content, begin with [starter-teaching.ts](src/core/st
 | Content and API | Zod 4, Node.js 22, configurable OpenAI-compatible AI endpoint; deployment uses OpenRouter |
 | Persistence     | Built-in `node:sqlite`, WAL, database-backed job queue                                    |
 | Python          | Pyodide 0.28.3, loaded from jsDelivr into a browser worker                                |
-| Narration       | ElevenLabs with-timestamps; deployed starter and featured audio use `eleven_v3`          |
+| Narration       | ElevenLabs with-timestamps; deployed starter and featured audio use `eleven_v3`           |
 | Exports         | fflate ZIP archives; experiment JSON                                                      |
 | Hosting         | Render web service and persistent disk, with website and worker on one instance           |
 | Verification    | Vitest and Playwright                                                                     |
@@ -186,12 +186,49 @@ The revised starter release also passed 87 focused unit tests, 28 selected exist
 - **Adaptive paths have limits.** Extension routes and performance-based adjustments exist. Arbitrary curriculum scheduling and fully automatic teaching-quality assessment remain future work.
 - **Provider and hosting limits.** New AI content and uncached speech require configured providers. Render sets global UTC-day limits of 100 AI requests and 30,000 synthesized characters. Cached playback does not consume synthesis limits. These are usage counters, not currency limits.
 
-Planned work includes account-based progress sync, richer learning components, more precise demonstration timing and stronger content evaluation.
+## Limitations and future work
+
+The section above covers what the current runtimes can do. This one is about what Methelia cannot do yet, and what we want to add. None of it has a date.
+
+### Accounts
+
+A learner is just a browser cookie today. There is no sign-up and no password, so clearing site data loses the courses.
+
+- Sign in with an email link or another provider, keeping work started before signing in.
+- Pick up a course on another device, and get progress back after clearing a browser.
+- Export or delete your own courses and work.
+- Teacher and student roles, so a class can be grouped and given a project.
+
+### More courses
+
+There are 20 featured projects and one starter course, each five chapters, in English and Traditional Chinese. The catalog filters by one subject and has no search.
+
+- More projects, in more subjects, and longer ones. The schema already allows up to seven chapters; every published course stops at five.
+- Search by title and content, with filters for difficulty and assumed prior knowledge.
+- More languages.
+- Turn your own material into a course: hand Methelia a video, a PDF, a slide deck or an article, and get chapters, checkpoints and narration built from it. None of this exists yet. Today a course is either written by us or generated from a goal you type.
+- Courses written by teachers, and a way to publish finished work.
+
+### Better teaching
+
+Checkpoints are multiple-choice questions and file checks. The server can tell whether a file looks right. It cannot tell whether your code is any good, or whether an explanation in your own words makes sense.
+
+- Written answers with model feedback, shown separately from the automatic file checks.
+- Bring earlier chapters back for review instead of only moving forward.
+- More laboratories, and better timing on demonstrations.
+- Better quality checks on generated courses before a learner sees them.
+
+### Platform
+
+One Render service and its worker share a single SQLite file on one disk, and deploys are manual.
+
+- Automatic backups, with restores actually tested. See [operations](docs/operations.md) for today's manual steps.
+- Room to run more than one instance.
+- Higher provider limits. Right now the whole site shares 100 AI requests and 30,000 spoken characters a day.
 
 ## Sources and attribution
 
 - Authored featured courses and simplified models live in [src/core/featured](src/core/featured) and [src/core/labs](src/core/labs). Their [references](src/core/featured/references.ts) point to primary documentation and open textbooks. Personalized course content is generated at runtime.
-- [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) was consulted as a learning-interface reference. No OpenMAIC code or artwork was incorporated in the featured release.
 - ElevenLabs supplies synthesized narration; OpenRouter provides the configured model gateway. Provider terms apply to their services and generated outputs.
 - Pyodide assets are fetched from jsDelivr. DM Sans and Noto Sans TC are loaded through Google Fonts with system fallbacks; they are not bundled font files.
 - Dependencies retain their own licenses. The repository's MIT license does not replace third-party licenses or service terms.

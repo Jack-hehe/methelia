@@ -13,3 +13,9 @@ test-results-*/
 .tmp_doc_review/
 .worktrees/
 .claude/settings.local.json
+
+# Working notes kept locally. Nothing in the app, the scripts or the READMEs
+# reads these, so they stay out of the published repository.
+docs/superpowers/
+docs/general-learning-validation.md
+docs/learning-experience-improvements.md
