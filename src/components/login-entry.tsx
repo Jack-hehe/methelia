@@ -40,9 +40,13 @@ export function LoginEntry({ language }: { language: HomeLanguage }) {
         >
           <X size={18} />
         </button>
-        <span className="login-monogram" aria-hidden="true">
-          M
-        </span>
+        <img
+          className="login-logo"
+          src="/icon.svg"
+          alt="Methelia"
+          width={64}
+          height={64}
+        />
         <h2 id="login-title">{copy.loginTitle}</h2>
         <p id="login-description">{copy.loginMessage}</p>
         <button
