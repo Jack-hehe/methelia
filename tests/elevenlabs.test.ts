@@ -127,3 +127,60 @@ it("rejects overlong text before sending a paid request", async () => {
   );
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("sends eleven_v3 with a pinned language and without the neighbour text it rejects", async () => {
+  vi.stubEnv("ELEVENLABS_MODEL", "eleven_v3");
+  const sent: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+    sent.push(JSON.parse(String(init.body)));
+    return new Response(
+      JSON.stringify({
+        audio_base64: Buffer.from("audio").toString("base64"),
+        alignment: {
+          characters: ["你", "好"],
+          character_start_times_seconds: [0, 0.2],
+          character_end_times_seconds: [0.2, 0.4],
+        },
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  });
+  const profile = speechConfig(undefined, "zh-TW").profile;
+  expect(profile.model).toBe("eleven_v3");
+  expect(profile.languageCode).toBe("zh");
+  await synthesize(chapter("你好"), profile, {
+    previousText: "前一頁",
+    nextText: "下一頁",
+  });
+  expect(sent[0].model_id).toBe("eleven_v3");
+  expect(sent[0].language_code).toBe("zh");
+  expect(sent[0].previous_text).toBeUndefined();
+  expect(sent[0].next_text).toBeUndefined();
+});
+
+it("keeps sending neighbour text on the models that accept it", async () => {
+  vi.stubEnv("ELEVENLABS_MODEL", "eleven_flash_v2_5");
+  const sent: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+    sent.push(JSON.parse(String(init.body)));
+    return new Response(
+      JSON.stringify({
+        audio_base64: Buffer.from("audio").toString("base64"),
+        alignment: {
+          characters: ["你", "好"],
+          character_start_times_seconds: [0, 0.2],
+          character_end_times_seconds: [0.2, 0.4],
+        },
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  });
+  const profile = speechConfig(undefined, "zh-TW").profile;
+  await synthesize(chapter("你好"), profile, { previousText: "前一頁" });
+  expect(sent[0].previous_text).toBe("前一頁");
+});
+
+it("rejects a model the adapter has no verified limits for", () => {
+  vi.stubEnv("ELEVENLABS_MODEL", "eleven_v4_imaginary");
+  expect(() => speechConfig()).toThrow(/ELEVENLABS_MODEL/);
+});

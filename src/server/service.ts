@@ -18,6 +18,13 @@ import {
   nextLearningNode,
 } from "../core/graph";
 import { learnerProfileSchema } from "../core/learner-profile";
+import {
+  intakeFields,
+  intakeFieldSchema,
+  type IntakeField,
+  type IntakeQuestion,
+} from "../core/intake-question";
+import { generateIntakeQuestion as generateQuestion } from "./model";
 import { learningNote } from "../core/learning-notes";
 import { recommendDepth } from "../core/adaptive-learning";
 import {
@@ -38,6 +45,26 @@ import type {
 } from "../core/state";
 export const nodeHash = (node: LearningNode) =>
   createHash("sha256").update(JSON.stringify(node)).digest("hex");
+const intakeRequests = new WeakMap<
+  Store,
+  Map<string, Promise<IntakeQuestion>>
+>();
+
+function intakeContext(c: Course, field: IntakeField, base: number) {
+  if (!c.intake) throw new Error("Intake not found");
+  if (c.status !== "intake" || c.intake.revision !== base)
+    throw new Error("Intake conflict: 回答已更新，請重新載入");
+  const answers: Partial<LearnerProfile> = {};
+  for (const previous of intakeFields.slice(0, intakeFields.indexOf(field))) {
+    const answer = c.intake.answers[previous];
+    if (!answer?.trim()) throw new Error("請先回答前面的問題");
+    Object.assign(answers, { [previous]: answer });
+  }
+  return {
+    answers,
+    context: JSON.stringify([c.goal, c.language || "zh-TW", field, answers]),
+  };
+}
 export class LearningService {
   constructor(public store: Store) {}
   session(existing?: string): string {
@@ -86,9 +113,19 @@ export class LearningService {
       )
       .all(session) as CourseSummary[];
   }
-  deleteCourse(session: string, id: string): { deleted: true } {
+  deleteCourse(
+    session: string,
+    id: string,
+    intakeRevision?: number,
+  ): { deleted: true } {
     return this.store.transaction(() => {
-      this.owned(session, id);
+      const course = this.owned(session, id);
+      if (
+        intakeRevision !== undefined &&
+        (course.status !== "intake" ||
+          course.intake?.revision !== intakeRevision)
+      )
+        throw new Error("Intake conflict: 課程已更新，請重新載入後再取消");
       const packages = this.store.db
         .prepare("SELECT id FROM chapter_packages WHERE course_id=?")
         .all(id) as { id: string }[];
@@ -161,7 +198,7 @@ export class LearningService {
         )
         .get(session) as { n: number };
       if (busy.n > 4) throw new Error("請等待目前的課程生成完成");
-      const graph = mode === "demo" ? demoGraph() : null;
+      const graph = mode === "demo" ? demoGraph(language) : null;
       const course: Course = {
         id: randomUUID(),
         sessionId: session,
@@ -203,6 +240,44 @@ export class LearningService {
       return this.snapshot(course);
     });
   }
+  async generateIntakeQuestion(
+    session: string,
+    id: string,
+    requestedField: IntakeField,
+    base: number,
+  ): Promise<IntakeQuestion> {
+    const field = intakeFieldSchema.parse(requestedField);
+    const course = this.owned(session, id);
+    const { answers, context } = intakeContext(course, field, base);
+    const cached = course.intake!.questions?.[field];
+    if (cached?.context === context) return cached.question;
+    let requests = intakeRequests.get(this.store);
+    if (!requests) intakeRequests.set(this.store, (requests = new Map()));
+    const key = JSON.stringify([id, base, context]);
+    const pending = requests.get(key);
+    if (pending) return pending;
+    const request = (async () => {
+      const question = await generateQuestion(
+        course.goal,
+        course.language || "zh-TW",
+        field,
+        answers,
+      );
+      return this.mutate(session, id, (c) => {
+        if (intakeContext(c, field, base).context !== context)
+          throw new Error("Intake conflict: 回答已更新，請重新載入");
+        c.intake!.questions ??= {};
+        c.intake!.questions[field] = { context, question };
+        return question;
+      });
+    })();
+    requests.set(key, request);
+    try {
+      return await request;
+    } finally {
+      requests.delete(key);
+    }
+  }
   saveIntake(
     session: string,
     id: string,
@@ -225,12 +300,25 @@ export class LearningService {
       }
       if (c.intake.revision !== base)
         throw new Error("Intake conflict: 回答已更新，請重新載入");
+      if (c.intake.questions) {
+        const changed = intakeFields.findIndex(
+          (field) =>
+            patch[field] !== undefined &&
+            patch[field] !== c.intake!.answers[field],
+        );
+        if (changed >= 0) {
+          for (const later of intakeFields.slice(changed + 1)) {
+            delete c.intake.questions[later];
+            if (patch[later] === undefined) delete merged[later];
+          }
+        }
+      }
       if (finalize) {
         c.learnerProfile = learnerProfileSchema.parse(merged);
         c.status = "planning";
         this.store.enqueue(`graph:${c.id}`, c.id, "graph");
       }
-      c.intake = { answers: merged, revision: base + 1 };
+      c.intake = { ...c.intake, answers: merged, revision: base + 1 };
       return this.snapshot(c);
     });
   }
@@ -285,7 +373,7 @@ export class LearningService {
         c.completed.includes(nodeId))
     )
       return prior;
-    const chapter = c.mode === "demo" ? demoChapter(node) : null;
+    const chapter = c.mode === "demo" ? demoChapter(node, c.language) : null;
     const pkg: PackageState = {
       id: randomUUID(),
       nodeHash: this.preparationHash(c, node),
@@ -413,7 +501,7 @@ export class LearningService {
         throw new Error(
           "教學檔案環境不執行 Python；請使用 Python 編輯器的執行按鈕。",
         );
-      const result = runCommand(c.workspace, command);
+      const result = runCommand(c.workspace, command, c.language);
       c.workspace = result.workspace;
       return result;
     });
@@ -451,7 +539,13 @@ export class LearningService {
         c.attempts ??= [];
         if (c.attempts.length >= 5000)
           throw new Error("本課程已達作答紀錄上限");
-        const feedback = checkFeedback(section, c.workspace, passed, answer);
+        const feedback = checkFeedback(
+          section,
+          c.workspace,
+          passed,
+          answer,
+          c.language,
+        );
         c.attempts.push({
           nodeId: c.currentNodeId,
           sectionId,
@@ -484,7 +578,13 @@ export class LearningService {
         progress: c.progress[c.currentNodeId],
         notes: c.notes,
         adjustments: c.adjustments,
-        feedback: checkFeedback(section, c.workspace, passed, answer),
+        feedback: checkFeedback(
+          section,
+          c.workspace,
+          passed,
+          answer,
+          c.language,
+        ),
       };
     });
   }
@@ -530,6 +630,31 @@ export class LearningService {
         this.scheduleSpeech(c, pkg);
         this.prefetch(c);
       } else if (c.extensionSession) this.returnFromExtension(c);
+      return this.snapshot(c);
+    });
+  }
+  /** Move the learning position to a chapter further along the route without
+   * completing what comes before. Nothing is marked done, so a skipped chapter
+   * stays available and the learner can jump back to it later. */
+  jumpTo(session: string, id: string, nodeId: string) {
+    return this.mutate(session, id, (c) => {
+      if (!c.graph) throw new Error("課程還在規劃中，請稍後再試。");
+      if (c.extensionSession)
+        throw new Error("請先離開延伸單元，再跳到其他章節。");
+      if (!c.graph.nodes.some((n) => n.id === nodeId))
+        throw new Error("Node not found");
+      if (
+        c.graph.extensions?.some((extension) =>
+          extension.nodeIds.includes(nodeId),
+        )
+      )
+        throw new Error("請使用「進入延伸」開啟這個單元，以保留主線進度。");
+      if (nodeId === c.currentNodeId) return this.snapshot(c);
+      c.currentNodeId = nodeId;
+      const pkg = this.prepare(c, nodeId);
+      if (pkg.chapter) this.initialize(c, pkg.chapter);
+      this.scheduleSpeech(c, pkg);
+      this.prefetch(c);
       return this.snapshot(c);
     });
   }

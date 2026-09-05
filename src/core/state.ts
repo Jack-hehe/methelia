@@ -1,6 +1,7 @@
 import type { Chapter, Graph, LearningNode } from "./protocol";
 import type { Cue, Caption } from "./narration";
 import type { Workspace } from "./workspace";
+import type { IntakeField, IntakeQuestionRecord } from "./intake-question";
 export type PageAudio = {
   status: "pending" | "generating" | "ready" | "failed";
   cues: Cue[];
@@ -106,7 +107,11 @@ export type Course = {
   mode: "demo" | "live";
   status: "intake" | "planning" | "ready" | "failed";
   learningVersion?: 1;
-  intake?: { answers: Partial<LearnerProfile>; revision: number };
+  intake?: {
+    answers: Partial<LearnerProfile>;
+    revision: number;
+    questions?: Partial<Record<IntakeField, IntakeQuestionRecord>>;
+  };
   learnerProfile?: LearnerProfile;
   attempts?: LearningAttempt[];
   notes?: Record<string, NodeNote>;

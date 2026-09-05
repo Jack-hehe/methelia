@@ -1,3 +1,4 @@
+import { localizedError, type Language } from "./language";
 export type Workspace = {
   revision: number;
   cwd: string;
@@ -127,6 +128,7 @@ export function validatePracticeCommand(command: string) {
 export function runCommand(
   ws: Workspace,
   command: string,
+  language: Language = "en",
 ): { workspace: Workspace; output: string } {
   const next = structuredClone(ws);
   let output = "";
@@ -137,7 +139,10 @@ export function runCommand(
     const path = arg ? normalizePath(next.cwd, arg) : next.cwd;
     if (command.trim() === "python -m http.server 8000") {
       next.previewRunning = true;
-      output = "Website preview started at port 8000 (practice adapter).";
+      output =
+        language === "en"
+          ? "Website preview started at port 8000 (practice adapter)."
+          : "網站預覽已在連接埠 8000 啟動（教學模擬環境）。";
     } else if (cmd === "pwd" && !arg) output = next.cwd;
     else if (cmd === "clear" && !arg) output = "";
     else if (cmd === "ls") {
@@ -158,7 +163,7 @@ export function runCommand(
               p.slice(prefix.length) +
               (next.directories.includes(p) ? "/" : ""),
           )
-          .join("\n") || "(empty)";
+          .join("\n") || (language === "en" ? "(empty)" : "（空目錄）");
     } else if (cmd === "cd" && arg) {
       if (!next.directories.includes(path))
         throw new Error("Directory not found");
@@ -191,7 +196,7 @@ export function runCommand(
   } catch (error) {
     return {
       workspace: ws,
-      output: error instanceof Error ? error.message : "Command failed",
+      output: localizedError(error, language),
     };
   }
 }

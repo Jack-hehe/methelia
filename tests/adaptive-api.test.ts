@@ -7,6 +7,7 @@ import { POST, PUT } from "../src/app/api/[...path]/route";
 const state = vi.hoisted(() => ({
   store: null as Store | null,
   extension: vi.fn(),
+  intakeQuestion: vi.fn(),
 }));
 vi.mock("../src/server/db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/server/db")>()),
@@ -16,6 +17,7 @@ vi.mock("../src/server/model", () => ({
   modelConfigured: () => true,
   generateExtension: state.extension,
   generateHelp: vi.fn(),
+  generateIntakeQuestion: state.intakeQuestion,
 }));
 let service: LearningService, session: string;
 beforeEach(() => {
@@ -23,6 +25,7 @@ beforeEach(() => {
   service = new LearningService(state.store);
   session = service.session();
   state.extension.mockReset();
+  state.intakeQuestion.mockReset();
   vi.stubEnv("METHELIA_DEMO_PASSWORD", "");
   vi.stubEnv("RENDER", "false");
   vi.stubEnv("METHELIA_ALLOWED_ORIGINS", "");
@@ -173,4 +176,65 @@ it("persists personal notes with conflict protection through the API", async () 
       )
     ).status,
   ).toBe(409);
+});
+it("generates and caches authorized intake questions with strict request validation", async () => {
+  const c = service.createCourse(
+    session,
+    "Linux",
+    "live",
+    "questions",
+    "en",
+    true,
+  );
+  const question = {
+    field: "experience",
+    title: "Used Linux paths?",
+    description: "",
+    placeholder: "Your experience",
+    options: ["Never", "Folders", "Scripts"].map((value) => ({
+      value,
+      label: value,
+      description: "",
+    })),
+  };
+  state.intakeQuestion.mockResolvedValue(question);
+  const path = `courses/${c.id}/intake/question`;
+  const body = { field: "experience", baseRevision: 0 };
+  expect((await request(path, body, "POST", service.session())).status).toBe(
+    404,
+  );
+  expect((await request(path, { ...body, baseRevision: 1 })).status).toBe(409);
+  expect((await request(path, { ...body, field: "unknown" })).status).toBe(400);
+  expect(
+    (await request(path, { ...body, answers: { experience: "unsaved" } }))
+      .status,
+  ).toBe(400);
+  expect((await request(path, { ...body, field: "purpose" })).status).toBe(400);
+  expect(state.intakeQuestion).not.toHaveBeenCalled();
+  expect(await (await request(path, body)).json()).toEqual({ question });
+  expect(await (await request(path, body)).json()).toEqual({ question });
+  expect(state.intakeQuestion).toHaveBeenCalledTimes(1);
+  expect(service.getCourse(session, c.id).intake?.revision).toBe(0);
+});
+
+it("cancels intake through the API while preserving other courses", async () => {
+  const keep = service.createCourse(session, "Existing course", "demo", "keep");
+  const draft = service.createCourse(
+    session,
+    "Linux",
+    "live",
+    "cancel",
+    "zh-TW",
+    true,
+  );
+  const path = `courses/${draft.id}/intake/cancel`;
+  expect((await request(path, { baseRevision: 1 })).status).toBe(409);
+  expect(
+    (await request(path, { baseRevision: 0 }, "POST", service.session()))
+      .status,
+  ).toBe(404);
+  const response = await request(path, { baseRevision: 0 });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ deleted: true });
+  expect(service.listCourses(session).map((c) => c.id)).toEqual([keep.id]);
 });

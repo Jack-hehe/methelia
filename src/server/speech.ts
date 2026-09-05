@@ -3,9 +3,20 @@ import type { SpeechProfile } from "../core/state";
 import { mapNarration, mapCaptions, type Word } from "../core/narration";
 import { reserveUsage } from "./usage";
 
-const limits: Record<string, number> = {
-  eleven_multilingual_v2: 10000,
-  eleven_flash_v2_5: 40000,
+/** Per-model request limit and parameter support, checked against the API.
+ * v3 rejects previous_text/next_text outright, and multilingual_v2 ignores
+ * language_code, so both have to be decided per model rather than sent blind. */
+const models: Record<
+  string,
+  { limit: number; languageCode: boolean; neighbourText: boolean }
+> = {
+  eleven_v3: { limit: 5000, languageCode: true, neighbourText: false },
+  eleven_multilingual_v2: {
+    limit: 10000,
+    languageCode: false,
+    neighbourText: true,
+  },
+  eleven_flash_v2_5: { limit: 40000, languageCode: true, neighbourText: true },
 };
 export function speechConfig(
   pinned?: SpeechProfile,
@@ -23,15 +34,24 @@ export function speechConfig(
     );
   if (!/^[a-zA-Z0-9_-]{1,200}$/.test(voiceId))
     throw new Error("ELEVENLABS_VOICE_ID 格式不正確，請填入老師的 Voice ID。");
-  if (!Object.hasOwn(limits, model))
+  if (!Object.hasOwn(models, model))
     throw new Error(
-      "ELEVENLABS_MODEL 無效，請設定 eleven_multilingual_v2 或 eleven_flash_v2_5。",
+      "ELEVENLABS_MODEL 無效，請設定 eleven_v3、eleven_multilingual_v2 或 eleven_flash_v2_5。",
     );
+  const capability = models[model];
   const profile: SpeechProfile = { provider: "elevenlabs", voiceId, model };
-  if (model === "eleven_flash_v2_5" && (pinned?.languageCode || language))
-    profile.languageCode =
-      pinned?.languageCode || (language === "en" ? "en" : "zh");
-  return { key, profile, limit: limits[model] };
+  if (capability.languageCode && (pinned?.languageCode || language))
+    profile.languageCode = language
+      ? language === "en"
+        ? "en"
+        : "zh"
+      : pinned?.languageCode;
+  return {
+    key,
+    profile,
+    limit: capability.limit,
+    neighbourText: capability.neighbourText,
+  };
 }
 
 type Alignment = {
@@ -103,8 +123,11 @@ export async function synthesize(
           text,
           model_id: config.profile.model,
           language_code: config.profile.languageCode,
-          previous_text: context?.previousText,
-          next_text: context?.nextText,
+          // v3 returns 400 rather than ignoring these, so omit them entirely.
+          previous_text: config.neighbourText
+            ? context?.previousText
+            : undefined,
+          next_text: config.neighbourText ? context?.nextText : undefined,
         }),
         signal: AbortSignal.timeout(180000),
       },

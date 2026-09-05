@@ -65,12 +65,18 @@ it("a blocked prefetch cannot delay a new foreground course", async () => {
   );
   try {
     const session = service.session();
-    service.createCourse(session, "first", "live", "first");
+    service.createCourse(session, "first", "live", "first", "en");
     await vi.waitFor(() => expect(prefetchStarted).toBe(true), {
       timeout: 10000,
     });
     const started = Date.now();
-    const second = service.createCourse(session, "second", "live", "second");
+    const second = service.createCourse(
+      session,
+      "second",
+      "live",
+      "second",
+      "en",
+    );
     await vi.waitFor(
       () =>
         expect(service.getCourse(session, second.id).chapters.web?.status).toBe(
@@ -297,7 +303,13 @@ it("prepares the next chapter while current narration is blocked and preserves c
   if (!address || typeof address === "string")
     throw new Error("Missing server address");
   const session = service.session();
-  const course = service.createCourse(session, "Concepts", "demo", "lanes");
+  const course = service.createCourse(
+    session,
+    "Concepts",
+    "demo",
+    "lanes",
+    "en",
+  );
   service.mutate(session, course.id, (c) => {
     c.mode = "live";
     c.status = "planning";
@@ -407,6 +419,7 @@ it("processes persisted graph and chapter jobs in the real worker process", asyn
     "A website",
     "demo",
     "worker-test",
+    "en",
   );
   service.mutate(session, course.id, (c) => {
     c.mode = "live";

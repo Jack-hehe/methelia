@@ -45,7 +45,7 @@ it("repairs a support recommendation without an explicit environment", async () 
       ],
     });
   });
-  const result = await generateHelp("Why?", {});
+  const result = await generateHelp("Why?", {}, "en");
   expect(result.nodes[0].environment).toBe("none");
   expect(count).toBe(2);
 });

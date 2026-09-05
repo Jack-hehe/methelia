@@ -1,5 +1,61 @@
 import type { Chapter, Graph, Section } from "./protocol";
 
+const labels = {
+  en: {
+    handout: "Course handout",
+    objective: "Learning objective",
+    terminal: "Practice Terminal",
+    noFiles: "No practice files are prepared for this chapter.",
+    preview:
+      "Open the interactive website preview in the course workspace. This chapter's source code is included at the end of the chapter.",
+    myAnswer: "My answer:",
+    demonstration: "Demonstration",
+    find: "Find this content",
+    replace: "Replace with",
+    previewClick: "Preview action: click",
+    chapter: (number: number) => `Chapter ${number}`,
+    files: "Chapter practice files",
+    answer: "Answer",
+    reference: "Answer key",
+    explanations: "Quiz answers and explanations",
+    print: 'Use your browser\'s Print command and choose "Save as PDF".',
+    contentsLabel: "Handout contents",
+    contents: "Contents",
+    included: (count: number) =>
+      `This handout includes ${count} prepared ${count === 1 ? "chapter" : "chapters"}.`,
+    emptyTitle: "No chapters are ready to export yet",
+    emptyBody:
+      "Download the handout again after your chapters are ready to get the lessons and exercises.",
+    prepared: (count: number) =>
+      `${count} prepared ${count === 1 ? "chapter" : "chapters"}`,
+  },
+  "zh-TW": {
+    handout: "課程講義",
+    objective: "學習目標",
+    terminal: "教學 Terminal",
+    noFiles: "本章沒有準備實作檔案。",
+    preview: "互動網頁預覽請在課程實作區開啟；本章準備的原始碼收錄於章末。",
+    myAnswer: "我的答案：",
+    demonstration: "操作示範",
+    find: "找到這段內容",
+    replace: "修改為",
+    previewClick: "預覽操作：點選",
+    chapter: (number: number) => `第 ${number} 章`,
+    files: "本章實作檔案",
+    answer: "答案",
+    reference: "參考答案",
+    explanations: "測驗答案與解析",
+    print: "使用瀏覽器的「列印」功能，可選擇另存為 PDF。",
+    contentsLabel: "講義目錄",
+    contents: "章節目錄",
+    included: (count: number) => `本講義收錄 ${count} 個已準備好的章節。`,
+    emptyTitle: "目前尚無可匯出的章節",
+    emptyBody: "課程章節準備完成後，再次下載講義即可取得教材與練習。",
+    prepared: (count: number) => `${count} 個已準備章節`,
+  },
+};
+type Labels = (typeof labels)[keyof typeof labels];
+
 function escape(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
     switch (character) {
@@ -21,7 +77,11 @@ function codeBlock(label: string, code: string): string {
   return `<figure class="code-block"><figcaption>${escape(label)}</figcaption><pre><code>${escape(code)}</code></pre></figure>`;
 }
 
-function renderComponent(section: Section, chapter: Chapter): string {
+function renderComponent(
+  section: Section,
+  chapter: Chapter,
+  copy: Labels,
+): string {
   const component = section.component;
   switch (component.type) {
     case "lesson.article":
@@ -47,48 +107,48 @@ function renderComponent(section: Section, chapter: Chapter): string {
       );
     case "terminal":
       return codeBlock(
-        "教學 Terminal",
+        copy.terminal,
         component.commands.map((command) => `$ ${command}`).join("\n"),
       );
     case "file.tree": {
       const paths = Object.keys(chapter.workspaceSetup);
       return paths.length
         ? `<ul class="file-list">${paths.map((path) => `<li><code>${escape(path)}</code></li>`).join("")}</ul>`
-        : '<p class="note">本章沒有準備實作檔案。</p>';
+        : `<p class="note">${copy.noFiles}</p>`;
     }
     case "browser.preview":
-      return '<p class="note">互動網頁預覽請在課程實作區開啟；本章準備的原始碼收錄於章末。</p>';
+      return `<p class="note">${copy.preview}</p>`;
     case "quiz.choice":
-      return `<div class="quiz"><h4>${escape(component.question)}</h4><ol type="A">${component.options.map((option) => `<li>${escape(option)}</li>`).join("")}</ol><p class="answer-space">我的答案：________________</p></div>`;
+      return `<div class="quiz"><h4>${escape(component.question)}</h4><ol type="A">${component.options.map((option) => `<li>${escape(option)}</li>`).join("")}</ol><p class="answer-space">${copy.myAnswer}________________</p></div>`;
   }
 }
 
-function renderGuide(section: Section): string {
+function renderGuide(section: Section, copy: Labels): string {
   if (!section.guide) return "";
-  return `<div class="guide"><h4>操作示範 · ${escape(section.guide.path)}</h4>${codeBlock("找到這段內容", section.guide.find)}${codeBlock("修改為", section.guide.replacement)}${section.guide.previewClick ? `<p>預覽操作：點選 <code>${escape(section.guide.previewClick)}</code>。</p>` : ""}</div>`;
+  return `<div class="guide"><h4>${copy.demonstration} · ${escape(section.guide.path)}</h4>${codeBlock(copy.find, section.guide.find)}${codeBlock(copy.replace, section.guide.replacement)}${section.guide.previewClick ? `<p>${copy.previewClick} <code>${escape(section.guide.previewClick)}</code>${copy === labels.en ? "." : "。"}</p>` : ""}</div>`;
 }
 
-function renderChapter(chapter: Chapter, index: number): string {
+function renderChapter(chapter: Chapter, index: number, copy: Labels): string {
   const workspace = Object.entries(chapter.workspaceSetup);
   return `<article class="chapter" id="chapter-${index + 1}">
-    <header class="chapter-header"><p class="eyebrow">第 ${index + 1} 章</p><h2>${escape(chapter.title)}</h2><p class="objective"><strong>學習目標</strong> ${escape(chapter.objective)}</p></header>
-    ${chapter.sections.map((section, sectionIndex) => `<section class="lesson"><h3><span>${index + 1}.${sectionIndex + 1}</span> ${escape(section.title)}</h3><p class="body-copy">${escape(section.body)}</p>${renderComponent(section, chapter)}${renderGuide(section)}</section>`).join("\n")}
-    ${workspace.length ? `<section class="workspace"><h3>本章實作檔案</h3>${workspace.map(([path, content]) => codeBlock(path, content)).join("")}</section>` : ""}
+    <header class="chapter-header"><p class="eyebrow">${copy.chapter(index + 1)}</p><h2>${escape(chapter.title)}</h2><p class="objective"><strong>${copy.objective}</strong> ${escape(chapter.objective)}</p></header>
+    ${chapter.sections.map((section, sectionIndex) => `<section class="lesson"><h3><span>${index + 1}.${sectionIndex + 1}</span> ${escape(section.title)}</h3><p class="body-copy">${escape(section.body)}</p>${renderComponent(section, chapter, copy)}${renderGuide(section, copy)}</section>`).join("\n")}
+    ${workspace.length ? `<section class="workspace"><h3>${copy.files}</h3>${workspace.map(([path, content]) => codeBlock(path, content)).join("")}</section>` : ""}
   </article>`;
 }
 
-function renderAnswers(chapters: Chapter[]): string {
+function renderAnswers(chapters: Chapter[], copy: Labels): string {
   const answers = chapters.flatMap((chapter, chapterIndex) =>
     chapter.sections.flatMap((section, sectionIndex) => {
       const component = section.component;
       if (component.type !== "quiz.choice") return [];
       return [
-        `<section class="answer"><p class="eyebrow">第 ${chapterIndex + 1} 章 · ${chapterIndex + 1}.${sectionIndex + 1}</p><h3>${escape(section.title)}</h3><p>${escape(component.question)}</p><p class="correct-answer"><strong>答案 ${String.fromCharCode(65 + component.answer)}</strong> ${escape(component.options[component.answer] ?? "")}</p><p>${escape(component.explanation)}</p></section>`,
+        `<section class="answer"><p class="eyebrow">${copy.chapter(chapterIndex + 1)} · ${chapterIndex + 1}.${sectionIndex + 1}</p><h3>${escape(section.title)}</h3><p>${escape(component.question)}</p><p class="correct-answer"><strong>${copy.answer} ${String.fromCharCode(65 + component.answer)}</strong> ${escape(component.options[component.answer] ?? "")}</p><p>${escape(component.explanation)}</p></section>`,
       ];
     }),
   );
   return answers.length
-    ? `<article class="answer-appendix"><header class="chapter-header"><p class="eyebrow">參考答案</p><h2>測驗答案與解析</h2></header>${answers.join("\n")}</article>`
+    ? `<article class="answer-appendix"><header class="chapter-header"><p class="eyebrow">${copy.reference}</p><h2>${copy.explanations}</h2></header>${answers.join("\n")}</article>`
     : "";
 }
 
@@ -162,26 +222,28 @@ const printStyles = `
 
 /** Render prepared course material without executing or embedding its markup. */
 export function renderHandout(
-  course: { goal: string; graph: Graph | null },
+  course: { goal: string; graph: Graph | null; language?: "en" | "zh-TW" },
   chapters: Chapter[],
 ): string {
-  const title = course.graph?.title || course.goal || "課程講義";
+  const language = course.language ?? "zh-TW";
+  const copy = labels[language];
+  const title = course.graph?.title || course.goal || copy.handout;
   return `<!doctype html>
-<html lang="zh-Hant">
+<html lang="${language === "en" ? "en" : "zh-Hant"}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
-  <title>${escape(title)} · 課程講義</title>
+  <title>${escape(title)} · ${copy.handout}</title>
   <style>${printStyles}</style>
 </head>
 <body><main>
-  <header class="cover"><p class="eyebrow">METHELIA · 課程講義</p><h1>${escape(title)}</h1><p class="goal"><strong>學習目標</strong><br>${escape(course.goal)}</p><p class="print-note">使用瀏覽器的「列印」功能，可選擇另存為 PDF。</p>
-  ${chapters.length ? `<nav class="contents" aria-label="講義目錄"><h2>章節目錄</h2><p class="note">本講義收錄 ${chapters.length} 個已準備好的章節。</p><ol>${chapters.map((chapter, index) => `<li><a href="#chapter-${index + 1}">${escape(chapter.title)}</a><small>${escape(chapter.objective)}</small></li>`).join("")}</ol></nav>` : '<div class="empty"><h2>目前尚無可匯出的章節</h2><p>課程章節準備完成後，再次下載講義即可取得教材與練習。</p></div>'}
+  <header class="cover"><p class="eyebrow">METHELIA · ${copy.handout}</p><h1>${escape(title)}</h1><p class="goal"><strong>${copy.objective}</strong><br>${escape(course.goal)}</p><p class="print-note">${escape(copy.print)}</p>
+  ${chapters.length ? `<nav class="contents" aria-label="${copy.contentsLabel}"><h2>${copy.contents}</h2><p class="note">${copy.included(chapters.length)}</p><ol>${chapters.map((chapter, index) => `<li><a href="#chapter-${index + 1}">${escape(chapter.title)}</a><small>${escape(chapter.objective)}</small></li>`).join("")}</ol></nav>` : `<div class="empty"><h2>${copy.emptyTitle}</h2><p>${copy.emptyBody}</p></div>`}
   </header>
-  ${chapters.map(renderChapter).join("\n")}
-  ${renderAnswers(chapters)}
-  <footer>Methelia · ${chapters.length} 個已準備章節</footer>
+  ${chapters.map((chapter, index) => renderChapter(chapter, index, copy)).join("\n")}
+  ${renderAnswers(chapters, copy)}
+  <footer>Methelia · ${copy.prepared(chapters.length)}</footer>
 </main></body>
 </html>`;
 }

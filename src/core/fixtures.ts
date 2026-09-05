@@ -4,6 +4,7 @@ import {
   type LearningNode,
   validateChapter,
 } from "./protocol";
+import { englishDemoChapter, englishDemoGraph } from "./fixtures-en";
 
 export const starterFiles = {
   "/index.html":
@@ -13,7 +14,8 @@ export const starterFiles = {
   "/app.js":
     'document.querySelector("#hello").addEventListener("click", () => {\n  document.querySelector("h1").textContent = "很高興認識你！";\n});',
 };
-export function demoGraph(): Graph {
+export function demoGraph(language: "en" | "zh-TW" = "zh-TW"): Graph {
+  if (language === "en") return englishDemoGraph();
   const lessons = [
     [
       "web",
@@ -40,7 +42,11 @@ export function demoGraph(): Graph {
     edges: lessons.slice(1).map((n, i) => ({ from: lessons[i][0], to: n[0] })),
   };
 }
-export function demoChapter(node: LearningNode): Chapter {
+export function demoChapter(
+  node: LearningNode,
+  locale: "en" | "zh-TW" = "zh-TW",
+): Chapter {
+  if (locale === "en") return englishDemoChapter(node);
   const language =
     node.id === "css" ? "css" : node.id === "js" ? "javascript" : "html";
   const path =

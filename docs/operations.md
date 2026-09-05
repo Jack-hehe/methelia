@@ -8,17 +8,29 @@
 
 只在本機 `.env.local` 填寫憑證；`.env.example` 必須保持空白範例。修改設定後要重新啟動 **Next.js 和 worker 兩者**。
 
-| 變數                  | 用途                                                     |
-| --------------------- | -------------------------------------------------------- |
-| `AI_BASE_URL`         | 支援 `/chat/completions` 的服務根網址，通常以 `/v1` 結尾 |
-| `AI_MODEL`            | 該服務實際可用的模型 ID                                  |
-| `AI_API_KEY`          | 模型服務憑證                                             |
-| `ELEVENLABS_API_KEY`  | ElevenLabs API key；只由伺服器使用                       |
-| `ELEVENLABS_VOICE_ID` | 老師的 Voice ID；不是聲音名稱                            |
-| `ELEVENLABS_MODEL`    | `eleven_multilingual_v2`（預設）或 `eleven_flash_v2_5`   |
-| `METHELIA_DATA_DIR`   | 選填，資料目錄；預設 `.data`                             |
+| 變數                  | 用途                                                         |
+| --------------------- | ------------------------------------------------------------ |
+| `AI_BASE_URL`         | 支援 `/chat/completions` 的服務根網址，通常以 `/v1` 結尾     |
+| `AI_MODEL`            | 該服務實際可用的模型 ID                                      |
+| `AI_API_KEY`          | 模型服務憑證                                                 |
+| `ELEVENLABS_API_KEY`  | ElevenLabs API key；只由伺服器使用                           |
+| `ELEVENLABS_VOICE_ID` | 老師的 Voice ID；不是聲音名稱                                |
+| `ELEVENLABS_MODEL`    | `eleven_v3`、`eleven_multilingual_v2` 或 `eleven_flash_v2_5` |
+| `METHELIA_DATA_DIR`   | 選填，資料目錄；預設 `.data`                                 |
 
 不需要 API key 也能試用：點選「Try a Lesson／先體驗一堂課」直接進入預先製作的課程。
+
+### 模型差異
+
+| 模型                     | 單次字元上限 | `language_code` | `previous_text`／`next_text` |
+| ------------------------ | ------------ | --------------- | ---------------------------- |
+| `eleven_v3`              | 5,000        | 支援            | **不支援**（送了回 400）     |
+| `eleven_multilingual_v2` | 10,000       | 不支援          | 支援                         |
+| `eleven_flash_v2_5`      | 40,000       | 支援            | 支援                         |
+
+以上為實測結果，寫在 [`src/server/speech.ts`](../src/server/speech.ts) 的 `models` 表裡。三者都支援 with-timestamps，且回傳的 alignment 欄位相同。
+
+`eleven_v3` 把中文標為 Mandarin Chinese（共 74 種語言），舊模型只標 Chinese（29–32 種）。搭配 `language_code` 可避免中英夾雜的旁白被誤判成英文發音。
 
 ## 生成與播放規則
 
@@ -76,7 +88,19 @@ npm.cmd run test:e2e
 
 核心測試涵蓋 protocol、graph、檔案衝突、進度／分支交易、SQLite 重開、模型修復、ElevenLabs alignment、舊音軌相容性、刪除交易與真實 worker 子行程。以本機替身驗證語音部分失敗、固定聲音重試，以及刪除或換版後不寫回背景生成結果。瀏覽器測試涵蓋首頁／探索頁、多課程、刪除確認、語音重建確認、地圖、分支、即時預覽、示範隔離、保存、深淺色與手機版。
 
-語音瀏覽器測試使用**測試專用靜音 WAV** 驗證播放、seek、重播、分頁音檔、播放結束停留、翻頁不自動播放，以及音檔載入失敗時仍保存正確頁碼，不驗證老師聲音品質。截圖與 trace 存在被 Git 忽略的 `test-results/`。
+完整瀏覽器驗證可使用獨立的正式版建置、暫存資料庫與本機模型替身，避免碰到開發中的課程或付費 API：
+
+```powershell
+$env:METHELIA_TEST_BUILD = '1'
+npm.cmd run build
+Remove-Item Env:METHELIA_TEST_BUILD
+npx.cmd playwright test --config playwright.general.config.ts
+npx.cmd next typegen
+```
+
+此測試服務固定從 `.next-validation` 啟動，請先重新建置，避免測到舊版本。`next typegen` 會在測試後將產生的型別入口還原到一般開發目錄。
+
+語音瀏覽器測試使用**測試專用靜音 WAV** 驗證播放、seek、重播、整章音檔與分頁時間點、頁末自動暫停、手動翻頁自動播放，以及音檔載入失敗時仍保存正確頁碼，不驗證老師聲音品質。截圖與 trace 存在被 Git 忽略的 `test-results/`。
 
 正式模式本機啟動：
 

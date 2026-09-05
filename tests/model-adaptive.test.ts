@@ -97,6 +97,64 @@ afterEach(() => {
 const response = (value: unknown) =>
   Response.json({ choices: [{ message: { content: JSON.stringify(value) } }] });
 
+it("reports separate page errors together so one repair can fix the whole chapter", async () => {
+  let calls = 0;
+  vi.stubGlobal("fetch", async (_url: unknown, options: RequestInit) => {
+    const { validationFeedback } = JSON.parse(
+      JSON.parse(String(options.body)).messages[1].content,
+    );
+    if (++calls === 1) {
+      const invalid = chapter(2);
+      invalid.environment = "web";
+      invalid.sections[0].intent = "practice";
+      invalid.sections[1].component = {
+        type: "code.editor",
+        path: "/plan.txt",
+        language: "text",
+        example: "Plan",
+      };
+      invalid.sections[1].template = "workspace";
+      invalid.sections[1].completion = {
+        type: "file.includes",
+        path: "/plan.txt",
+        value: "Plan",
+      };
+      invalid.workspaceSetup = { "/plan.txt": "Write a plan" };
+      return response(invalid);
+    }
+    expect(validationFeedback).toContain('Section "intro"');
+    expect(validationFeedback).toContain("Practice section needs completion");
+    expect(validationFeedback).toContain('Section "check-0"');
+    expect(validationFeedback).toContain(
+      "Code language is incompatible with environment",
+    );
+    const valid = chapter(2);
+    valid.environment = "web";
+    return response(valid);
+  });
+  await generateChapter(
+    { ...node("b"), environment: "web" },
+    "Learn paths",
+    emptyWorkspace(),
+    { learnerProfile: profile, language: "en" },
+  );
+  expect(calls).toBe(2);
+});
+
+it("retains the final validation cause after bounded repairs are exhausted", async () => {
+  const fetch = vi.fn(async () => response(chapter(1)));
+  vi.stubGlobal("fetch", fetch);
+  await expect(
+    generateChapter(node("b"), "Learn paths", emptyWorkspace(), {
+      learnerProfile: profile,
+      language: "en",
+    }),
+  ).rejects.toThrow(
+    /課程格式驗證失敗[\s\S]*at least two meaningful checkpoints/,
+  );
+  expect(fetch).toHaveBeenCalledTimes(3);
+});
+
 it("repairs profile graphs missing learning metadata and supplies the learner profile", async () => {
   let calls = 0;
   vi.stubGlobal("fetch", async (_url: unknown, options: RequestInit) => {
@@ -142,7 +200,7 @@ it("requires two checkpoints for profile courses and sends only bounded relevant
     { ...graph().nodes[1], ...metadata },
     "Learn paths",
     emptyWorkspace(),
-    { graph: graph(), learnerProfile: profile, attempts },
+    { graph: graph(), learnerProfile: profile, attempts, language: "en" },
   );
   expect(calls).toBe(2);
   expect(result.sections.filter((s) => s.completion)).toHaveLength(2);

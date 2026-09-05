@@ -11,6 +11,7 @@ import {
 } from "../../../server/model";
 import { nodeSchema } from "../../../core/protocol";
 import { learnerProfileSchema } from "../../../core/learner-profile";
+import { intakeFieldSchema } from "../../../core/intake-question";
 import { demoAccess, publicOrigin } from "../../../server/deployment";
 import { UsageLimitError } from "../../../server/usage";
 import { pageAudioArtifactKey } from "../../../server/page-audio";
@@ -108,6 +109,42 @@ async function handle(request: NextRequest) {
       path[0] === "courses" &&
       path[1] &&
       path[2] === "intake" &&
+      path[3] === "cancel" &&
+      path.length === 4 &&
+      request.method === "POST"
+    ) {
+      const body = z
+        .object({ baseRevision: z.number().int().nonnegative() })
+        .strict()
+        .parse(data);
+      result = service.deleteCourse(session, path[1], body.baseRevision);
+    } else if (
+      path[0] === "courses" &&
+      path[1] &&
+      path[2] === "intake" &&
+      path[3] === "question" &&
+      path.length === 4 &&
+      request.method === "POST"
+    ) {
+      const body = z
+        .object({
+          field: intakeFieldSchema,
+          baseRevision: z.number().int().nonnegative(),
+        })
+        .strict()
+        .parse(data);
+      result = {
+        question: await service.generateIntakeQuestion(
+          session,
+          path[1],
+          body.field,
+          body.baseRevision,
+        ),
+      };
+    } else if (
+      path[0] === "courses" &&
+      path[1] &&
+      path[2] === "intake" &&
       path.length === 3 &&
       ["PUT", "POST"].includes(request.method)
     ) {
@@ -188,6 +225,13 @@ async function handle(request: NextRequest) {
     ) {
       const body = z.object({ nodeId: short.optional() }).parse(data);
       result = service.advance(session, path[1], body.nodeId);
+    } else if (
+      path[0] === "courses" &&
+      path[2] === "jump" &&
+      request.method === "POST"
+    ) {
+      const body = z.object({ nodeId: short }).parse(data);
+      result = service.jumpTo(session, path[1], body.nodeId);
     } else if (
       path[0] === "courses" &&
       path[2] === "retry" &&
@@ -342,13 +386,21 @@ async function handle(request: NextRequest) {
         c.mode === "demo"
           ? {
               answer:
-                "這是體驗模式的示範回覆。HTML 決定內容的意義與結構，CSS 負責樣式，JavaScript 負責互動。如果還不熟悉，可以先補上一個 HTML 基礎節點；完成目前章節後，會先走這條補強路徑，再回到主線。",
+                c.language === "en"
+                  ? "This is a demo response. HTML defines content and structure, CSS controls appearance, and JavaScript adds interaction. You can add an HTML fundamentals unit for reinforcement before returning to the main path."
+                  : "這是體驗模式的示範回覆。HTML 決定內容的意義與結構，CSS 負責樣式，JavaScript 負責互動。如果還不熟悉，可以先補上一個 HTML 基礎節點；完成目前章節後，會先走這條補強路徑，再回到主線。",
               nodes: canBranch
                 ? [
                     {
                       id: "support-" + randomUUID(),
-                      title: "HTML 標籤與元素",
-                      objective: "理解開始標籤、內容與結束標籤的關係",
+                      title:
+                        c.language === "en"
+                          ? "HTML tags and elements"
+                          : "HTML 標籤與元素",
+                      objective:
+                        c.language === "en"
+                          ? "Understand opening tags, content and closing tags"
+                          : "理解開始標籤、內容與結束標籤的關係",
                       minutes: 4,
                       kind: "support" as const,
                       prerequisites: [],
@@ -356,13 +408,17 @@ async function handle(request: NextRequest) {
                   ]
                 : [],
             }
-          : await generateHelp(body.question, {
-              goal: c.goal,
-              node: c.graph?.nodes.find((n) => n.id === c.currentNodeId),
-              chapter: service.getChapter(session, c.id, c.currentNodeId)
-                .chapter,
-              sectionId: body.sectionId,
-            });
+          : await generateHelp(
+              body.question,
+              {
+                goal: c.goal,
+                node: c.graph?.nodes.find((n) => n.id === c.currentNodeId),
+                chapter: service.getChapter(session, c.id, c.currentNodeId)
+                  .chapter,
+                sectionId: body.sectionId,
+              },
+              c.language || "zh-TW",
+            );
       result = service.appendMessages(session, c.id, [
         {
           id: randomUUID(),
@@ -422,23 +478,36 @@ async function handle(request: NextRequest) {
             })
           : {
               title: topic.slice(0, 120),
-              reason: `體驗模式只示範從「${anchor.title}」延伸與返回的流程，教材固定為 HTML 編輯練習。若要製作「${topic.slice(0, 120)}」的專屬內容，請建立正式課程。`,
+              reason:
+                c.language === "en"
+                  ? `This demo shows extending from “${anchor.title}” and returning to the course, using a fixed HTML exercise. Create a live course for content about “${topic.slice(0, 120)}”.`
+                  : `體驗模式只示範從「${anchor.title}」延伸與返回的流程，教材固定為 HTML 編輯練習。若要製作「${topic.slice(0, 120)}」的專屬內容，請建立正式課程。`,
               nodes: [
                 {
                   id: "support-" + randomUUID(),
                   title: topic.slice(0, 100),
                   objective:
-                    "透過固定 HTML 編輯練習，體驗延伸單元與返回主線的流程",
+                    c.language === "en"
+                      ? "Practice extending the course and returning to the main path with a fixed HTML exercise"
+                      : "透過固定 HTML 編輯練習，體驗延伸單元與返回主線的流程",
                   minutes: 5,
                   kind: "support" as const,
                   prerequisites: [anchor.id],
                   environment: "web" as const,
                   depth: body.depth,
                   summary:
-                    "體驗教材使用固定 HTML 例子，尚未針對輸入主題生成內容。",
-                  keyConcepts: ["HTML 編輯", "延伸單元與主線的關係"],
+                    c.language === "en"
+                      ? "Demo material uses a fixed HTML example, not content generated for the requested topic."
+                      : "體驗教材使用固定 HTML 例子，尚未針對輸入主題生成內容。",
+                  keyConcepts:
+                    c.language === "en"
+                      ? ["HTML editing", "Extensions and the main course"]
+                      : ["HTML 編輯", "延伸單元與主線的關係"],
                   misconceptions: [],
-                  assessment: "完成固定 HTML 編輯練習後返回主線",
+                  assessment:
+                    c.language === "en"
+                      ? "Complete the HTML exercise and return to the main course"
+                      : "完成固定 HTML 編輯練習後返回主線",
                 },
               ],
             };

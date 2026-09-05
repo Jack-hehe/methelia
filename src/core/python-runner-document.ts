@@ -1,3 +1,4 @@
+import { copyFor, type Language } from "./language";
 export const PYODIDE_VERSION = "0.28.3";
 export const PYTHON_OUTPUT_LIMIT = 20000;
 export const PYTHON_EXECUTION_MS = 10000;
@@ -7,7 +8,11 @@ export const PYTHON_EXECUTION_MS = 10000;
  * Pyodide's worker and stream APIs: https://pyodide.org/en/0.28.3/usage/webworker.html
  * https://pyodide.org/en/0.28.3/usage/streams.html
  */
-export function pythonRunnerDocument(channel: string): string {
+export function pythonRunnerDocument(
+  channel: string,
+  language: Language = "zh-TW",
+): string {
+  const t = copyFor(language);
   const cdn = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
   const workerSource = String.raw`
     const CDN = ${JSON.stringify(cdn)};
@@ -128,7 +133,7 @@ export function pythonRunnerDocument(channel: string): string {
             worker = new Worker(url);
           }
           const current = worker;
-          timer = setTimeout(() => finish("error", "Python 載入逾時，請檢查網路後重試。"), 45000);
+          timer = setTimeout(() => finish("error", ${JSON.stringify(t("Python 載入逾時，請檢查網路後重試。", "Python loading timed out. Check your connection and retry."))}), 45000);
           current.onmessage = event => {
             if (worker !== current) return;
             const message = event.data;
@@ -137,17 +142,17 @@ export function pythonRunnerDocument(channel: string): string {
             } else if (message?.kind === "running" && runId && !running) {
               running = true;
               clearTimeout(timer);
-              timer = setTimeout(() => finish("error", "執行超過 10 秒，已停止。"), ${PYTHON_EXECUTION_MS});
+              timer = setTimeout(() => finish("error", ${JSON.stringify(t("執行超過 10 秒，已停止。", "Execution stopped after 10 seconds."))}), ${PYTHON_EXECUTION_MS});
               send("running");
             } else if (message?.kind === "output" && typeof message.text === "string") {
               const text = message.text.slice(0, Math.max(0, ${PYTHON_OUTPUT_LIMIT} - count));
               count += message.text.length;
               if (text) send("output", text);
-              if (count >= ${PYTHON_OUTPUT_LIMIT}) finish("error", "輸出已達 20,000 字元上限，已停止。");
+              if (count >= ${PYTHON_OUTPUT_LIMIT}) finish("error", ${JSON.stringify(t("輸出已達 20,000 字元上限，已停止。", "Output reached the 20,000 character limit. Execution stopped."))});
             } else if (message?.kind === "done") finish("done");
-            else if (message?.kind === "error") finish("error", String(message.text || "Python 執行失敗。").slice(0, 4000), message.reusable === true);
+            else if (message?.kind === "error") finish("error", String(message.text || ${JSON.stringify(t("Python 執行失敗。", "Python execution failed."))}).slice(0, 4000), message.reusable === true);
           };
-          current.onerror = () => finish("error", "Python 無法啟動，請確認瀏覽器支援 WebAssembly 並可連線至執行環境 CDN。");
+          current.onerror = () => finish("error", ${JSON.stringify(t("Python 無法啟動，請確認瀏覽器支援 WebAssembly 並可連線至執行環境 CDN。", "Python could not start. Check that WebAssembly and the runtime CDN are accessible."))});
           current.postMessage({ kind: "warmup" });
         } catch (error) { finish("error", String(error?.message || error).slice(0, 4000)); }
       };

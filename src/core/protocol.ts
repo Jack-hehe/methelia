@@ -383,117 +383,139 @@ export function validateChapter(input: unknown): Chapter {
   if (chapter.script.map((s) => s.text).join("\n").length > 12000)
     throw new Error("Chapter narration too long");
   const demonstrationFiles = { ...chapter.workspaceSetup };
+  const sectionErrors: string[] = [];
   for (const section of chapter.sections) {
-    if (section.guide) {
-      const { path, find, replacement } = section.guide;
-      const source = demonstrationFiles[path];
-      if (section.intent !== "demonstrate" || !source || !source.includes(find))
-        throw new Error(
-          "Invalid guide: expected a replayable demonstration edit",
-        );
-      demonstrationFiles[path] = source.replace(find, replacement);
-    }
-    const c = section.component;
-    if (!templateRegistry[section.template].includes(c.type))
-      throw new Error("Component is incompatible with template");
-    if (c.type === "quiz.choice" && c.answer >= c.options.length)
-      throw new Error("Invalid quiz answer");
-    if (section.completion?.type === "quiz" && c.type !== "quiz.choice")
-      throw new Error("Quiz completion requires quiz component");
-    if (["practice", "check"].includes(section.intent) && !section.completion)
-      throw new Error("Practice section needs completion");
-    if (c.type === "terminal")
-      for (const command of c.commands) validatePracticeCommand(command);
-    if (chapter.schemaVersion === 2) {
-      if (
-        environment === "none" &&
-        (["terminal", "code.editor", "file.tree", "browser.preview"].includes(
-          c.type,
-        ) ||
-          section.guide ||
-          (section.completion && section.completion.type !== "quiz"))
-      )
-        throw new Error(
-          "Component/checkpoint requires a practical environment",
-        );
-      if (
-        (c.type === "browser.preview" ||
-          c.type === "dom.explorer" ||
-          (c.type === "concept.canvas" && c.variant === "web.languages")) &&
-        environment !== "web"
-      )
-        throw new Error("Web component requires the web environment");
-      if (c.type === "terminal" && environment !== "terminal")
-        throw new Error("Terminal component requires the terminal environment");
-      if (
-        c.type === "terminal" &&
-        c.commands.some((cmd) => cmd.startsWith("python "))
-      )
-        throw new Error(
-          "Terminal environment is a file sandbox, not Python or a web server",
-        );
-      if (c.type === "code.editor") {
+    try {
+      if (section.guide) {
+        const { path, find, replacement } = section.guide;
+        const source = demonstrationFiles[path];
         if (
-          normalizePath("/", c.path) !== c.path ||
-          !(c.path in chapter.workspaceSetup)
+          section.intent !== "demonstrate" ||
+          !source ||
+          !source.includes(find)
         )
           throw new Error(
-            "Code editor requires a prepared, canonical file path",
+            "Invalid guide: expected a replayable demonstration edit",
+          );
+        demonstrationFiles[path] = source.replace(find, replacement);
+      }
+      const c = section.component;
+      if (!templateRegistry[section.template].includes(c.type))
+        throw new Error("Component is incompatible with template");
+      if (c.type === "quiz.choice" && c.answer >= c.options.length)
+        throw new Error("Invalid quiz answer");
+      if (section.completion?.type === "quiz" && c.type !== "quiz.choice")
+        throw new Error(
+          "Quiz completion requires quiz component (quiz.choice). For ungraded exploration use intent explain and omit completion; keep assessed questions in separate quiz.choice sections.",
+        );
+      if (["practice", "check"].includes(section.intent) && !section.completion)
+        throw new Error(
+          "Practice section needs completion. For ungraded exploration use intent explain and omit completion. For an assessed task supply a compatible checkpoint; completion type quiz requires a quiz.choice component.",
+        );
+      if (c.type === "terminal")
+        for (const command of c.commands) validatePracticeCommand(command);
+      if (chapter.schemaVersion === 2) {
+        if (
+          environment === "none" &&
+          (["terminal", "code.editor", "file.tree", "browser.preview"].includes(
+            c.type,
+          ) ||
+            section.guide ||
+            (section.completion && section.completion.type !== "quiz"))
+        )
+          throw new Error(
+            "Component/checkpoint requires a practical environment",
           );
         if (
-          (c.language === "python") !== (environment === "python") ||
-          (environment === "web" &&
-            !["html", "css", "javascript"].includes(c.language))
+          (c.type === "browser.preview" ||
+            c.type === "dom.explorer" ||
+            (c.type === "concept.canvas" && c.variant === "web.languages")) &&
+          environment !== "web"
         )
-          throw new Error("Code language is incompatible with environment");
+          throw new Error("Web component requires the web environment");
+        if (c.type === "terminal" && environment !== "terminal")
+          throw new Error(
+            "Terminal component requires the terminal environment",
+          );
+        if (
+          c.type === "terminal" &&
+          c.commands.some((cmd) => cmd.startsWith("python "))
+        )
+          throw new Error(
+            "Terminal environment is a file sandbox, not Python or a web server",
+          );
+        if (c.type === "code.editor") {
+          if (
+            normalizePath("/", c.path) !== c.path ||
+            !(c.path in chapter.workspaceSetup)
+          )
+            throw new Error(
+              "Code editor requires a prepared, canonical file path",
+            );
+          if (
+            (c.language === "python") !== (environment === "python") ||
+            (environment === "web" &&
+              !["html", "css", "javascript"].includes(c.language))
+          )
+            throw new Error(
+              `Code language is incompatible with environment: ${environment} does not support ${c.language}. Use ${environment === "python" ? "python" : "html, css or javascript"} for this editor, or present non-code planning as lesson.article plus a separate quiz.choice checkpoint.`,
+            );
+        }
+        const condition = section.completion;
+        if (
+          condition &&
+          "path" in condition &&
+          normalizePath("/", condition.path) !== condition.path
+        )
+          throw new Error("Checkpoint path must be canonical");
+        if (
+          condition?.type === "file.includes" &&
+          (!(condition.path in chapter.workspaceSetup) ||
+            condition.value.length > 2000)
+        )
+          throw new Error(
+            "File checkpoint requires a prepared editable file and a short target",
+          );
+        if (
+          condition &&
+          ["directory.exists", "cwd.equals", "file.exists"].includes(
+            condition.type,
+          ) &&
+          environment !== "terminal"
+        )
+          throw new Error(
+            "Filesystem checkpoint requires terminal environment",
+          );
+        if (condition?.type === "preview.running")
+          throw new Error(
+            "v2 needs a meaningful edit or quiz checkpoint, not merely viewing a preview",
+          );
+        if (
+          c.type === "quiz.choice" &&
+          (c.question.length > 500 ||
+            c.explanation.length > 900 ||
+            c.options.some((o) => o.length > 260))
+        )
+          throw new Error("Quiz exceeds presentation limits");
+        if (
+          c.type === "concept.canvas" &&
+          c.cards.some(
+            (card) => card.title.length > 100 || card.body.length > 800,
+          )
+        )
+          throw new Error("Concept cards exceed presentation limits");
+        if (section.guide?.previewClick && environment !== "web")
+          throw new Error(
+            "Preview click is only supported by the web environment",
+          );
       }
-      const condition = section.completion;
-      if (
-        condition &&
-        "path" in condition &&
-        normalizePath("/", condition.path) !== condition.path
-      )
-        throw new Error("Checkpoint path must be canonical");
-      if (
-        condition?.type === "file.includes" &&
-        (!(condition.path in chapter.workspaceSetup) ||
-          condition.value.length > 2000)
-      )
-        throw new Error(
-          "File checkpoint requires a prepared editable file and a short target",
-        );
-      if (
-        condition &&
-        ["directory.exists", "cwd.equals", "file.exists"].includes(
-          condition.type,
-        ) &&
-        environment !== "terminal"
-      )
-        throw new Error("Filesystem checkpoint requires terminal environment");
-      if (condition?.type === "preview.running")
-        throw new Error(
-          "v2 needs a meaningful edit or quiz checkpoint, not merely viewing a preview",
-        );
-      if (
-        c.type === "quiz.choice" &&
-        (c.question.length > 500 ||
-          c.explanation.length > 900 ||
-          c.options.some((o) => o.length > 260))
-      )
-        throw new Error("Quiz exceeds presentation limits");
-      if (
-        c.type === "concept.canvas" &&
-        c.cards.some(
-          (card) => card.title.length > 100 || card.body.length > 800,
-        )
-      )
-        throw new Error("Concept cards exceed presentation limits");
-      if (section.guide?.previewClick && environment !== "web")
-        throw new Error(
-          "Preview click is only supported by the web environment",
-        );
+    } catch (error) {
+      sectionErrors.push(
+        `Section "${section.id}": ${error instanceof Error ? error.message : "Invalid section"}`,
+      );
     }
   }
+  if (sectionErrors.length) throw new Error(sectionErrors.join("\n"));
   if (
     Object.keys(chapter.workspaceSetup).length > 30 ||
     Object.keys(chapter.workspaceSetup).some(
