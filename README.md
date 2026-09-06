@@ -1,6 +1,6 @@
 # Methelia
 
-**English** | [繁體中文](README.zh-TW.md) · **[Open Methelia](https://methelia.com)**
+**English** | [繁體中文](README.zh-TW.md) · [Website](https://methelia.com)
 
 **Learn anything you want.** Methelia is an AI learning platform built around a familiar problem: receiving plenty of information does not mean understanding it. AI can produce pages of answers, but learners still need a clear path through the ideas, examples that make them concrete, and opportunities to put their understanding to work.
 
@@ -8,7 +8,7 @@ Describe what you want to learn. Methelia asks topic-specific questions about yo
 
 Our vision is a learning environment that works across subjects, whether you want to understand a mathematical idea, explore a scientific phenomenon or learn the full process of building something. The Learning Map tracks your progress, supports deeper branches and helps adapt later chapters to your learning. The aim is to help you understand the essentials, connect them and apply them. The current implementation uses the supported components and practice environments listed below.
 
-Open to everyone, with no account and no shared password. Courses and saved work live on the server, and a browser cookie identifies each learner.
+Methelia is an open-source project under active development. The current application uses anonymous browser sessions: courses and saved work live on the server, and a browser cookie identifies each learner. You can run the project locally or deploy your own instance. The hosted instance may be paused; local setup does not depend on its availability.
 
 ## Core features
 
@@ -19,22 +19,16 @@ Open to everyone, with no account and no shared password. Courses and saved work
 - A Python runtime and a web editor with sandboxed preview, both in the browser; finished work downloads as a ZIP.
 - Checkpoints assess understanding through questions or verify saved work and code in supported practice environments.
 
-## Demo
-
-- Live site: <https://methelia.com>
-- Judging video: <https://youtu.be/3ka7kQrFlDg>
-
 ## Technology
 
 | Category         | Technology or service                                       | Purpose                                                  |
 | ---------------- | ----------------------------------------------------------- | -------------------------------------------------------- |
-| AI model         | Configurable OpenAI-compatible model API; hosted through OpenRouter | Generates course graphs, chapter content and checkpoints |
-| Sponsor          | **ElevenLabs** (`eleven_v3`, with-timestamps)               | Narration, plus caption and page-boundary alignment      |
+| AI model         | Configurable OpenAI-compatible model API, including OpenRouter | Generates course graphs, chapter content and checkpoints |
+| Speech           | **ElevenLabs** (`eleven_v3`, with-timestamps)               | Narration, plus caption and page-boundary alignment      |
 | Frontend         | Next.js 16 App Router, React 19, TypeScript 7, Lucide icons | Player, Learning Map and laboratory interfaces           |
 | Backend          | Node.js 22, Zod 4, built-in `node:sqlite` in WAL mode       | API, content validation, job queue and persistence       |
 | Learner runtimes | Pyodide 0.28.3, sandboxed iframe preview, fflate            | In-browser Python, web workspace and ZIP export          |
 | Hosting          | Render web service with a persistent disk                   | Website and background worker on one instance            |
-| Development      | Claude Code                                                 | Building and reviewing the codebase                      |
 | Verification     | Vitest, Playwright                                          | Unit tests and browser flow tests                        |
 
 [render.yaml](render.yaml) configures a single Render service using `main`. Automatic deployment is disabled in this configuration: pushing a commit alone does not publish it; trigger a manual deployment in Render. See [operations](docs/operations.md) for setup, backups and usage limits. The model is selected through `AI_MODEL`, rather than hard-coded to a particular provider model.
@@ -55,7 +49,7 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). On PowerShell, use `Copy-It
 
 **Featured course content and the starter lesson work without provider API keys.** For personalized generation, set `AI_BASE_URL`, `AI_MODEL` and `AI_API_KEY` in `.env.local`. Use an OpenAI-compatible endpoint such as OpenRouter's `https://openrouter.ai/api/v1` and a model supporting the structured output expected by the application.
 
-For new narration, set `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` and `ELEVENLABS_MODEL`. The example environment defaults to `eleven_flash_v2_5`; deployed starter and featured assets use `eleven_v3`. A bundled audio cache hit requires the matching voice/model/language profile, but no synthesis key. Changing that profile requires preparing new audio. The hosted website already has the matching configuration.
+For new narration, set `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` and `ELEVENLABS_MODEL`. The example environment defaults to `eleven_flash_v2_5`; deployed starter and featured assets use `eleven_v3`. A bundled audio cache hit requires the matching voice/model/language profile, but no synthesis key. Changing that profile requires preparing new audio. Configure these values for your own instance.
 
 ```bash
 # Production application, locally
@@ -167,8 +161,18 @@ Dated verification records, including the narration preparation commands, live i
 - Teacher-authored courses, classroom roles and assignments do not exist yet.
 - The terminal runs a bounded command set rather than a host shell, Python runs in the browser, and the laboratories expose fixed parameters rather than solving arbitrary equations.
 - The checked-in deployment uses one `1c-2g` Render instance and a 1 GB persistent disk for SQLite, including generated audio. This is not an automatically scaling architecture; attached disks prevent scaling a service to multiple instances. See [Render's disk limitations](https://render.com/docs/disks#disk-limitations-and-considerations).
-- The deployment template explicitly sets `METHELIA_AI_DAILY_REQUESTS` and `METHELIA_SPEECH_DAILY_CHARACTERS` to `unlimited`, removing application daily caps while retaining UTC-day usage counts. Providers still charge for usage and enforce their own quotas. Administrators can set non-negative integer budgets instead; `0` blocks new calls. If omitted on Render, conservative defaults of 100 AI requests and 30,000 speech characters apply. These settings are not Render visitor limits. Intake, generation and repair requests consume the AI budget; failed or uncertain requests remain counted. Prepared courses can still be used after a generation budget is exhausted.
+- AI and narration use paid external services. The deployment template currently sets application daily budgets to `unlimited`; configure budgets for your own deployment. Provider quotas still apply. See [operations](docs/operations.md) for limits, usage accounting and backups.
 - One worker runs separate foreground-content, prefetch and speech lanes, processing one job per lane at a time. Simultaneous generation requests queue up. Provider quotas, CPU, memory, storage and bandwidth still constrain capacity; paying for hosting does not remove them. No concurrent-user capacity has been established by load testing.
+
+## Contributing
+
+Contributions to the learning experience, course content, interactive components and reliability are welcome. For a substantial change, open an issue first to describe the problem and proposed approach.
+
+- Keep lessons focused on understanding: explain an idea, make it concrete, then give the learner a useful way to apply it.
+- Choose text, visuals or interaction to suit the subject. Keep interfaces readable and give learning content room to breathe.
+- Make components reusable across courses, with explicit parameters and matching validation.
+- Keep English and Traditional Chinese documentation and learner-facing copy aligned.
+- Include relevant verification with your changes. Never commit API keys or learner data.
 
 ## Sources and attribution
 

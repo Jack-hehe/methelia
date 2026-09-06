@@ -1,6 +1,6 @@
 # Methelia
 
-[English](README.md) | **繁體中文** · **[開啟 Methelia](https://methelia.com)**
+[English](README.md) | **繁體中文** · [網站](https://methelia.com)
 
 **Learn anything you want — 學你想學的任何事。** Methelia 是一個 AI 學習平台，想解決的是：接收到很多資訊，卻沒有真正理解。AI 可以給出大量回答，但學習者仍需要清楚的學習順序、讓概念變得具體的例子，以及運用所學的機會。
 
@@ -8,7 +8,7 @@
 
 我們希望建立一個跨領域的學習環境：無論是理解數學架構、探索科學現象，還是學會從頭完成一個作品，都能找到有脈絡的學習方式。Learning Map 串起學習進度、延伸探索與後續章節的難度調整，讓使用者理解重點、建立概念之間的連結，並能運用所學。目前的實作範圍以以下支援的教學元件與練習環境為基礎。
 
-網站已公開，免帳號、免共用密碼。課程與作品保存在伺服器，由瀏覽器 cookie 識別各個學習者。
+Methelia 是持續開發中的開源專案。目前使用匿名瀏覽器 session：課程與作品保存在伺服器，由瀏覽器 cookie 識別各個學習者。你可以在本機執行，也可以自行部署。託管網站可能暫停，本機執行不依賴網站是否開放。
 
 ## 核心功能
 
@@ -19,22 +19,16 @@
 - 瀏覽器內的 Python 執行環境與網頁編輯／沙箱預覽工作區，完成的作品可下載成 ZIP。
 - 透過題目檢查理解程度，或在支援的實作環境中驗證實際儲存的作品與程式碼。
 
-## 作品展示
-
-- 作品展示網址：<https://methelia.com>
-- 評選影片：<https://youtu.be/3ka7kQrFlDg>
-
 ## 使用技術
 
 | 類別         | 技術／服務                                                 | 用途                                     |
 | ------------ | ---------------------------------------------------------- | ---------------------------------------- |
-| AI 模型      | 可設定的 OpenAI 相容模型 API；正式環境透過 OpenRouter | 生成課程圖、章節內容與檢查條件           |
-| Sponsor 技術 | **ElevenLabs**（`eleven_v3`，with-timestamps）             | 合成旁白，並產生字幕與分頁時間對齊       |
+| AI 模型      | 可設定的 OpenAI 相容模型 API，例如 OpenRouter | 生成課程圖、章節內容與檢查條件           |
+| 語音合成     | **ElevenLabs**（`eleven_v3`，with-timestamps）             | 合成旁白，並產生字幕與分頁時間對齊       |
 | 前端         | Next.js 16 App Router、React 19、TypeScript 7、Lucide 圖示 | 播放器、Learning Map 與實驗元件介面      |
 | 後端         | Node.js 22、Zod 4、內建 `node:sqlite`（WAL 模式）          | API、內容驗證、生成佇列與資料保存        |
 | 學習執行環境 | Pyodide 0.28.3、沙箱 iframe 預覽、fflate                   | 瀏覽器內的 Python、網頁工作區與 ZIP 匯出 |
 | 部署         | Render Web Service 與持久化磁碟                            | 網站與背景 worker 共用單一執行個體       |
-| 開發工具     | Claude Code                                                | 協作開發與程式碼審查                     |
 | 驗證         | Vitest、Playwright                                         | 單元測試與瀏覽器流程測試                 |
 
 [render.yaml](render.yaml) 設定使用 `main` 的單一 Render 服務。目前設定關閉自動部署，push 本身不會更新正式網站，需在 Render 手動啟動部署。安裝、備份與用量設定見[操作說明](docs/operations.md)。模型透過 `AI_MODEL` 選擇，並未在程式中綁定特定供應商模型。
@@ -55,7 +49,7 @@ npm run dev
 
 **精選課程內容與入門課程不需要供應商 API key。** 要生成個人化課程，請在 `.env.local` 設定 `AI_BASE_URL`、`AI_MODEL` 與 `AI_API_KEY`。使用 OpenRouter 的 `https://openrouter.ai/api/v1` 等 OpenAI 相容端點，以及支援應用程式所需結構化輸出的模型。
 
-要合成新語音，請設定 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID` 與 `ELEVENLABS_MODEL`。範例環境預設為 `eleven_flash_v2_5`，正式入門與精選音檔使用 `eleven_v3`。預製語音快取需要相符的聲音、模型與語言設定，但命中快取不需要合成用金鑰。更換設定後需重新準備音檔；正式網站已設定好相符的配置。
+要合成新語音，請設定 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID` 與 `ELEVENLABS_MODEL`。範例環境預設為 `eleven_flash_v2_5`，正式入門與精選音檔使用 `eleven_v3`。預製語音快取需要相符的聲音、模型與語言設定，但命中快取不需要合成用金鑰。更換設定後需重新準備音檔，請為自己的執行環境配置相符的設定。
 
 ```bash
 # 建置並啟動本機 production 版本
@@ -167,8 +161,18 @@ npx playwright test --config playwright.general.config.ts
 - 教師自己編寫課程、班級角色與作業指派都還不存在。
 - Terminal 只支援有限指令而不是主機 shell，Python 在瀏覽器中執行，實驗元件也只開放固定參數，不是任意方程求解器。
 - 儲存庫中的部署設定使用單一 `1c-2g` Render 執行個體與 1 GB 持久化磁碟，SQLite 也存放新生成的音檔。這個架構不會自動擴充；掛載持久化磁碟的服務無法擴充成多個執行個體，見 [Render 磁碟限制](https://render.com/docs/disks#disk-limitations-and-considerations)。
-- 部署範本明確將 `METHELIA_AI_DAILY_REQUESTS` 與 `METHELIA_SPEECH_DAILY_CHARACTERS` 設為 `unlimited`，取消應用程式的每日上限，但保留 UTC 日用量統計。供應商仍會計費並限制其服務額度。管理者也能改設非負整數預算，`0` 表示禁止新呼叫；若在 Render 未設定，則回到每日 100 次 AI 請求與 30,000 個語音字元的保守預設。這不是 Render 的訪客限制。前置問題、內容生成與修正都消耗 AI 請求，失敗或結果不明的請求仍計入；生成額度用完後，仍可使用已準備的課程。
+- AI 與語音生成使用付費外部服務。部署範本目前將應用程式的每日預算設為 `unlimited`，自行部署時請依需求設定預算；供應商額度仍然適用。用量統計、限制與備份方式見[操作說明](docs/operations.md)。
 - 一個 worker 分別處理目前內容、預取與語音三條佇列，每條同時執行一個工作，多人生成時會排隊。供應商額度、CPU、記憶體、儲存空間與流量仍會限制容量，支付主機費不會移除這些限制。目前尚未透過壓力測試確認可承載的同時使用人數。
+
+## 參與開發
+
+歡迎一起改進學習體驗、課程內容、互動元件與系統穩定性。較大的修改請先開 issue，說明想解決的問題與做法。
+
+- 以理解為核心：解釋概念、讓它變得具體，再提供有意義的應用機會。
+- 依主題選擇文字、視覺呈現或互動，保持字體清晰，讓教學內容有足夠的畫面空間。
+- 元件應能跨課程重用，並提供明確的參數與對應驗證。
+- 同步維護英文與繁體中文文件及使用者介面文字。
+- 修改時附上相關驗證，不要提交 API key 或學習者資料。
 
 ## 來源與致謝
 
