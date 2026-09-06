@@ -497,6 +497,7 @@ test("terminal page has one preview and one terminal, saves edits on page naviga
   ).toHaveCount(1);
   await expect(page.locator('iframe[title="實作網站預覽"]')).toHaveCount(1);
   const input = page.getByRole("textbox", { name: "終端機指令" });
+  await page.getByRole("button", { name: "自己試試", exact: true }).click();
   await input.fill("edit index.html");
   await input.press("ArrowLeft");
   await expect(page.getByLabel("頁碼")).toHaveText("2 / 3");

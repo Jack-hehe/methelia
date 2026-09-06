@@ -1,4 +1,5 @@
 "use client";
+import { GenerationProgress } from "./generation-progress";
 import { useCourseLanguage } from "./course-language";
 import { localizedError } from "../core/language";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -798,6 +799,7 @@ export function LearningMap({
       {intro ? (
         <div className="map-intro-bar">
           <div className="map-intro-brief">
+            <GenerationProgress pkg={firstChapter} compact />
             {graph.outcome && (
               <p>
                 <strong>
@@ -823,10 +825,7 @@ export function LearningMap({
               disabled={busy || submitting || introPending}
               onClick={intro.onStart}
             >
-              {introPending && <LoaderCircle className="spin" size={15} />}
-              {introPending
-                ? t("正在準備第 1 章…", "Preparing chapter 1…")
-                : t("開始學習", "Start learning")}
+              {t("開始學習", "Start learning")}
               {!introPending && <ArrowRight size={16} />}
             </button>
           </div>

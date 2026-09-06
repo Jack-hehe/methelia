@@ -10,6 +10,12 @@
   font-size: 20px;
   line-height: 1.55;
   color: var(--ink, #252337);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.laboratory :is(input, textarea, [contenteditable]:not([contenteditable="false"])) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 :root[data-theme="dark"] .laboratory {
   --lab-teal: #35cbbc;

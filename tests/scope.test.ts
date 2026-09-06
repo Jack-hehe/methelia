@@ -145,7 +145,8 @@ it("waits for the first chapter before offering to start", () => {
     );
   try {
     service.mutate(session, id, (c) => service.prepare(c, "start"));
-    expect(render()).toContain("正在準備第 1 章…");
+    expect(render()).toContain('role="progressbar"');
+    expect(render()).not.toContain("正在準備第 1 章…");
     service.mutate(session, id, (c) => {
       const pkg = store.getPackage(c.chapterIds.start)!;
       pkg.status = "ready";

@@ -34,6 +34,26 @@
 .shell :global(.canvas-content) {
   padding: 8px 28px 24px;
 }
+.shell :global(.canvas-content:has(> .workspace-page)) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.shell :global(.canvas-content > .workspace-page) {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.shell :global(.workspace-page > .practice-studio) {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+.shell :global(.workspace-page .studio-toolbar) {
+  flex-shrink: 0;
+}
 .shell :global(.section-body) {
   margin-bottom: 12px;
 }

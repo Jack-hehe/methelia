@@ -9,16 +9,19 @@ export function useTheme() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    let initial = document.documentElement.dataset.theme === "dark";
     try {
-      setDark(localStorage.getItem(KEY) === "dark");
+      const saved = localStorage.getItem(KEY);
+      if (saved === "dark" || saved === "light") initial = saved === "dark";
     } catch {}
+    setDark(initial);
     setLoaded(true);
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-    // Never persist the default before the stored choice has been read back.
+    // Do not overwrite the pre-paint theme while restoring state on a new route.
     if (!loaded) return;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
     try {
       localStorage.setItem(KEY, dark ? "dark" : "light");
     } catch {}

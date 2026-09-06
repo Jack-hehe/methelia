@@ -23,6 +23,7 @@ import { api } from "./api";
 import { LessonSection } from "./lesson-section";
 import { WorkspacePanel } from "./workspace-panel";
 import { LearningMap } from "./learning-map";
+import { GenerationProgress } from "./generation-progress";
 import { HelpDrawer } from "./help-drawer";
 import { AudioControls } from "./audio-controls";
 import type { CheckFeedback } from "../core/check-feedback";
@@ -610,15 +611,14 @@ function CoursePlayerContent({
       </header>
       {course.status !== "ready" ? (
         <main className="preparation">
-          {course.status !== "failed" && (
-            <LoaderCircle className="spin" size={32} />
-          )}
-          <h1>
+          
+          <h1 className={course.status === "failed" ? undefined : "sr-only"}>
             {course.status === "failed"
               ? t("課程生成失敗", "Course generation failed")
               : t("正在規劃課程", "Planning your course")}
           </h1>
-          <p>
+          {course.status !== "failed" && <GenerationProgress planning />}
+          <p className={course.status === "failed" ? undefined : "sr-only"}>
             {(course.error ? localizedError(course.error, language) : "") ||
               t(
                 "先建立學習路徑，再準備章節內容。",
@@ -710,15 +710,14 @@ function CoursePlayerContent({
             </div>
             {!canEnter ? (
               <div className="chapter-gate">
-                {pkg?.status !== "failed" && (
-                  <LoaderCircle className="spin" size={28} />
-                )}
-                <h2>
+                
+                <h2 className={pkg?.status === "failed" ? undefined : "sr-only"}>
                   {pkg?.status === "failed"
                     ? t("章節生成失敗", "Chapter generation failed")
                     : t("正在準備章節", "Preparing chapter")}
                 </h2>
-                <p>
+                {pkg?.status !== "failed" && <GenerationProgress key={pkg?.id} pkg={pkg} />}
+                <p className={pkg?.status === "failed" ? undefined : "sr-only"}>
                   {(pkg?.error ? localizedError(pkg.error, language) : "") ||
                     t("正在準備章節內容。", "Preparing chapter content.")}
                 </p>
@@ -935,11 +934,9 @@ function CoursePlayerContent({
                   trailingControls={canvasTools}
                   statusControl={
                     !canEnter ? (
-                      <span className="audio-preparation-status">
-                        {pkg.status === "failed"
-                          ? t("章節未就緒", "Chapter not ready")
-                          : t("章節準備中", "Preparing chapter")}
-                      </span>
+                      pkg.status === "failed" ? <span className="audio-preparation-status">{t("章節未就緒", "Chapter not ready")}</span> : null
+                    ) : ["pending", "generating"].includes(pkg.speech) ? (
+                      <GenerationProgress pkg={pkg} compact />
                     ) : !chapterAudio &&
                       !review &&
                       !["pending", "generating"].includes(pkg.speech) ? (
@@ -998,9 +995,7 @@ function CoursePlayerContent({
                           <Volume2 size={16} />
                           {pkg.speech === "ready"
                             ? t("啟用語音解說", "Enable narration")
-                            : ["failed", "not_requested"].includes(pkg.speech)
-                              ? t("準備章節語音", "Prepare chapter narration")
-                              : t("語音準備中…", "Preparing narration…")}
+                            : t("準備章節語音", "Prepare chapter narration")}
                         </button>
                       )
                     )
