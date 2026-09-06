@@ -19,7 +19,7 @@ Open to everyone, with no account and no shared password. Courses and saved work
 ## Demo
 
 - Live site: <https://methelia.com>
-- Judging video: _to be added_
+- Judging video: <https://youtu.be/3ka7kQrFlDg>
 
 ## Technology
 
