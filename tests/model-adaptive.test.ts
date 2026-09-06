@@ -294,3 +294,20 @@ it("repairs extension duplicates and returns explicit bounded learning metadata"
   expect(result.nodes[0].title).toBe("Nested relative paths");
   expect(result.nodes[0].environment).toBe("none");
 });
+
+it("accepts a valid chapter with redundant root completion without another model call", async () => {
+  const fetch = vi.fn(async () => response({ ...chapter(2), completion: { type: "quiz" } }));
+  vi.stubGlobal("fetch", fetch);
+  const result = await generateChapter(node("b"), "Learn paths", emptyWorkspace(), { learnerProfile: profile, language: "en" });
+  expect(result.sections.filter(s => s.completion)).toHaveLength(2);
+  expect(result).not.toHaveProperty("completion");
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+it("preserves Japanese examples through the full chapter generation path", async () => {
+  const value = chapter(2);
+  value.sections[0].body = 'Compare "お願いします" with "頼む".';
+  const fetch = vi.fn(async () => response(value));
+  vi.stubGlobal("fetch", fetch);
+  await expect(generateChapter(node("b"), "Learn Japanese", emptyWorkspace(), { learnerProfile: profile, language: "en" })).resolves.toMatchObject({sections: value.sections});
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
