@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "Methelia",
-  description: "互動式程式設計課程。",
+  description: "學你想學的任何事。Methelia 將學習目標整理成個人化課程，結合圖解、動畫、互動與實作，幫助你理解並運用所學。",
 };
 export default function RootLayout({
   children,

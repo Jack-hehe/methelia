@@ -2,19 +2,22 @@
 
 **English** | [繁體中文](README.zh-TW.md) · **[Open Methelia](https://methelia.com)**
 
-Watching a tutorial is not the same as being able to build the thing. Methelia turns a learning goal into a guided course where every chapter pairs a short explanation with a model you can manipulate, something you actually build, and a checkpoint that tests whether the idea landed. Start from a ready-made project, or describe what you want to learn and get a course built for it.
+**Learn anything you want.** Methelia is an AI learning platform built around a familiar problem: receiving plenty of information does not mean understanding it. AI can produce pages of answers, but learners still need a clear path through the ideas, examples that make them concrete, and opportunities to put their understanding to work.
 
-It is written for students teaching themselves programming and science, and for teachers who want a ready-made project to run a class from. The goal is to turn "I watched the whole thing and still can't build it" into "I built it, and I can explain why it works."
+Describe what you want to learn. Methelia asks topic-specific questions about your background and goals, then organizes a course around a Learning Map. Lessons combine focused teacher narration with text, diagrams, animations, interactive models and hands-on practice where each helps explain the subject. Some ideas need a clear visual explanation; others become understandable through an experiment, a question or a complete project. Every activity should serve the learning goal.
+
+Our vision is a learning environment that works across subjects, whether you want to understand a mathematical idea, explore a scientific phenomenon or learn the full process of building something. The Learning Map tracks your progress, supports deeper branches and helps adapt later chapters to your learning. The aim is to help you understand the essentials, connect them and apply them. The current implementation uses the supported components and practice environments listed below.
 
 Open to everyone, with no account and no shared password. Courses and saved work live on the server, and a browser cookie identifies each learner.
 
 ## Core features
 
+- Topic-specific onboarding connects your background and learning goal to a personalized course and Learning Map, with later chapters adjusted from checkpoint results and optional branches for deeper exploration.
+- Focused explanations, diagrams, animations, interactive models and practice share one learning interface; the format follows the concept being taught.
 - 20 featured project courses, five chapters each, in English and Traditional Chinese, with all 200 chapter narrations prepared in advance.
-- Describe what you want to learn and get a personalized course and Learning Map, with later chapters adjusted from how you did on earlier checkpoints.
 - 17 reusable interactive laboratories across mathematics, physics, chemistry, biology, economics and logic.
 - A Python runtime and a web editor with sandboxed preview, both in the browser; finished work downloads as a ZIP.
-- Checkpoints verify the work and code you actually saved, not just multiple-choice answers.
+- Checkpoints assess understanding through questions or verify saved work and code in supported practice environments.
 
 ## Demo
 
@@ -25,7 +28,7 @@ Open to everyone, with no account and no shared password. Courses and saved work
 
 | Category         | Technology or service                                       | Purpose                                                  |
 | ---------------- | ----------------------------------------------------------- | -------------------------------------------------------- |
-| AI model         | ChatGPT (`openai/gpt-5.6-luna`) through OpenRouter          | Generates course graphs, chapter content and checkpoints |
+| AI model         | Configurable OpenAI-compatible model API; hosted through OpenRouter | Generates course graphs, chapter content and checkpoints |
 | Sponsor          | **ElevenLabs** (`eleven_v3`, with-timestamps)               | Narration, plus caption and page-boundary alignment      |
 | Frontend         | Next.js 16 App Router, React 19, TypeScript 7, Lucide icons | Player, Learning Map and laboratory interfaces           |
 | Backend          | Node.js 22, Zod 4, built-in `node:sqlite` in WAL mode       | API, content validation, job queue and persistence       |
@@ -34,7 +37,7 @@ Open to everyone, with no account and no shared password. Courses and saved work
 | Development      | Claude Code                                                 | Building and reviewing the codebase                      |
 | Verification     | Vitest, Playwright                                          | Unit tests and browser flow tests                        |
 
-[render.yaml](render.yaml) deploys `main` to a single Render service; see [operations](docs/operations.md) for setup, backups and usage limits.
+[render.yaml](render.yaml) configures a single Render service using `main`. Automatic deployment is disabled in this configuration: pushing a commit alone does not publish it; trigger a manual deployment in Render. See [operations](docs/operations.md) for setup, backups and usage limits. The model is selected through `AI_MODEL`, rather than hard-coded to a particular provider model.
 
 ## Run locally
 
@@ -157,13 +160,15 @@ Dated verification records, including the narration preparation commands, live i
 
 ## Limitations and future work
 
-- There is no account system. A learner is a browser cookie, so clearing site data loses their courses and nothing follows them to another device. Sign-in with cross-device progress is what we want next.
-- Every course is five chapters, in English or Traditional Chinese, and the catalog has no search. More projects, more languages and real search are planned.
+- There is no account system. Clearing the learner cookie removes access to that browser's saved courses; it does not itself delete their server records. Cross-device sign-in and recovery are not implemented.
+- Featured courses have five chapters each. Personalized courses have variable Learning Maps (the current prompt usually requests 4–9 nodes), with optional extensions. Supported course languages are English and Traditional Chinese; catalog search and additional languages remain future work.
 - A course is either written by us or generated from a goal you type. We want to build one from your own material too — a video, a PDF or a slide deck.
 - Checkpoints are multiple-choice questions and file checks. They cannot tell whether code is written well, or whether an explanation in your own words makes sense; written answers with model feedback are planned.
 - Teacher-authored courses, classroom roles and assignments do not exist yet.
 - The terminal runs a bounded command set rather than a host shell, Python runs in the browser, and the laboratories expose fixed parameters rather than solving arbitrary equations.
-- One Render service and its worker share a single SQLite file, and the whole site shares 100 AI requests and 30,000 synthesized characters a day.
+- The checked-in deployment uses one `1c-2g` Render instance and a 1 GB persistent disk for SQLite, including generated audio. This is not an automatically scaling architecture; attached disks prevent scaling a service to multiple instances. See [Render's disk limitations](https://render.com/docs/disks#disk-limitations-and-considerations).
+- The deployment template explicitly sets `METHELIA_AI_DAILY_REQUESTS` and `METHELIA_SPEECH_DAILY_CHARACTERS` to `unlimited`, removing application daily caps while retaining UTC-day usage counts. Providers still charge for usage and enforce their own quotas. Administrators can set non-negative integer budgets instead; `0` blocks new calls. If omitted on Render, conservative defaults of 100 AI requests and 30,000 speech characters apply. These settings are not Render visitor limits. Intake, generation and repair requests consume the AI budget; failed or uncertain requests remain counted. Prepared courses can still be used after a generation budget is exhausted.
+- One worker runs separate foreground-content, prefetch and speech lanes, processing one job per lane at a time. Simultaneous generation requests queue up. Provider quotas, CPU, memory, storage and bandwidth still constrain capacity; paying for hosting does not remove them. No concurrent-user capacity has been established by load testing.
 
 ## Sources and attribution
 
