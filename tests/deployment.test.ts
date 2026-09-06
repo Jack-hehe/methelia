@@ -3,6 +3,24 @@ import { Store } from "../src/server/db";
 
 afterEach(() => vi.unstubAllEnvs());
 
+it("allows explicit unlimited budgets while retaining usage counts and zero as a stop", async () => {
+  const { reserveUsage } = await import("../src/server/usage");
+  vi.stubEnv("RENDER", "true");
+  vi.stubEnv("METHELIA_AI_DAILY_REQUESTS", "unlimited");
+  vi.stubEnv("METHELIA_SPEECH_DAILY_CHARACTERS", "unlimited");
+  const store = new Store(":memory:");
+  try {
+    reserveUsage("ai", 101, store);
+    reserveUsage("ai", 101, store);
+    reserveUsage("speech", 30001, store);
+    expect(store.db.prepare("SELECT units FROM daily_usage WHERE kind='ai'").get()).toEqual({ units: 202 });
+    expect(store.db.prepare("SELECT units FROM daily_usage WHERE kind='speech'").get()).toEqual({ units: 30001 });
+    expect(() => reserveUsage("ai", -1, store)).toThrow("Invalid generation usage");
+    vi.stubEnv("METHELIA_AI_DAILY_REQUESTS", "0");
+    expect(() => reserveUsage("ai", 1, store)).toThrow(/上限/);
+  } finally { store.db.close(); }
+});
+
 it("allows anonymous public access on Render even with an existing private password", async () => {
   const { demoAccess } = await import("../src/server/deployment");
   vi.stubEnv("RENDER", "true");

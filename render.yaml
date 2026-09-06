@@ -27,9 +27,9 @@ services:
       - key: METHELIA_DEMO_PASSWORD
         generateValue: true
       - key: METHELIA_AI_DAILY_REQUESTS
-        value: "100"
+        value: "unlimited"
       - key: METHELIA_SPEECH_DAILY_CHARACTERS
-        value: "30000"
+        value: "unlimited"
       - key: AI_BASE_URL
         value: https://openrouter.ai/api/v1
       - key: AI_MODEL

@@ -136,7 +136,7 @@ npm.cmd start
 
 - `METHELIA_DATA_DIR=/var/data/methelia`；`/var/data` 掛載持久化磁碟。程式更新／重啟保留這裡的課程、進度與音檔。磁碟不可供多服務共用，也不支援多實例；重新部署會短暫中斷網站。
 - 本機 `.data` 和 `.env.local` 不會隨程式上傳。這次部署預設建立空的雲端資料庫，不修改本機資料。舊資料若要搬移，需要一致性的 SQLite 備份及匯入；匿名 cookie 不會跨 `localhost`、`onrender.com`、`methelia.com` 共用，還要處理課程歸屬。正式展示課程請在最終網址建立。
-- 預設全站每日最多 **100 次 AI HTTP 請求**與 **30,000 個送出合成的語音字元**，由 SQLite 原子計數，UTC 00:00 重置。失敗、不確定結果與模型格式修正請求仍計入；已快取音檔的播放不計入。`0` 表示禁止新呼叫，不是無上限。這不是美元支出硬上限，供應商仍依模型、token、語音等規則計費。
+- 部署範本目前將兩項用量設定明確設為 **`unlimited`**，不限制應用程式每日生成量，但仍記錄用量。若在 Render 未設定，保守預設為每日 **100 次 AI HTTP 請求**與 **30,000 個送出合成的語音字元**。用量由 SQLite 原子計數，UTC 00:00 重置。失敗、不確定結果與模型格式修正請求仍計入；已快取音檔的播放不計入。`0` 表示禁止新呼叫，不是無上限。這不是美元支出硬上限，供應商仍依模型、token、語音等規則計費。
 - 在 Render Environment 修改 `METHELIA_AI_DAILY_REQUESTS` 或 `METHELIA_SPEECH_DAILY_CHARACTERS` 可調整額度。超過限制仍能閱讀已準備的課程；失敗任務需手動重試，不自動重送付費請求。
 - 正式網站以 `METHELIA_PUBLIC_ACCESS=true` 開放使用，不要求共用帳密，也不是會員系統；清除瀏覽器 cookie 後仍沒有跨裝置取回進度的機制。API 的 session 歸屬檢查、來源檢查與每日使用額度保持啟用。
 - 已關閉程式 commit 自動部署，避免展示途中更新；需要更新時在 Render 執行 **Manual Deploy → Deploy latest commit**。不要在語音生成途中部署，尚未保存的供應商回應可能於任務恢復時再次計費。
