@@ -30,6 +30,7 @@ import {
   intakeFieldSchema,
   type IntakeField,
   type IntakeQuestion,
+  intakeQuestionVersion,
 } from "../core/intake-question";
 import { generateIntakeQuestion as generateQuestion } from "./model";
 import { learningNote } from "../core/learning-notes";
@@ -62,14 +63,18 @@ function intakeContext(c: Course, field: IntakeField, base: number) {
   if (c.status !== "intake" || c.intake.revision !== base)
     throw new Error("Intake conflict: 回答已更新，請重新載入");
   const answers: Partial<LearnerProfile> = {};
+  const previousQuestions: IntakeQuestion[] = [];
   for (const previous of intakeFields.slice(0, intakeFields.indexOf(field))) {
     const answer = c.intake.answers[previous];
     if (!answer?.trim()) throw new Error("請先回答前面的問題");
     Object.assign(answers, { [previous]: answer });
+    const question = c.intake.questions?.[previous]?.question;
+    if (question) previousQuestions.push(question);
   }
   return {
     answers,
-    context: JSON.stringify([c.goal, c.language || "zh-TW", field, answers]),
+    previousQuestions,
+    context: JSON.stringify([intakeQuestionVersion, c.goal, c.language || "zh-TW", field, answers, previousQuestions]),
   };
 }
 export class LearningService {
@@ -324,7 +329,7 @@ export class LearningService {
   ): Promise<IntakeQuestion> {
     const field = intakeFieldSchema.parse(requestedField);
     const course = this.owned(session, id);
-    const { answers, context } = intakeContext(course, field, base);
+    const { answers, context, previousQuestions } = intakeContext(course, field, base);
     const cached = course.intake!.questions?.[field];
     if (cached?.context === context) return cached.question;
     let requests = intakeRequests.get(this.store);
@@ -338,6 +343,7 @@ export class LearningService {
         course.language || "zh-TW",
         field,
         answers,
+        previousQuestions,
       );
       return this.mutate(session, id, (c) => {
         if (intakeContext(c, field, base).context !== context)

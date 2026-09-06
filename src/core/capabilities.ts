@@ -1,3 +1,4 @@
+import { narrationPolicy } from "./teaching-policy";
 import { practiceCommands } from "./workspace";
 import { templateRegistry } from "./protocol";
 import {labParameterRanges} from "./lab";
@@ -10,8 +11,7 @@ export const generationPolicy = {
   requiredCheckpoints: 1,
   titleCharacters: 100,
   bodyCharacters: 800,
-  narration:
-    "One complete script per page. Prefer 40-180 Chinese characters or 30-80 English words per page.",
+  narration: narrationPolicy,
   retryRepairs: 2,
 } as const;
 

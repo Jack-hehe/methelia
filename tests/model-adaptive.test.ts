@@ -5,6 +5,7 @@ import {
   generateExtension,
 } from "../src/server/model";
 import { emptyWorkspace } from "../src/core/workspace";
+import { courseTeachingPolicy, chapterTeachingPolicy, narrationPolicy } from "../src/core/teaching-policy";
 import type { Graph, Chapter, LearningNode } from "../src/core/protocol";
 import type { LearnerProfile, LearningAttempt } from "../src/core/state";
 
@@ -96,6 +97,61 @@ afterEach(() => {
 });
 const response = (value: unknown) =>
   Response.json({ choices: [{ message: { content: JSON.stringify(value) } }] });
+
+it("requires a full replacement when a repair returns abbreviated sections and missing chapter fields", async () => {
+  let calls = 0;
+  vi.stubGlobal("fetch", async (_url: unknown, options: RequestInit) => {
+    calls++;
+    const request = JSON.parse(String(options.body));
+    if (calls === 1) return response({ ...chapter(2), sections: [chapter(2).sections[0], "unchanged"], script: undefined, workspaceSetup: undefined });
+    expect(request.messages.at(-1).content).toContain("COMPLETE corrected JSON");
+    expect(request.messages.at(-1).content).toContain("NEVER a patch");
+    expect(JSON.parse(request.messages[1].content).validationFeedback).toContain("sections must contain full section objects");
+    return response(chapter(2));
+  });
+  const result = await generateChapter(node("b"), "Learn paths", emptyWorkspace(), { learnerProfile: profile, language: "en" });
+  expect(result.script).toHaveLength(result.sections.length);
+  expect(calls).toBe(2);
+});
+
+it("gives concrete repair instructions when generated quizzes omit completion", async () => {
+  let calls = 0;
+  vi.stubGlobal("fetch", async (_url: unknown, options: RequestInit) => {
+    const request = JSON.parse(String(options.body));
+    const { validationFeedback } = JSON.parse(request.messages[1].content);
+    calls++;
+    if (calls === 1) {
+      const invalid = chapter(2);
+      invalid.sections.forEach(section => { delete section.completion; });
+      return response(invalid);
+    }
+    expect(validationFeedback).toContain('"completion":{"type":"quiz"}');
+    expect(validationFeedback).toContain("section level");
+    expect(validationFeedback).toContain("matching script entry");
+    return response(chapter(2));
+  });
+  const result = await generateChapter(node("b"), "Learn paths", emptyWorkspace(), { learnerProfile: profile, language: "en" });
+  expect(result.sections.filter(s => s.completion)).toHaveLength(2);
+  expect(calls).toBe(2);
+});
+
+it("sends the shared teaching standard to planning and full chapter requests without an extra model call", async () => {
+  const requests: { messages: { content: string }[] }[] = [];
+  vi.stubGlobal("fetch", async (_url: unknown, options: RequestInit) => {
+    requests.push(JSON.parse(String(options.body)));
+    return response(requests.length === 1 ? graph() : chapter(1));
+  });
+  await generateGraph("Understand relative paths", "en");
+  await generateChapter(node("b"), "Understand relative paths", emptyWorkspace(), { language: "en" });
+  expect(requests).toHaveLength(2);
+  for (const request of requests) {
+    expect(request.messages[0].content).toContain(courseTeachingPolicy);
+    expect(request.messages[0].content).not.toContain("40-180 Chinese");
+    expect(JSON.parse(request.messages[1].content).input.policy.narration).toBe(narrationPolicy);
+  }
+  expect(requests[1].messages[0].content).toContain(chapterTeachingPolicy);
+  expect(requests[1].messages[0].content).toContain(narrationPolicy);
+});
 
 it("reports separate page errors together so one repair can fix the whole chapter", async () => {
   let calls = 0;

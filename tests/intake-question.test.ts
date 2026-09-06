@@ -10,7 +10,7 @@ import {
 let store: Store, service: LearningService, session: string;
 const question = (field: IntakeField = "experience") => ({
   field,
-  title: "How have you used Linux paths?",
+  title: field === "experience" ? "How have you used Linux paths?" : `What ${field} should this Linux course address?`,
   description: "Choose your starting point.",
   options: [
     "Never used paths",
@@ -38,6 +38,24 @@ afterEach(() => {
 });
 const course = () =>
   service.createCourse(session, "Linux paths", "live", "intake", "en", true);
+it("passes previous questions and repairs a repeated question before showing it", async () => {
+  const c = course();
+  vi.stubGlobal("fetch", async () => reply(question()));
+  await service.generateIntakeQuestion(session, c.id, "experience", 0);
+  service.saveIntake(session, c.id, { experience: "Never used paths" }, 0, false);
+  let calls = 0;
+  vi.stubGlobal("fetch", async (_url: unknown, options: RequestInit) => {
+    const input = JSON.parse(JSON.parse(String(options.body)).messages[1].content).input;
+    expect(input.previousQuestions).toEqual([question()]);
+    calls++;
+    return reply(calls === 1
+      ? { ...question("purpose"), title: question().title }
+      : question("purpose"));
+  });
+  const result = await service.generateIntakeQuestion(session, c.id, "purpose", 1);
+  expect(calls).toBe(2);
+  expect(result.title).toBe(question("purpose").title);
+});
 it("deduplicates concurrent generation across service instances and persists a reload cache without revision or jobs", async () => {
   const fetch = vi.fn(async () => reply(question()));
   vi.stubGlobal("fetch", fetch);
