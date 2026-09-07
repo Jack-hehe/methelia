@@ -80,6 +80,10 @@ test("English live intake persists English through generation and reload", async
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(page.locator("#intake-question")).not.toHaveText(title!);
   }
+  // A new course opens on the learning map, not straight into the chapter.
+  await page
+    .getByRole("button", { name: "Start learning", exact: true })
+    .click();
   await expect(page.getByLabel("Page number", { exact: true })).toHaveText(
     "1 / 3",
   );

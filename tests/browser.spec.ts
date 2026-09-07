@@ -1,14 +1,13 @@
 import { expect, test } from "./fixtures/course-test";
-test("explore labels illustrative content and stays usable on narrow phones", async ({
+test("explore offers the catalog and stays usable on narrow phones", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto("/explore");
-  await expect(
-    page.getByText("課程構想 · 尚未開放", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  // Explore used to label its content as unreleased ideas. It now lists the
+  // authored courses, so check the catalog is really there.
+  await expect(page.getByText("目前還沒有課程")).toBeVisible();
+  await expect(page.locator(".featured-course")).toHaveCount(20);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

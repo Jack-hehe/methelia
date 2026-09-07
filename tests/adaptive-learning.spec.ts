@@ -20,7 +20,11 @@ test("live intake, last-node extension, learning evidence and main-route restora
   await page
     .getByLabel("你想學什麼？")
     .fill("Build a website with controlled examples");
-  await page.getByRole("button", { name: "開始學習", exact: true }).click();
+  // The header's own button carries this label too; this one submits the goal.
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "開始學習", exact: true })
+    .click();
   await expect(page.getByRole("radiogroup")).toBeVisible();
   await page.getByLabel("補充你的回答").fill("I have edited one page before");
   await page.getByRole("button", { name: "儲存回答", exact: true }).click();

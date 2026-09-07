@@ -175,7 +175,11 @@ test("creating a course from a selected course's home pins the new course for re
   await page
     .getByRole("textbox", { name: "你想學什麼？" })
     .fill("Learn website planning");
-  await page.getByRole("button", { name: "開始學習", exact: true }).click();
+  // The header's own button carries this label too; this one submits the goal.
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "開始學習", exact: true })
+    .click();
   await expect(page.getByRole("radiogroup")).toBeVisible();
   const { course }: { course: Snapshot } = await (
     await page.request.post("/api/sessions", { data: {} })
