@@ -137,7 +137,7 @@ npx playwright install chromium
 ```bash
 # macOS / Linux
 METHELIA_TEST_BUILD=1 npm run build
-npx playwright test --config playwright.general.config.ts
+npm run test:acceptance
 ```
 
 ```powershell
@@ -145,7 +145,7 @@ npx playwright test --config playwright.general.config.ts
 $env:METHELIA_TEST_BUILD = '1'
 npm run build
 Remove-Item Env:METHELIA_TEST_BUILD
-npx playwright test --config playwright.general.config.ts
+npm run test:acceptance
 ```
 
 這個設定使用暫存資料庫、固定回應的本機模型替身與 3100 port，實際執行 API、worker 及瀏覽器執行環境。預設的 `npm run test:e2e` 則啟動或重用 3000 port 的開發伺服器；部分隔離伺服器專用案例會在該模式下跳過。

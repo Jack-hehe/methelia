@@ -14,6 +14,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "test:acceptance": "playwright test --config playwright.general.config.ts",
     "format": "prettier --write src tests docs README.md README.zh-TW.md CONTEXT.md \"*.json\" \"*.ts\"",
     "format:check": "prettier --check src tests docs README.md README.zh-TW.md CONTEXT.md \"*.json\" \"*.ts\""
   },

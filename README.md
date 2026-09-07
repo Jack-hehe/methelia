@@ -137,7 +137,7 @@ For isolated browser acceptance tests, first build the dedicated output:
 ```bash
 # macOS / Linux
 METHELIA_TEST_BUILD=1 npm run build
-npx playwright test --config playwright.general.config.ts
+npm run test:acceptance
 ```
 
 ```powershell
@@ -145,7 +145,7 @@ npx playwright test --config playwright.general.config.ts
 $env:METHELIA_TEST_BUILD = '1'
 npm run build
 Remove-Item Env:METHELIA_TEST_BUILD
-npx playwright test --config playwright.general.config.ts
+npm run test:acceptance
 ```
 
 This configuration uses a temporary database, a deterministic local model substitute and port 3100. It exercises the real API, worker and browser runtime. The default `npm run test:e2e` instead starts or reuses the development server on port 3000; some isolated-server cases are skipped there.
