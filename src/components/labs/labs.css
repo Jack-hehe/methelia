@@ -13,7 +13,8 @@
   -webkit-user-select: none;
   user-select: none;
 }
-.laboratory :is(input, textarea, [contenteditable]:not([contenteditable="false"])) {
+.laboratory
+  :is(input, textarea, [contenteditable]:not([contenteditable="false"])) {
   -webkit-user-select: text;
   user-select: text;
 }

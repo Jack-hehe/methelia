@@ -592,7 +592,9 @@ function CoursePlayerContent({
         </div>
         <div className="header-right">
           {course.mode === "demo" && !course.featuredId && (
-            <span className="demo-badge">{t("入門課程", "Starter course")}</span>
+            <span className="demo-badge">
+              {t("入門課程", "Starter course")}
+            </span>
           )}
           {themeControl}
           <button
@@ -611,7 +613,6 @@ function CoursePlayerContent({
       </header>
       {course.status !== "ready" ? (
         <main className="preparation">
-          
           <h1 className={course.status === "failed" ? undefined : "sr-only"}>
             {course.status === "failed"
               ? t("課程生成失敗", "Course generation failed")
@@ -710,13 +711,16 @@ function CoursePlayerContent({
             </div>
             {!canEnter ? (
               <div className="chapter-gate">
-                
-                <h2 className={pkg?.status === "failed" ? undefined : "sr-only"}>
+                <h2
+                  className={pkg?.status === "failed" ? undefined : "sr-only"}
+                >
                   {pkg?.status === "failed"
                     ? t("章節生成失敗", "Chapter generation failed")
                     : t("正在準備章節", "Preparing chapter")}
                 </h2>
-                {pkg?.status !== "failed" && <GenerationProgress key={pkg?.id} pkg={pkg} />}
+                {pkg?.status !== "failed" && (
+                  <GenerationProgress key={pkg?.id} pkg={pkg} />
+                )}
                 <p className={pkg?.status === "failed" ? undefined : "sr-only"}>
                   {(pkg?.error ? localizedError(pkg.error, language) : "") ||
                     t("正在準備章節內容。", "Preparing chapter content.")}
@@ -804,7 +808,11 @@ function CoursePlayerContent({
                     section={section!}
                     index={index}
                     hideHeading
-                    labContext={{courseId:course.id,nodeId,saved:course.labWork?.[nodeId]?.[sectionId]}}
+                    labContext={{
+                      courseId: course.id,
+                      nodeId,
+                      saved: course.labWork?.[nodeId]?.[sectionId],
+                    }}
                     done={progress.done.includes(sectionId)}
                     files={displayedWorkspace.files}
                     onCheck={check}
@@ -934,7 +942,11 @@ function CoursePlayerContent({
                   trailingControls={canvasTools}
                   statusControl={
                     !canEnter ? (
-                      pkg.status === "failed" ? <span className="audio-preparation-status">{t("章節未就緒", "Chapter not ready")}</span> : null
+                      pkg.status === "failed" ? (
+                        <span className="audio-preparation-status">
+                          {t("章節未就緒", "Chapter not ready")}
+                        </span>
+                      ) : null
                     ) : ["pending", "generating"].includes(pkg.speech) ? (
                       <GenerationProgress pkg={pkg} compact />
                     ) : !chapterAudio &&

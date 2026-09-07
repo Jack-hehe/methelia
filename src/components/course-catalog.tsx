@@ -164,11 +164,7 @@ export function CourseCatalog({
             <p className="eyebrow">
               {en ? "FOLLOW YOUR CURIOSITY" : "從好奇開始"}
             </p>
-            <h2>
-              {en
-                ? "Learn anything you want."
-                : "學你想學的任何事。"}
-            </h2>
+            <h2>{en ? "Learn anything you want." : "學你想學的任何事。"}</h2>
           </div>
           <p>
             {en

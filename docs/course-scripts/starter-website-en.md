@@ -97,4 +97,3 @@ Enter the preview command shown on screen: python -m http.server 8000, then pres
 ### 4. Your result: download the interactive static homepage
 
 Congratulations on completing this course. Let us revisit what you can now do: edit an HTML heading, change a CSS button background, and set the text produced by a JavaScript click handler. More importantly, you can classify a new requirement as content, appearance or behavior before editing. Use the website download control to save the project as a ZIP. The archive contains your static website files, but downloading does not publish a public URL. Deployment is a separate step. What you have completed here is an interactive personal homepage that you can preview and keep. You can now replace the exercise text with your own introduction and expand the page using the same three responsibilities. Thank you for learning with us, and see you in the next course.
-

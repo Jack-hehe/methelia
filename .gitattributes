@@ -1,0 +1,7 @@
+# Check every text file out with LF, on every platform. Without this, Windows
+# clones get CRLF and `npm run format:check` fails on almost the whole tree,
+# because Prettier expects LF.
+* text=auto eol=lf
+
+# Prepared narration. Never touch these bytes.
+*.mp3 binary

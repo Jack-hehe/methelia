@@ -129,12 +129,18 @@ async function work(job: Job) {
       return current;
     });
     if (!active?.chapter) return;
-    const sharedKey = course.featuredId || course.mode === "demo"
-      ? featuredAudioKey(active.chapter.script, active.speechProfile)
-      : null;
+    const sharedKey =
+      course.featuredId || course.mode === "demo"
+        ? featuredAudioKey(active.chapter.script, active.speechProfile)
+        : null;
     const result =
-      (sharedKey ? readFeaturedAudio(store, sharedKey, course.featuredId ? "featured-audio" : "starter-audio") : null) ||
-      (await synthesize(active.chapter, active.speechProfile));
+      (sharedKey
+        ? readFeaturedAudio(
+            store,
+            sharedKey,
+            course.featuredId ? "featured-audio" : "starter-audio",
+          )
+        : null) || (await synthesize(active.chapter, active.speechProfile));
     store.transaction(() => {
       const current = activePackage(course.id, pkg.id);
       if (!current) return;

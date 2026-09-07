@@ -25,16 +25,45 @@ afterEach(() => {
 it("allows Japanese learning examples while keeping English explanations", () => {
   const lesson = {
     title: "Compare Japanese requests",
-    sections: [{
-      body: 'Compare "お願いします" with "頼む" and choose the formal request.',
-      component: { type: "quiz.choice", question: "Which request is formal?", options: ["お願いします", "頼む"], explanation: '"お願いします" is more polite.' },
-    }],
-    script: [{ text: 'The expression 「お願いします」 makes a polite request.' }],
+    sections: [
+      {
+        body: 'Compare "お願いします" with "頼む" and choose the formal request.',
+        component: {
+          type: "quiz.choice",
+          question: "Which request is formal?",
+          options: ["お願いします", "頼む"],
+          explanation: '"お願いします" is more polite.',
+        },
+      },
+    ],
+    script: [
+      { text: "The expression 「お願いします」 makes a polite request." },
+    ],
   };
-  expect(() => validateGeneratedLanguage(lesson, "en", "I want to learn Japanese")).not.toThrow();
-  expect(() => validateGeneratedLanguage({body: "這段說明是中文。"}, "en", "Learn Japanese")).toThrow(/English/);
-  expect(() => validateGeneratedLanguage({title:'"這是一整段中文介紹"'}, "en", "Learn Japanese")).toThrow(/English/);
-  expect(() => validateGeneratedLanguage({component: {options: ["中文", "英文"]}}, "en", "Learn algebra")).toThrow(/English/);
+  expect(() =>
+    validateGeneratedLanguage(lesson, "en", "I want to learn Japanese"),
+  ).not.toThrow();
+  expect(() =>
+    validateGeneratedLanguage(
+      { body: "這段說明是中文。" },
+      "en",
+      "Learn Japanese",
+    ),
+  ).toThrow(/English/);
+  expect(() =>
+    validateGeneratedLanguage(
+      { title: '"這是一整段中文介紹"' },
+      "en",
+      "Learn Japanese",
+    ),
+  ).toThrow(/English/);
+  expect(() =>
+    validateGeneratedLanguage(
+      { component: { options: ["中文", "英文"] } },
+      "en",
+      "Learn algebra",
+    ),
+  ).toThrow(/English/);
 });
 it("rejects wrong-language generated prose while preserving code identifiers", () => {
   expect(() =>

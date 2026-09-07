@@ -393,13 +393,13 @@ test("practice has left live preview, right terminal, and an isolated guided dem
   page,
 }) => {
   // Exercise the text-only fallback explicitly now that starter audio is bundled.
-  await page.route("**/api/courses", async route => {
+  await page.route("**/api/courses", async (route) => {
     const response = await route.fetch();
     const course = await response.json();
-    for (const pkg of Object.values(course.chapters) as {speech:string}[]) {
+    for (const pkg of Object.values(course.chapters) as { speech: string }[]) {
       pkg.speech = "failed";
     }
-    await route.fulfill({json:course});
+    await route.fulfill({ json: course });
   });
   const duplicateKeys: string[] = [];
   page.on("console", (m) => {

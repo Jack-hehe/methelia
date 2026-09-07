@@ -1,4 +1,8 @@
-import { courseTeachingPolicy, chapterTeachingPolicy, narrationPolicy } from "../core/teaching-policy";
+import {
+  courseTeachingPolicy,
+  chapterTeachingPolicy,
+  narrationPolicy,
+} from "../core/teaching-policy";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import {
@@ -113,10 +117,12 @@ async function structured<T>(
     } catch (error) {
       feedback = error instanceof Error ? error.message : "Invalid JSON";
       if (error instanceof z.ZodError) {
-        feedback += '\nReturn a complete document, not only the fields being corrected. For a chapter, sections must contain full section objects (never strings such as "unchanged"); script must be an array of {sectionId,text} entries matching every section in order; workspaceSetup must be an object ({} for environment none). Preserve the requested nodeId, objective and environment.';
+        feedback +=
+          '\nReturn a complete document, not only the fields being corrected. For a chapter, sections must contain full section objects (never strings such as "unchanged"); script must be an array of {sectionId,text} entries matching every section in order; workspaceSetup must be an object ({} for environment none). Preserve the requested nodeId, objective and environment.';
       }
       if (/checkpoint|completion/i.test(feedback)) {
-        feedback += '\nRepair the assessment structure, not just the prose. Every assessed quiz.choice needs "completion":{"type":"quiz"} at the section level, beside component (not inside it or at the chapter root). A question written only in body or script is not a checkpoint. Preserve existing valid questions and add the missing completion fields. If there are no quiz sections, add distinct relevant quiz.choice sections with options, a valid zero-based answer and explanation, each with a matching script entry in the same order. Profile-based chapters need at least TWO distinct meaningful checkpoints. Never mark reading, diagrams or ungraded labs as completed quizzes. Keep all content in input.language.';
+        feedback +=
+          '\nRepair the assessment structure, not just the prose. Every assessed quiz.choice needs "completion":{"type":"quiz"} at the section level, beside component (not inside it or at the chapter root). A question written only in body or script is not a checkpoint. Preserve existing valid questions and add the missing completion fields. If there are no quiz sections, add distinct relevant quiz.choice sections with options, a valid zero-based answer and explanation, each with a matching script entry in the same order. Profile-based chapters need at least TWO distinct meaningful checkpoints. Never mark reading, diagrams or ungraded labs as completed quizzes. Keep all content in input.language.';
       }
     }
   }
@@ -124,10 +130,17 @@ async function structured<T>(
     `${options.errorMessage ?? "課程格式驗證失敗，已嘗試修正兩次。請重試。"}\nValidation details: ${feedback.slice(0, 4000)}`,
   );
 }
-export function validateGeneratedLanguage(value: unknown, language?: string, learningGoal = "") {
+export function validateGeneratedLanguage(
+  value: unknown,
+  language?: string,
+  learningGoal = "",
+) {
   if (language !== "en" && language !== "zh-TW") return;
   const prose: { text: string; path: string }[] = [];
-  const languageLesson = /\b(japanese|mandarin|chinese|kanji|hanzi)\b|日[語文]|日本語|中文|漢語|汉语|華語|华语/i.test(learningGoal);
+  const languageLesson =
+    /\b(japanese|mandarin|chinese|kanji|hanzi)\b|日[語文]|日本語|中文|漢語|汉语|華語|华语/i.test(
+      learningGoal,
+    );
   const excluded = new Set([
     "id",
     "nodeId",
@@ -152,7 +165,8 @@ export function validateGeneratedLanguage(value: unknown, language?: string, lea
   ]);
   function collect(item: unknown, path = "") {
     if (typeof item === "string") prose.push({ text: item, path });
-    else if (Array.isArray(item)) item.forEach((entry, i) => collect(entry, `${path}[${i}]`));
+    else if (Array.isArray(item))
+      item.forEach((entry, i) => collect(entry, `${path}[${i}]`));
     else if (item && typeof item === "object")
       for (const [key, entry] of Object.entries(item))
         if (
@@ -167,13 +181,29 @@ export function validateGeneratedLanguage(value: unknown, language?: string, lea
     if (!/[\u3040-\u30ff\u3400-\u9fff]/u.test(text)) return false;
     if (!languageLesson) return true;
     // Quiz answers and diagram labels can themselves be the language being learned.
-    if (/(?:^|\.)component\.(?:options\[\d+\]|(?:items|cards)\[\d+\]\.label)$/.test(path)) return false;
-    const explanation = text.replace(/"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』|`[^`\n]*`|'[^'\n]*'/gu, "");
-    return /[\u3040-\u30ff\u3400-\u9fff]/u.test(explanation) || !/[A-Za-z]{2,}/.test(explanation);
+    if (
+      /(?:^|\.)component\.(?:options\[\d+\]|(?:items|cards)\[\d+\]\.label)$/.test(
+        path,
+      )
+    )
+      return false;
+    const explanation = text.replace(
+      /"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』|`[^`\n]*`|'[^'\n]*'/gu,
+      "",
+    );
+    return (
+      /[\u3040-\u30ff\u3400-\u9fff]/u.test(explanation) ||
+      !/[A-Za-z]{2,}/.test(explanation)
+    );
   });
   if (language === "en" && wrongEnglish.length)
     throw new Error(
-      `All learner-facing explanations must be English. Check fields: ${wrongEnglish.slice(0, 8).map(p => p.path).join(", ")}. For Japanese/Chinese lessons, retain target-language examples inside quotes with an English explanation; quiz options may be target-language phrases. Translate instructional prose, not the examples being taught. Preserve code identifiers.`,
+      `All learner-facing explanations must be English. Check fields: ${wrongEnglish
+        .slice(0, 8)
+        .map((p) => p.path)
+        .join(
+          ", ",
+        )}. For Japanese/Chinese lessons, retain target-language examples inside quotes with an English explanation; quiz options may be target-language phrases. Translate instructional prose, not the examples being taught. Preserve code identifiers.`,
     );
   if (language === "zh-TW" && prose.length && !hasChinese)
     throw new Error(
@@ -197,7 +227,8 @@ export function generateIntakeQuestion(
       answers,
       previousQuestions,
       questionFocus: intakeFocus[field],
-      nonRepetition: "Read all previous questions AND answers before writing. Each step must add new planning information. Do not rephrase a previous question or recycle its answer options. Treat explicitly supplied information as known, skipped information as unknown; ask a distinct missing detail within questionFocus. Silently compare the intent of your draft to every earlier question, and replace it if the learner would reasonably give the same answer. Keep the requested field and schema.",
+      nonRepetition:
+        "Read all previous questions AND answers before writing. Each step must add new planning information. Do not rephrase a previous question or recycle its answer options. Treat explicitly supplied information as known, skipped information as unknown; ask a distinct missing detail within questionFocus. Silently compare the intent of your draft to every earlier question, and replace it if the learner would reasonably give the same answer. Keep the requested field and schema.",
       ...intakePolicy(field),
       presentation:
         "One viewport, concise choices. When multiple is true, choices may coexist, never mutually exclusive levels. Skipped answers are unknown, not lack of knowledge. Keep title under 65 characters, descriptions under 80, option labels under 40 and option descriptions empty unless essential.",
@@ -221,7 +252,9 @@ export function generateGraph(
     ? "Use the learner profile as an initial hypothesis: align the starting point, depth, examples and pacing to their experience, purpose, prior knowledge and study plan. Every node MUST include depth (foundation/applied/advanced), a concrete summary, nonempty keyConcepts, misconceptions (empty only when none are relevant), and assessment describing observable evidence. Retain necessary prerequisites and do not invent demonstrated mastery. Plan only nodes; generate no chapters yet. "
     : "";
   return structured(
-    courseTeachingPolicy + "\n" + profileInstruction +
+    courseTeachingPolicy +
+      "\n" +
+      profileInstruction +
       `Generate schemaVersion 2 and the COMPLETE goal-specific Course Graph, not chapter content. Usually 4-9 small nodes, each 3-10 minutes. One ordered route: nodes in learning order, edges connect adjacent nodes, prerequisites point backward. Each node must have environment: none, web, python, or terminal, chosen from the capabilities. A concept-only subject uses none and ends in understanding/applying its subject, NOT exporting a website. Python beginner courses use the real browser Python environment; Linux basics use terminal for supported virtual file exercises, none for explanations. Web concept chapters can use web when they need a DOM/web-language experiment. Include outcome describing the actual skill the course enables. Include scopeNote (empty if no material restriction) and requiresConfirmation boolean. Preserve the raw learning goal: never replace Python/Linux/another subject with a website ABOUT that subject. If the core requested outcome needs unavailable execution capabilities (full OS administration, npm/backend deployment, package installation etc), clearly explain the limitation in scopeNote, set requiresConfirmation=true, and propose the closest HONEST conceptual/bounded route; it will wait for learner confirmation. For a basic Linux course include a short scopeNote explaining the virtual file sandbox, without confirmation unless unsupported operations are essential. Do not claim the learner deploys an app or executes unsupported operations. Titles <=100 characters, objectives <=500.`,
     {
       goal,
@@ -277,7 +310,13 @@ export function generateChapter(
     ? "Include at least TWO distinct meaningful checkpoints that assess the node's core capabilities, with explanation or practice before each. Use different questions/tasks; do not duplicate one checkpoint to reach the count. Preserve truthful first-attempt evidence. "
     : "";
   return structured(
-    courseTeachingPolicy + "\n" + chapterTeachingPolicy + "\n" + narrationPolicy + "\n" + adaptationInstruction +
+    courseTeachingPolicy +
+      "\n" +
+      chapterTeachingPolicy +
+      "\n" +
+      narrationPolicy +
+      "\n" +
+      adaptationInstruction +
       checkpointInstruction +
       `Generate ONE WHOLE schemaVersion 2 chapter, usually 3-4 focused sections. Copy nodeId, objective and environment EXACTLY from the node (legacy nodes without environment use web). Each section is one full canvas page with one teaching point and exactly one matching script entry, in the same order. Keep the page body concise (prefer <=180 Chinese characters or <=100 English words), title <=100 chars, and use the shared narration policy for full teacher-style explanation. No autoplay assumptions or narration that requires another page to be visible. At least one verifiable checkpoint is REQUIRED. completion belongs only inside a section, never at the chapter root or inside component. Use a quiz.choice with completion {type:quiz} for conceptual understanding; a practice/check intent MUST have completion. Do not introduce unexplained prerequisites; use the supplied prior and upcoming node objectives for continuity. Vary explain/predict/experiment/check instead of long definition lists.
 Start with a clear explanation before asking the learner to interact. Prefer lesson.article for reading: paragraphs (1-4 short paragraphs), takeaway, optional figure {items:[{label,description}],caption} for a 2-5-stage illustrated process. Use the figure only when a relationship or process actually benefits from a visual. Mix reading, visual explanation, demonstration and practice; never force every page into a clickable card. Do not invent image URLs.
@@ -317,7 +356,10 @@ For a guided edit, use a demonstrate section with guide {path,find,replacement},
       // Root completion has no meaning in the player. Ignore this redundant
       // model field; all actual section assessments still pass strict validation.
       if (value && typeof value === "object" && !Array.isArray(value)) {
-        const { completion: _unused, ...document } = value as Record<string, unknown>;
+        const { completion: _unused, ...document } = value as Record<
+          string,
+          unknown
+        >;
         value = document;
       }
       const chapter = validateChapter(value);
@@ -369,7 +411,9 @@ export function generateExtension(input: {
   language?: "zh-TW" | "en";
 }): Promise<{ title: string; reason: string; nodes: LearningNode[] }> {
   return structured(
-    courseTeachingPolicy + "\n" + "Plan a focused optional extension connected to the supplied anchor's concepts and learner topic. Return title, reason, and support nodes only, never full chapters. The reason MUST explain the connection, concrete added capabilities and any execution or scope limitations. If the topic is unrelated, find and transparently describe a narrow related bridge; never claim an unrelated request is covered. Use requested depth on every node: foundation usually 1-2 nodes, applied 2-3, advanced 3-5; prefer fewer when sufficient, maximum 6, no filler to hit a quota. Every node requires explicit environment, depth, summary, keyConcepts, misconceptions and assessment. Prerequisites form one chain from anchor to the first node, then previous support node. Use unique random-looking support- IDs. Do not repeat titles, objectives or already-planned scope from existing graph nodes. The main route remains intact; there is no return edge. Use the capability registry honestly: unsupported OS/server operations can only be explained conceptually, never claimed as executed. Respect learnerProfile as self-reported context, not demonstrated mastery. Use the requested language, Traditional Chinese by default.",
+    courseTeachingPolicy +
+      "\n" +
+      "Plan a focused optional extension connected to the supplied anchor's concepts and learner topic. Return title, reason, and support nodes only, never full chapters. The reason MUST explain the connection, concrete added capabilities and any execution or scope limitations. If the topic is unrelated, find and transparently describe a narrow related bridge; never claim an unrelated request is covered. Use requested depth on every node: foundation usually 1-2 nodes, applied 2-3, advanced 3-5; prefer fewer when sufficient, maximum 6, no filler to hit a quota. Every node requires explicit environment, depth, summary, keyConcepts, misconceptions and assessment. Prerequisites form one chain from anchor to the first node, then previous support node. Use unique random-looking support- IDs. Do not repeat titles, objectives or already-planned scope from existing graph nodes. The main route remains intact; there is no return edge. Use the capability registry honestly: unsupported OS/server operations can only be explained conceptually, never claimed as executed. Respect learnerProfile as self-reported context, not demonstrated mastery. Use the requested language, Traditional Chinese by default.",
     {
       ...input,
       language: input.language || "zh-TW",

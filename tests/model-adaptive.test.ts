@@ -5,7 +5,11 @@ import {
   generateExtension,
 } from "../src/server/model";
 import { emptyWorkspace } from "../src/core/workspace";
-import { courseTeachingPolicy, chapterTeachingPolicy, narrationPolicy } from "../src/core/teaching-policy";
+import {
+  courseTeachingPolicy,
+  chapterTeachingPolicy,
+  narrationPolicy,
+} from "../src/core/teaching-policy";
 import type { Graph, Chapter, LearningNode } from "../src/core/protocol";
 import type { LearnerProfile, LearningAttempt } from "../src/core/state";
 
@@ -103,13 +107,28 @@ it("requires a full replacement when a repair returns abbreviated sections and m
   vi.stubGlobal("fetch", async (_url: unknown, options: RequestInit) => {
     calls++;
     const request = JSON.parse(String(options.body));
-    if (calls === 1) return response({ ...chapter(2), sections: [chapter(2).sections[0], "unchanged"], script: undefined, workspaceSetup: undefined });
-    expect(request.messages.at(-1).content).toContain("COMPLETE corrected JSON");
+    if (calls === 1)
+      return response({
+        ...chapter(2),
+        sections: [chapter(2).sections[0], "unchanged"],
+        script: undefined,
+        workspaceSetup: undefined,
+      });
+    expect(request.messages.at(-1).content).toContain(
+      "COMPLETE corrected JSON",
+    );
     expect(request.messages.at(-1).content).toContain("NEVER a patch");
-    expect(JSON.parse(request.messages[1].content).validationFeedback).toContain("sections must contain full section objects");
+    expect(
+      JSON.parse(request.messages[1].content).validationFeedback,
+    ).toContain("sections must contain full section objects");
     return response(chapter(2));
   });
-  const result = await generateChapter(node("b"), "Learn paths", emptyWorkspace(), { learnerProfile: profile, language: "en" });
+  const result = await generateChapter(
+    node("b"),
+    "Learn paths",
+    emptyWorkspace(),
+    { learnerProfile: profile, language: "en" },
+  );
   expect(result.script).toHaveLength(result.sections.length);
   expect(calls).toBe(2);
 });
@@ -122,7 +141,9 @@ it("gives concrete repair instructions when generated quizzes omit completion", 
     calls++;
     if (calls === 1) {
       const invalid = chapter(2);
-      invalid.sections.forEach(section => { delete section.completion; });
+      invalid.sections.forEach((section) => {
+        delete section.completion;
+      });
       return response(invalid);
     }
     expect(validationFeedback).toContain('"completion":{"type":"quiz"}');
@@ -130,8 +151,13 @@ it("gives concrete repair instructions when generated quizzes omit completion", 
     expect(validationFeedback).toContain("matching script entry");
     return response(chapter(2));
   });
-  const result = await generateChapter(node("b"), "Learn paths", emptyWorkspace(), { learnerProfile: profile, language: "en" });
-  expect(result.sections.filter(s => s.completion)).toHaveLength(2);
+  const result = await generateChapter(
+    node("b"),
+    "Learn paths",
+    emptyWorkspace(),
+    { learnerProfile: profile, language: "en" },
+  );
+  expect(result.sections.filter((s) => s.completion)).toHaveLength(2);
   expect(calls).toBe(2);
 });
 
@@ -142,12 +168,19 @@ it("sends the shared teaching standard to planning and full chapter requests wit
     return response(requests.length === 1 ? graph() : chapter(1));
   });
   await generateGraph("Understand relative paths", "en");
-  await generateChapter(node("b"), "Understand relative paths", emptyWorkspace(), { language: "en" });
+  await generateChapter(
+    node("b"),
+    "Understand relative paths",
+    emptyWorkspace(),
+    { language: "en" },
+  );
   expect(requests).toHaveLength(2);
   for (const request of requests) {
     expect(request.messages[0].content).toContain(courseTeachingPolicy);
     expect(request.messages[0].content).not.toContain("40-180 Chinese");
-    expect(JSON.parse(request.messages[1].content).input.policy.narration).toBe(narrationPolicy);
+    expect(JSON.parse(request.messages[1].content).input.policy.narration).toBe(
+      narrationPolicy,
+    );
   }
   expect(requests[1].messages[0].content).toContain(chapterTeachingPolicy);
   expect(requests[1].messages[0].content).toContain(narrationPolicy);
@@ -296,10 +329,17 @@ it("repairs extension duplicates and returns explicit bounded learning metadata"
 });
 
 it("accepts a valid chapter with redundant root completion without another model call", async () => {
-  const fetch = vi.fn(async () => response({ ...chapter(2), completion: { type: "quiz" } }));
+  const fetch = vi.fn(async () =>
+    response({ ...chapter(2), completion: { type: "quiz" } }),
+  );
   vi.stubGlobal("fetch", fetch);
-  const result = await generateChapter(node("b"), "Learn paths", emptyWorkspace(), { learnerProfile: profile, language: "en" });
-  expect(result.sections.filter(s => s.completion)).toHaveLength(2);
+  const result = await generateChapter(
+    node("b"),
+    "Learn paths",
+    emptyWorkspace(),
+    { learnerProfile: profile, language: "en" },
+  );
+  expect(result.sections.filter((s) => s.completion)).toHaveLength(2);
   expect(result).not.toHaveProperty("completion");
   expect(fetch).toHaveBeenCalledTimes(1);
 });
@@ -308,6 +348,11 @@ it("preserves Japanese examples through the full chapter generation path", async
   value.sections[0].body = 'Compare "お願いします" with "頼む".';
   const fetch = vi.fn(async () => response(value));
   vi.stubGlobal("fetch", fetch);
-  await expect(generateChapter(node("b"), "Learn Japanese", emptyWorkspace(), { learnerProfile: profile, language: "en" })).resolves.toMatchObject({sections: value.sections});
+  await expect(
+    generateChapter(node("b"), "Learn Japanese", emptyWorkspace(), {
+      learnerProfile: profile,
+      language: "en",
+    }),
+  ).resolves.toMatchObject({ sections: value.sections });
   expect(fetch).toHaveBeenCalledTimes(1);
 });

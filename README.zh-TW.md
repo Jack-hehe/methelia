@@ -23,7 +23,7 @@ Methelia 是持續開發中的開源專案。目前使用匿名瀏覽器 session
 
 | 類別         | 技術／服務                                                 | 用途                                     |
 | ------------ | ---------------------------------------------------------- | ---------------------------------------- |
-| AI 模型      | 可設定的 OpenAI 相容模型 API，例如 OpenRouter | 生成課程圖、章節內容與檢查條件           |
+| AI 模型      | 可設定的 OpenAI 相容模型 API，例如 OpenRouter              | 生成課程圖、章節內容與檢查條件           |
 | 語音合成     | **ElevenLabs**（`eleven_v3`，with-timestamps）             | 合成旁白，並產生字幕與分頁時間對齊       |
 | 前端         | Next.js 16 App Router、React 19、TypeScript 7、Lucide 圖示 | 播放器、Learning Map 與實驗元件介面      |
 | 後端         | Node.js 22、Zod 4、內建 `node:sqlite`（WAL 模式）          | API、內容驗證、生成佇列與資料保存        |

@@ -1,14 +1,83 @@
-.root { width: min(100%, 560px); min-width: 0; text-align: center; padding-block: 12px; }
-.track { height: 7px; background: var(--line); border-radius: 999px; overflow: hidden; }
-.fill { display: block; height: 100%; background: #4c31a6; border-radius: inherit; transition: width 1000ms linear; }
-:global([data-theme="dark"]) .fill { background: #e6dbff; }
-.labels { display: flex; justify-content: space-between; gap: 12px; padding: 0; margin: 14px 0 10px; list-style: none; font-size: 15px; color: var(--muted); }
-.labels [aria-current] { color: var(--ink); font-weight: 600; }
-.root p { font-size: 16px; line-height: 1.6; margin: 10px 0 0; color: var(--muted); }
-.compact { width: min(100%, 360px); min-width: 120px; padding-block: 4px; }
-.compact p { font-size: 14px; margin-top: 6px; }
-.aside { min-height: 3.2em; margin-top: 18px; font-size: 15px; line-height: 1.6; color: var(--muted); opacity: .8; }
-.aside span { display: block; animation: appear 450ms ease-out; }
-@keyframes appear { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
-@media (prefers-reduced-motion: reduce) { .aside span { animation: none; } }
+.root {
+  width: min(100%, 560px);
+  min-width: 0;
+  text-align: center;
+  padding-block: 12px;
+}
+.track {
+  height: 7px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.fill {
+  display: block;
+  height: 100%;
+  background: #4c31a6;
+  border-radius: inherit;
+  transition: width 1000ms linear;
+}
+:global([data-theme="dark"]) .fill {
+  background: #e6dbff;
+}
+.labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  margin: 14px 0 10px;
+  list-style: none;
+  font-size: 15px;
+  color: var(--muted);
+}
+.labels [aria-current] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.root p {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+.compact {
+  width: min(100%, 360px);
+  min-width: 120px;
+  padding-block: 4px;
+}
+.compact p {
+  font-size: 14px;
+  margin-top: 6px;
+}
+.aside {
+  min-height: 3.2em;
+  margin-top: 18px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+  opacity: 0.8;
+}
+.aside span {
+  display: block;
+  animation: appear 450ms ease-out;
+}
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aside span {
+    animation: none;
+  }
+}

@@ -46,7 +46,8 @@ export const homeCopy = {
     courses: "課程",
     login: "開始學習",
     loginTitle: "歡迎來到 Methelia",
-    loginMessage: "選擇一堂課程，或建立自己的學習路徑。學習進度會保存在目前的瀏覽器中。",
+    loginMessage:
+      "選擇一堂課程，或建立自己的學習路徑。學習進度會保存在目前的瀏覽器中。",
     loginClose: "探索課程",
     explore: "看看其他人做了什麼",
     github: "在 GitHub 上查看原始碼",

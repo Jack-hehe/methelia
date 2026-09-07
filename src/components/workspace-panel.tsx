@@ -79,7 +79,8 @@ export function WorkspacePanel({
   const shellAvailable = environment === "terminal" || legacyTerminal;
   const component = chapter.sections[0]?.component;
   const example = component?.type === "code.editor" ? component : null;
-  const domElements = component?.type === "dom.explorer" ? component.elements : [];
+  const domElements =
+    component?.type === "dom.explorer" ? component.elements : [];
   const [selectedTag, setSelectedTag] = useState<string>();
   const defaultPath =
     example && Object.hasOwn(workspace.files, example.path)
@@ -588,14 +589,32 @@ export function WorkspacePanel({
             </div>
             {domElements.length > 0 && (
               <div className="studio-dom-tools">
-                <div className="studio-actions" role="group" aria-label={t("HTML 元素", "HTML elements")}>
-                  {domElements.map(element => (
-                    <button key={element.tag} aria-pressed={selectedTag === element.tag}
-                      className={selectedTag === element.tag ? "studio-selected" : ""}
-                      onClick={() => setSelectedTag(element.tag)}>{element.tag}</button>
+                <div
+                  className="studio-actions"
+                  role="group"
+                  aria-label={t("HTML 元素", "HTML elements")}
+                >
+                  {domElements.map((element) => (
+                    <button
+                      key={element.tag}
+                      aria-pressed={selectedTag === element.tag}
+                      className={
+                        selectedTag === element.tag ? "studio-selected" : ""
+                      }
+                      onClick={() => setSelectedTag(element.tag)}
+                    >
+                      {element.tag}
+                    </button>
                   ))}
                 </div>
-                <p aria-live="polite">{domElements.find(element => element.tag === selectedTag)?.description || t("點選標籤，在預覽中找出對應的元素。", "Select a tag to highlight its element in the preview.")}</p>
+                <p aria-live="polite">
+                  {domElements.find((element) => element.tag === selectedTag)
+                    ?.description ||
+                    t(
+                      "點選標籤，在預覽中找出對應的元素。",
+                      "Select a tag to highlight its element in the preview.",
+                    )}
+                </p>
               </div>
             )}
             <iframe

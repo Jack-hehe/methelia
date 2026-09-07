@@ -406,7 +406,10 @@ test("review can enable prepared narration and keeps its draft isolated from the
   await page.getByLabel("下一頁", { exact: true }).click();
   await page.getByRole("button", { name: "回到目前章節" }).click();
   await expect(
-    page.getByRole("heading", { name: "讀懂 HTML：標籤與內容的關係", exact: true }),
+    page.getByRole("heading", {
+      name: "讀懂 HTML：標籤與內容的關係",
+      exact: true,
+    }),
   ).toBeVisible();
   const workspace = await (
     await page.request.get(`/api/workspace?courseId=${course.id}`)

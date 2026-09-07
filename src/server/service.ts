@@ -74,7 +74,14 @@ function intakeContext(c: Course, field: IntakeField, base: number) {
   return {
     answers,
     previousQuestions,
-    context: JSON.stringify([intakeQuestionVersion, c.goal, c.language || "zh-TW", field, answers, previousQuestions]),
+    context: JSON.stringify([
+      intakeQuestionVersion,
+      c.goal,
+      c.language || "zh-TW",
+      field,
+      answers,
+      previousQuestions,
+    ]),
   };
 }
 export class LearningService {
@@ -329,7 +336,11 @@ export class LearningService {
   ): Promise<IntakeQuestion> {
     const field = intakeFieldSchema.parse(requestedField);
     const course = this.owned(session, id);
-    const { answers, context, previousQuestions } = intakeContext(course, field, base);
+    const { answers, context, previousQuestions } = intakeContext(
+      course,
+      field,
+      base,
+    );
     const cached = course.intake!.questions?.[field];
     if (cached?.context === context) return cached.question;
     let requests = intakeRequests.get(this.store);
@@ -524,11 +535,7 @@ export class LearningService {
       ["pending", "generating", "ready"].includes(pkg.speech)
     )
       return;
-    if (
-      automatic &&
-      c.mode !== "demo" && pkg.speech === "failed"
-    )
-      return;
+    if (automatic && c.mode !== "demo" && pkg.speech === "failed") return;
     try {
       useChapterNarration(pkg);
       pkg.speechProfile = resolveSpeechProfile(

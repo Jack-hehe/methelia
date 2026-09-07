@@ -21,15 +21,15 @@ Methelia is an open-source project under active development. The current applica
 
 ## Technology
 
-| Category         | Technology or service                                       | Purpose                                                  |
-| ---------------- | ----------------------------------------------------------- | -------------------------------------------------------- |
+| Category         | Technology or service                                          | Purpose                                                  |
+| ---------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
 | AI model         | Configurable OpenAI-compatible model API, including OpenRouter | Generates course graphs, chapter content and checkpoints |
-| Speech           | **ElevenLabs** (`eleven_v3`, with-timestamps)               | Narration, plus caption and page-boundary alignment      |
-| Frontend         | Next.js 16 App Router, React 19, TypeScript 7, Lucide icons | Player, Learning Map and laboratory interfaces           |
-| Backend          | Node.js 22, Zod 4, built-in `node:sqlite` in WAL mode       | API, content validation, job queue and persistence       |
-| Learner runtimes | Pyodide 0.28.3, sandboxed iframe preview, fflate            | In-browser Python, web workspace and ZIP export          |
-| Hosting          | Render web service with a persistent disk                   | Website and background worker on one instance            |
-| Verification     | Vitest, Playwright                                          | Unit tests and browser flow tests                        |
+| Speech           | **ElevenLabs** (`eleven_v3`, with-timestamps)                  | Narration, plus caption and page-boundary alignment      |
+| Frontend         | Next.js 16 App Router, React 19, TypeScript 7, Lucide icons    | Player, Learning Map and laboratory interfaces           |
+| Backend          | Node.js 22, Zod 4, built-in `node:sqlite` in WAL mode          | API, content validation, job queue and persistence       |
+| Learner runtimes | Pyodide 0.28.3, sandboxed iframe preview, fflate               | In-browser Python, web workspace and ZIP export          |
+| Hosting          | Render web service with a persistent disk                      | Website and background worker on one instance            |
+| Verification     | Vitest, Playwright                                             | Unit tests and browser flow tests                        |
 
 [render.yaml](render.yaml) configures a single Render service using `main`. Automatic deployment is disabled in this configuration: pushing a commit alone does not publish it; trigger a manual deployment in Render. See [operations](docs/operations.md) for setup, backups and usage limits. The model is selected through `AI_MODEL`, rather than hard-coded to a particular provider model.
 

@@ -10,11 +10,16 @@ export const intakeFields = [
 export type IntakeField = (typeof intakeFields)[number];
 export const intakeQuestionVersion = 2;
 export const intakeFocus: Record<IntakeField, string> = {
-  experience: "Ask only about actual previous exposure to the target subject. If the goal already states beginner/advanced, ask one concrete experience that clarifies the starting point, not the same level label again.",
-  purpose: "Ask which concrete outcome or real-use situation matters most. Do not ask ability, prerequisites or teaching format. If outcomes are already specified, ask which remaining use case should get priority.",
-  priorKnowledge: "Ask about TRANSFERABLE background outside the target subject, not target-subject experience again. For a new Japanese learner, ask about other language-learning or reading-system familiarity, not kana knowledge already answered. For Linux, ask about file/folder or computer familiarity rather than Linux commands again. Offer an honest none/unsure choice and allow skipping. Never repeat a fact already supplied.",
-  depth: "Ask how far to take the explanation within the chosen goal: essential intuition, applying/adapting it, or mechanisms and edge cases. This is desired depth, NOT current skill or a repeated list of use cases. Keep the learner's beginner starting point even if they want deep understanding. Values are foundation/applied/advanced.",
-  studyPlan: "Ask only about learning format or pacing within the ALREADY selected outcome and depth: e.g. worked examples then a try, visual explanations then checks, or short mixed sessions. Do not offer travel/work/personal goals again, ask level again, or ask the learner to choose their depth again. If format was already answered, ask about session length instead. Do not promise unavailable tools such as speech recognition.",
+  experience:
+    "Ask only about actual previous exposure to the target subject. If the goal already states beginner/advanced, ask one concrete experience that clarifies the starting point, not the same level label again.",
+  purpose:
+    "Ask which concrete outcome or real-use situation matters most. Do not ask ability, prerequisites or teaching format. If outcomes are already specified, ask which remaining use case should get priority.",
+  priorKnowledge:
+    "Ask about TRANSFERABLE background outside the target subject, not target-subject experience again. For a new Japanese learner, ask about other language-learning or reading-system familiarity, not kana knowledge already answered. For Linux, ask about file/folder or computer familiarity rather than Linux commands again. Offer an honest none/unsure choice and allow skipping. Never repeat a fact already supplied.",
+  depth:
+    "Ask how far to take the explanation within the chosen goal: essential intuition, applying/adapting it, or mechanisms and edge cases. This is desired depth, NOT current skill or a repeated list of use cases. Keep the learner's beginner starting point even if they want deep understanding. Values are foundation/applied/advanced.",
+  studyPlan:
+    "Ask only about learning format or pacing within the ALREADY selected outcome and depth: e.g. worked examples then a try, visual explanations then checks, or short mixed sessions. Do not offer travel/work/personal goals again, ask level again, or ask the learner to choose their depth again. If format was already answered, ask about session length instead. Do not promise unavailable tools such as speech recognition.",
 };
 export const intakePolicy = (field: IntakeField) => ({
   multiple: field === "purpose" || field === "priorKnowledge",
@@ -85,9 +90,19 @@ export function validateIntakeQuestion(
   const question = intakeQuestionSchema.parse(value);
   if (question.field !== field)
     throw new Error("Question field does not match the requested step");
-  const normalize = (text: string) => text.normalize("NFKC").toLocaleLowerCase().replace(/[\p{P}\p{Z}\s]/gu, "");
-  if (previousQuestions.some((previous) => normalize(previous.title) === normalize(question.title)))
-    throw new Error("This question repeats a previous question. Ask for a distinct missing detail assigned to the current field; do not rephrase the same question.");
+  const normalize = (text: string) =>
+    text
+      .normalize("NFKC")
+      .toLocaleLowerCase()
+      .replace(/[\p{P}\p{Z}\s]/gu, "");
+  if (
+    previousQuestions.some(
+      (previous) => normalize(previous.title) === normalize(question.title),
+    )
+  )
+    throw new Error(
+      "This question repeats a previous question. Ask for a distinct missing detail assigned to the current field; do not rephrase the same question.",
+    );
   for (const key of ["value", "label"] as const) {
     if (
       new Set(question.options.map((option) => option[key].toLocaleLowerCase()))

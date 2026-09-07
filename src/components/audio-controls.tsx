@@ -3,13 +3,7 @@ import { useCourseLanguage } from "./course-language";
 import { localizedError } from "../core/language";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Captions,
-} from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Captions } from "lucide-react";
 import type { PackageState, Progress } from "../core/state";
 import { pageTrack } from "../core/lesson-pages";
 import styles from "./audio-controls.module.css";

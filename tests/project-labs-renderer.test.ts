@@ -76,9 +76,7 @@ describe("project lab renderers", () => {
         expect(html).toContain(
           language === "en" ? "Export project data" : "匯出作品資料",
         );
-        expect(html).toContain(
-          language === "en" ? "Export SVG" : "匯出 SVG",
-        );
+        expect(html).toContain(language === "en" ? "Export SVG" : "匯出 SVG");
         expect(html).not.toMatch(/NaN|undefined|Infinity/);
       });
     }

@@ -87,10 +87,18 @@ it("accepts a full multi-minute chapter without overflowing base64 validation", 
   expect(result.cues).toHaveLength(1);
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
-it.each(["YQ=", "Y===", "YW=J", "YWJj===="])("rejects malformed base64 padding %s", async audio_base64 => {
-  vi.stubGlobal("fetch", vi.fn(async () => Response.json({...responseFor("第2頁。Hello!"),audio_base64})));
-  await expect(synthesize(chapter())).rejects.toThrow(/alignment/);
-});
+it.each(["YQ=", "Y===", "YW=J", "YWJj===="])(
+  "rejects malformed base64 padding %s",
+  async (audio_base64) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ ...responseFor("第2頁。Hello!"), audio_base64 }),
+      ),
+    );
+    await expect(synthesize(chapter())).rejects.toThrow(/alignment/);
+  },
+);
 it.each([401, 403, 429, 503])(
   "does not retry an ElevenLabs %i response or expose its private body",
   async (status) => {

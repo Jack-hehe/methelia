@@ -137,7 +137,11 @@ test("a prerequisite link returns to the unfinished practice page", async ({
     await page.getByLabel("下一頁", { exact: true }).click();
   await expect(page.getByLabel("頁碼")).toHaveText("4 / 4");
   await expect(page.getByRole("button", { name: /下一章：/ })).toBeDisabled();
-  await page.getByRole("button", { name: /先完成.*動手練習：儲存 Hello Methelia 主標題/ }).click();
+  await page
+    .getByRole("button", {
+      name: /先完成.*動手練習：儲存 Hello Methelia 主標題/,
+    })
+    .click();
   await expect(page.getByLabel("頁碼")).toHaveText("3 / 4");
   await expect(
     page.getByRole("button", { name: "驗證我的練習", exact: true }),

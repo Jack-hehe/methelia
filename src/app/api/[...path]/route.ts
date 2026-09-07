@@ -67,12 +67,39 @@ async function handle(request: NextRequest) {
         ? {}
         : await readBody(request);
     let result: unknown;
-    if (path[0] === "featured" && path.length === 1 && request.method === "POST") {
-      const body = z.object({id: short, language: z.enum(["en", "zh-TW"])}).strict().parse(data);
+    if (
+      path[0] === "featured" &&
+      path.length === 1 &&
+      request.method === "POST"
+    ) {
+      const body = z
+        .object({ id: short, language: z.enum(["en", "zh-TW"]) })
+        .strict()
+        .parse(data);
       result = service.createFeatured(session, body.id, body.language);
-    } else if (path[0] === "labs" && path.length === 1 && request.method === "PUT") {
-      const body = z.object({courseId: short, nodeId: short, sectionId: short, value:z.record(z.string(),z.number().finite()),version:z.number().int().nonnegative().optional()}).strict().parse(data);
-      result = service.saveLab(session,body.courseId,body.nodeId,body.sectionId,body.value,body.version);
+    } else if (
+      path[0] === "labs" &&
+      path.length === 1 &&
+      request.method === "PUT"
+    ) {
+      const body = z
+        .object({
+          courseId: short,
+          nodeId: short,
+          sectionId: short,
+          value: z.record(z.string(), z.number().finite()),
+          version: z.number().int().nonnegative().optional(),
+        })
+        .strict()
+        .parse(data);
+      result = service.saveLab(
+        session,
+        body.courseId,
+        body.nodeId,
+        body.sectionId,
+        body.value,
+        body.version,
+      );
     } else if (path[0] === "sessions")
       result = {
         course: service.latest(session),

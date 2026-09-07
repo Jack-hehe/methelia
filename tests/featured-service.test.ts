@@ -16,9 +16,13 @@ it("opens ready curated content while other generation jobs are queued", () => {
   for (const entry of featuredCourses) {
     const course = service.createFeatured(session, entry.id, "en");
     expect(course.status).toBe("ready");
-    expect(Object.values(course.chapters).every(pkg => pkg.status === "ready")).toBe(true);
+    expect(
+      Object.values(course.chapters).every((pkg) => pkg.status === "ready"),
+    ).toBe(true);
   }
-  expect(() => service.createCourse(session, "website", "demo", "new-generation")).toThrow();
+  expect(() =>
+    service.createCourse(session, "website", "demo", "new-generation"),
+  ).toThrow();
 });
 it("enrolls immediately, resumes without overwriting work and isolates learners", () => {
   const store = new Store(":memory:");

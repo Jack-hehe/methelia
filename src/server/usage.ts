@@ -24,9 +24,10 @@ export function reserveUsage(
   const day = new Date(now).toISOString().slice(0, 10);
   const db = (store || getStore()).db;
   if (unlimited) {
-    db.prepare(`INSERT INTO daily_usage(day,kind,units) VALUES(?,?,?)
-      ON CONFLICT(day,kind) DO UPDATE SET units=daily_usage.units+excluded.units`)
-      .run(day, kind, units);
+    db.prepare(
+      `INSERT INTO daily_usage(day,kind,units) VALUES(?,?,?)
+      ON CONFLICT(day,kind) DO UPDATE SET units=daily_usage.units+excluded.units`,
+    ).run(day, kind, units);
     return;
   }
   // One atomic statement, shared by the web process and background worker.
