@@ -123,6 +123,49 @@ test("a failed card deletion stays retryable and removes no other card", async (
   );
 });
 
+test("the delete confirmation opens as a readable panel, not a collapsed box", async ({
+  page,
+}) => {
+  await page.request.post("/api/sessions", { data: {} });
+  const course = await createDemo(page, "Sized confirmation course");
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/explore");
+    await page
+      .getByRole("button", { name: `刪除課程「${course.goal}」` })
+      .click();
+
+    const dialog = page.locator(".course-delete-dialog");
+    const panel = (await dialog.boundingBox())!;
+    expect(panel).not.toBeNull();
+    // Close to min(460px, viewport - 32px), allowing for the border, and tall
+    // enough to hold a heading, an explanation and two buttons.
+    expect(panel.width).toBeGreaterThan(Math.min(460, width - 32) - 8);
+    expect(panel.width).toBeLessThanOrEqual(width);
+    expect(panel.height).toBeGreaterThan(150);
+
+    // The icon has a fixed 44px box. A rule that leaks that box onto the panel
+    // collapses the whole dialog into an unreadable square.
+    const icon = (await page.locator(".course-delete-icon").boundingBox())!;
+    expect(panel.width).toBeGreaterThan(icon.width * 4);
+    expect(panel.height).toBeGreaterThan(icon.height * 3);
+
+    // Both actions must sit inside the panel to be reachable.
+    for (const action of [".course-delete-cancel", ".course-delete-confirm"]) {
+      const button = (await page.locator(action).boundingBox())!;
+      expect(button.width).toBeGreaterThan(0);
+      expect(button.x).toBeGreaterThanOrEqual(panel.x - 1);
+      expect(button.x + button.width).toBeLessThanOrEqual(
+        panel.x + panel.width + 1,
+      );
+      expect(button.y + button.height).toBeLessThanOrEqual(
+        panel.y + panel.height + 1,
+      );
+    }
+    await page.keyboard.press("Escape");
+  }
+});
+
 test("the delete control remains visible and accessible in both languages on mobile", async ({
   page,
 }) => {
