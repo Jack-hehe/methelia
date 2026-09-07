@@ -1,55 +1,66 @@
 import { expect, test } from "@playwright/test";
-test("homepage catalog reveals below the first screen and arrows flank each rail", async ({
+test("the featured catalog sits below the fold, centres its head and levels every row", async ({
   page,
 }) => {
   await page.goto("/?home=1");
-  await expect(page.getByRole("button", { name: "Try a Lesson" })).toHaveCount(
-    0,
-  );
   await expect(
     page.getByRole("textbox", { name: "What do you want to learn?" }),
   ).toBeVisible();
   const catalog = page.locator(".home-catalog");
-  const reveal = catalog.locator(".catalog-reveal").first();
   expect((await catalog.boundingBox())!.y).toBeGreaterThanOrEqual(1000);
-  await expect(reveal).toHaveAttribute("data-reveal", "pending");
-  await page.mouse.wheel(0, 700);
-  await expect(reveal).toHaveAttribute("data-reveal", "visible");
-  const rail = catalog.locator(".rail").first();
-  await rail.scrollIntoViewIfNeeded();
-  await expect(rail.locator(".rail-prev")).toBeDisabled();
-  const viewport = rail.locator(".rail-viewport");
-  const left = await rail.locator(".rail-prev").boundingBox();
-  const right = await rail.locator(".rail-next").boundingBox();
-  const bounds = await viewport.boundingBox();
-  expect(left!.x + left!.width).toBeLessThanOrEqual(bounds!.x);
-  expect(right!.x).toBeGreaterThanOrEqual(bounds!.x + bounds!.width);
-  await rail.locator(".rail-next").click();
-  await expect(rail.locator(".rail-prev")).toBeEnabled();
-  await viewport.evaluate((el) => (el.scrollLeft = el.scrollWidth));
-  await expect(rail.locator(".rail-next")).toBeDisabled();
+  await expect(catalog.locator(".featured-course")).toHaveCount(20);
+
+  // The head is centred, so eyebrow, title and subtitle share the container's
+  // axis. They previously kept the two-column rules and sat off to the left.
+  const offsets = await catalog.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const centre = box.x + box.width / 2;
+    const head = el.querySelector(".catalog-head")!;
+    return [".eyebrow", "h2", "p"].map((selector) => {
+      // Measure the text itself: a block can be centred while its ink is not.
+      const range = document.createRange();
+      range.selectNodeContents(head.querySelector(selector)!);
+      const ink = range.getBoundingClientRect();
+      return Math.round(ink.x + ink.width / 2 - centre);
+    });
+  });
+  for (const offset of offsets) expect(Math.abs(offset)).toBeLessThanOrEqual(2);
+
+  // Titles wrap to one or two lines depending on language, so the chapter line
+  // has to be pushed to the card's floor for a row to read as a row.
+  const ragged = await catalog.evaluate((el) => {
+    const rows: Record<number, number[]> = {};
+    for (const card of el.querySelectorAll(".featured-course")) {
+      const top = Math.round(card.getBoundingClientRect().y);
+      const meta = card
+        .querySelector(".featured-meta")!
+        .getBoundingClientRect();
+      (rows[top] ||= []).push(Math.round(meta.y));
+    }
+    return Object.values(rows).filter(
+      (row) => Math.max(...row) - Math.min(...row) > 1,
+    ).length;
+  });
+  expect(ragged).toBe(0);
+
+  await catalog.locator(".featured-course").first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/home-catalog-desktop.png" });
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    await rail.scrollIntoViewIfNeeded();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    const card = await rail.locator(".course-card").first().boundingBox();
-    const view = await viewport.boundingBox();
-    expect(Math.abs(card!.width - view!.width)).toBeLessThan(2);
     await page.screenshot({ path: `test-results/home-catalog-${width}.png` });
   }
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.locator(".language-trigger").click();
   await page.getByRole("menuitemradio", { name: "繁體中文" }).click();
-  await expect(catalog).toContainText("第一個 HTML 檔案");
-  await expect(page.locator(".hero-title .sr-only")).toHaveText(
-    "網頁設計、技術分析、數位行銷、流體動力學",
+  await expect(catalog.locator(".featured-course").first()).toContainText(
+    "用 HTML 與 CSS 打造可互動的作品集網頁",
   );
-  await expect(reveal).toHaveAttribute("data-reveal", "visible");
 });
 
 test("brand opens home while Courses always opens explore", async ({
@@ -81,9 +92,10 @@ test("brand opens home while Courses always opens explore", async ({
   await page.getByRole("link", { name: "Courses", exact: true }).click();
   await expect(page).toHaveURL(/\/explore$/);
   await page.getByRole("link", { name: "Methelia", exact: true }).click();
+  // A learner who already has a course gets the goal box, not the demo button.
   await expect(
-    page.getByRole("button", { name: "Try a Lesson" }),
-  ).toBeEnabled();
+    page.getByRole("textbox", { name: "What do you want to learn?" }),
+  ).toBeVisible();
   const resumed = await (
     await page.request.post("/api/sessions", { data: {} })
   ).json();
@@ -96,15 +108,20 @@ test("homepage is plain light and login is an honest bilingual entry", async ({
   await page.goto("/?home=1");
   await expect(page.locator(".landing-effects")).toHaveCount(0);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.getByRole("button", { name: "Log in", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("Log in is coming soon");
+  const header = page.getByRole("banner");
+  await header
+    .getByRole("button", { name: "Get started", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText("Welcome to Methelia");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.locator(".language-trigger").click();
   await page.getByRole("menuitemradio", { name: "繁體中文" }).click();
-  await page.getByRole("button", { name: "登入", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("登入功能即將開放");
-  await page.getByRole("button", { name: "知道了" }).click();
+  // Scoped to the header: the goal form's submit button shares this label.
+  await header.getByRole("button", { name: "開始學習", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("歡迎來到 Methelia");
+  await page.getByRole("button", { name: "探索課程" }).click();
+  await expect(page).toHaveURL(/\/explore$/);
 });
 
 test("homepage language switches preserve input and persist with keyboard navigation", async ({
@@ -128,7 +145,9 @@ test("homepage language switches preserve input and persist with keyboard naviga
   await expect(page.getByRole("textbox", { name: "你想學什麼？" })).toHaveValue(
     "My portfolio / 我的作品",
   );
-  await expect(page.getByRole("button", { name: "開始學習" })).toBeEnabled();
+  await expect(
+    page.getByRole("main").getByRole("button", { name: "開始學習" }),
+  ).toBeEnabled();
   await chooser.click();
   await page.keyboard.press("Escape");
   await expect(chooser).toBeFocused();
@@ -240,10 +259,7 @@ test("explore course groups collapse independently on narrow phones", async ({
   await page
     .getByRole("heading", { name: "探索更多課程" })
     .scrollIntoViewIfNeeded();
-  await expect(page.locator(".card-stats")).toHaveCount(23);
-  await expect(
-    page.locator(".manifesto, .demo-invite, .site-footer"),
-  ).toHaveCount(0);
+  await expect(page.locator(".featured-course")).toHaveCount(20);
   await page.screenshot({ path: "test-results/courses-groups-mobile.png" });
 });
 
@@ -273,14 +289,14 @@ test("courses toolbar matches home and shares language and login behavior", asyn
   await expect(
     page.getByRole("link", { name: "View source on GitHub" }),
   ).toHaveAttribute("href", "https://github.com/Jack-hehe/methelia");
-  await page.getByRole("button", { name: "Log in", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("Log in is coming soon");
+  await page.getByRole("button", { name: "Get started", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Welcome to Methelia");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Choose language" }).click();
   await page.getByRole("menuitemradio", { name: "繁體中文" }).click();
   await expect(page.getByRole("heading", { name: "我的課程" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "登入", exact: true }),
+    page.getByRole("button", { name: "開始學習", exact: true }),
   ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "選擇語言" })).toHaveText(
